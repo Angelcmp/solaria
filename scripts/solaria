@@ -1,0 +1,34 @@
+#!/bin/bash
+# Solaria Desktop - CLI wrapper
+# Pasa el directorio actual como working directory a Solaria.
+#
+# Instalación:
+#   sudo cp scripts/solaria /usr/local/bin/
+#   chmod +x /usr/local/bin/solaria
+#
+# Uso:
+#   cd /mi/proyecto
+#   solaria
+#
+# También funciona con rutas explícitas:
+#   solaria --working-dir=/otro/proyecto
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+BIN_DIR="$(cd "$SCRIPT_DIR/../src-tauri/target/release" && pwd 2>/dev/null || echo "$SCRIPT_DIR")"
+BINARY="homeangelsolaria"
+
+# Look for the binary in common locations
+if [ -f "$BIN_DIR/$BINARY" ]; then
+  BIN_PATH="$BIN_DIR/$BINARY"
+elif [ -f "/usr/local/lib/solaria/$BINARY" ]; then
+  BIN_PATH="/usr/local/lib/solaria/$BINARY"
+elif command -v "$BINARY" &>/dev/null; then
+  BIN_PATH="$BINARY"
+else
+  echo "Error: no se encuentra el binario de Solaria."
+  echo "Busca en: $BIN_DIR/$BINARY"
+  echo "O instálalo con: sudo cp src-tauri/target/release/$BINARY /usr/local/lib/solaria/"
+  exit 1
+fi
+
+exec "$BIN_PATH" --working-dir="$PWD" "$@"

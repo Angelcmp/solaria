@@ -15,7 +15,6 @@ No queremos que la IA reemplace tu pensamiento, sino que lo potencie. Que puedas
 Creemos en una IA que:
 - **Respete tu privacidad** — tus conversaciones nunca salen de tu equipo sin tu consentimiento
 - **Sea transparente** — sabes exactamente qué modelo está procesando tus datos y dónde
-- **Te dé el control** — eliges qué herramientas usar, qué modelos cargar y cómo interactuar
 
 ---
 
@@ -128,14 +127,6 @@ Activa el agente con el botón `[🤖 AGENT]` en el input de chat. El modelo pue
 | `glob` | Busca archivos por patrón | `**/*.ts`, `src/**/*.rs` |
 | `grep` | Busca texto dentro de archivos | Encontrar funciones, TODO, errores |
 
-### Ejemplos de uso
-
-> *"Explora la estructura del proyecto, dime cuántos archivos TypeScript hay y qué componentes principales tiene"*
-
-> *"Busca en el código todos los TODO y FIXME comments"*
-
-> *"Encuentra los archivos package.json, dime las dependencias y si hay alguna desactualizada"*
-
 Puedes configurar las herramientas permitidas y el directorio de trabajo en **Settings > Agente**.
 
 ---
@@ -185,19 +176,6 @@ solaria-desktop/
 
 ---
 
-## Roadmap
-
-Características planeadas para futuras versiones:
-
-- [ ] **Visión** — análisis de imágenes con modelos multimodales
-- [ ] **Auto-update** — actualizaciones automáticas
-- [ ] **System tray** — minimizar a bandeja del sistema
-- [ ] **Sync opcional** — sincronización cifrada entre dispositivos
-- [ ] **Plugins** — herramientas personalizadas para el agente
-- [ ] **Instaladores** — .exe (Windows), .dmg (macOS), .deb/.AppImage (Linux)
-
----
-
 ## Seguridad
 
 Revisa [SECURITY.md](./SECURITY.md) para el análisis completo de riesgos: inyección de prompts, ejecución de comandos, acceso a archivos, XSS, CSP y API keys.
@@ -206,7 +184,7 @@ Revisa [SECURITY.md](./SECURITY.md) para el análisis completo de riesgos: inyec
 
 ## Licencia
 
-MIT &copy; 2025 Angelcmp
+MIT
 
 ```
 MIT License

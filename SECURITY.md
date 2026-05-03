@@ -89,21 +89,26 @@ font-src 'self'; frame-src 'none'; object-src 'none'
 
 ---
 
-## Resumen de acciones
+## Resumen
 
-| Prioridad | Acción | Estado |
-|-----------|--------|--------|
-| 🔴 Alta | Denylist de comandos shell peligrosos | ✅ Implementado en `tools.rs` |
-| 🔴 Alta | Bloquear rutas sensibles del sistema | ✅ `/etc/shadow`, `~/.ssh/`, `/proc/`, etc. |
-| 🔴 Alta | Validar rutas contra directorio de trabajo | ✅ Advertencia + modo bloqueo estricto |
-| 🟡 Media | Cifrar API keys en disco | ✅ Keyring del SO con fallback localStorage |
-| 🟡 Media | Confirmación antes de write_file | ✅ Toggle "Confirmar escrituras" en Settings |
-| 🟡 Media | Command allowlist | ✅ Lista blanca configurable |
-| 🟡 Media | Rate limiting | ✅ Slider de herramientas/minuto |
-| 🟡 Media | Session timeout | ✅ Bloqueo automático por inactividad |
-| 🟢 Baja | Sandboxing del agente (contenedores) | ❌ Planeado |
-| 🟢 Baja | Auditoría local | ✅ `~/.solaria/audit.log` |
-| 🟢 Baja | CSP y XSS sanitization | ✅ Implementado |
+### ✅ Implementado
+
+- Denylist de comandos shell peligrosos (`rm -rf /`, `sudo`, `curl | bash`, etc.)
+- Bloqueo de rutas sensibles (`/etc/shadow`, `~/.ssh/`, `/proc/`, `/boot/`)
+- Validación de rutas contra directorio de trabajo (advertencia + modo bloqueo estricto)
+- Command allowlist (lista blanca configurable de comandos)
+- Confirmación Allow/Deny antes de ejecutar herramientas peligrosas
+- Confirmación antes de `write_file` (toggle)
+- API keys cifradas en keyring del SO + fallback localStorage
+- Rate limiting (slider de herramientas/minuto)
+- Session timeout (bloqueo automático por inactividad)
+- Auditoría local (`~/.solaria/audit.log`)
+- Content Security Policy (CSP)
+- Sanitización XSS en renderizador Markdown
+
+### ❌ Planeado
+
+- Sandboxing del agente en contenedores
 
 ---
 

@@ -36,7 +36,7 @@ fn timestamp() -> String {
     let seconds = time_secs % 60;
 
     // Simple date from days since epoch (1970-01-01)
-    let year = 1970f64;
+    let _year = 1970f64;
     let mut remaining = days as i64;
 
     let mut y = 1970i64;

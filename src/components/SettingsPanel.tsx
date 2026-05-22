@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { AppSettings, ApiKeys } from '../hooks/useSettings'
 import type { AgentConfig } from '../hooks/useAgent'
+import type { Lang } from '../lib/i18n'
+import { t } from '../lib/i18n'
 
 interface SettingsPanelProps {
   settings: AppSettings
@@ -31,6 +33,8 @@ const AVAILABLE_TOOLS = [
   { id: 'write_file', label: 'Escribir archivos', desc: 'Crear/modificar archivos' },
   { id: 'glob', label: 'Glob', desc: 'Buscar archivos por patrón' },
   { id: 'grep', label: 'Grep', desc: 'Buscar texto en archivos' },
+  { id: 'web_search', label: 'Web Search', desc: 'Buscar en internet (Tavily)' },
+  { id: 'fetch_url', label: 'Fetch URL', desc: 'Obtener contenido de una URL' },
 ]
 
 export default function SettingsPanel({
@@ -43,7 +47,8 @@ export default function SettingsPanel({
   agentConfig,
   onUpdateAgentConfig,
 }: SettingsPanelProps) {
-  const [tab, setTab] = useState<'general' | 'providers' | 'search' | 'agent' | 'audit'>('general')
+  const lang = settings.language as Lang
+  const [tab, setTab] = useState<'general' | 'providers' | 'search' | 'agent' | 'audit' | 'plugins'>('general')
 
   // Auto-fill working directory from CLI --working-dir if empty
   useEffect(() => {
@@ -65,7 +70,7 @@ export default function SettingsPanel({
       <div className="relative w-[480px] max-h-[80vh] bg-[#1C1B1B] border border-[rgba(255,255,255,0.1)] rounded-xl overflow-hidden shadow-2xl flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-[rgba(255,255,255,0.08)]">
-          <h2 className="text-sm font-semibold text-white">Configuración</h2>
+          <h2 className="text-sm font-semibold text-white">{t('settings.title', lang)}</h2>
           <button onClick={onClose} className="flex items-center justify-center w-6 h-6 rounded hover:bg-[rgba(255,255,255,0.08)] text-[#999999] hover:text-white transition-colors">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
@@ -73,17 +78,17 @@ export default function SettingsPanel({
 
         {/* Tabs */}
         <div className="flex gap-0 px-4 border-b border-[rgba(255,255,255,0.06)]">
-          {(['general', 'providers', 'search', 'agent', 'audit'] as const).map(t => (
+          {(['general', 'providers', 'search', 'agent', 'audit', 'plugins'] as const).map(tabKey => (
             <button
-              key={t}
-              onClick={() => setTab(t)}
+              key={tabKey}
+              onClick={() => setTab(tabKey)}
               className={`px-3 py-2 text-[0.6875rem] font-medium uppercase tracking-[0.05em] border-b-2 transition-colors ${
-                tab === t
+                tab === tabKey
                   ? 'text-[#00E5C9] border-[#00E5C9]'
                   : 'text-[#666666] border-transparent hover:text-[#E5E5E5]'
               }`}
             >
-              {t === 'general' ? 'General' : t === 'providers' ? 'API Keys' : t === 'search' ? 'Búsqueda' : t === 'agent' ? 'Agente' : 'Auditoría'}
+              {tabKey === 'general' ? t('settings.general', lang) : tabKey === 'providers' ? t('settings.providers', lang) : tabKey === 'search' ? t('settings.search', lang) : tabKey === 'agent' ? t('settings.agent', lang) : tabKey === 'audit' ? t('settings.audit', lang) : 'Plugins'}
             </button>
           ))}
         </div>
@@ -150,6 +155,75 @@ export default function SettingsPanel({
                 </div>
               </div>
 
+              <div className="pt-2 border-t border-[rgba(255,255,255,0.06)]">
+                <label className="block text-[0.6875rem] font-medium text-[#00E5C9] mb-2 uppercase tracking-[0.05em]">Parámetros del modelo</label>
+
+                <div className="mb-3">
+                  <label className="block text-[0.6875rem] font-medium text-[#999999] mb-1">
+                    Temperatura: {settings.temperature.toFixed(1)}
+                  </label>
+                  <input
+                    type="range"
+                    min={0}
+                    max={2}
+                    step={0.1}
+                    value={settings.temperature}
+                    onChange={(e) => onUpdate({ temperature: Number(e.target.value) })}
+                    className="w-full accent-[#DCB263]"
+                  />
+                  <div className="flex justify-between text-[0.55rem] text-[#666666]">
+                    <span>Preciso (0)</span>
+                    <span>Creativo (2)</span>
+                  </div>
+                </div>
+
+                <div className="mb-3">
+                  <label className="block text-[0.6875rem] font-medium text-[#999999] mb-1">
+                    Top P: {settings.topP.toFixed(2)}
+                  </label>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={settings.topP}
+                    onChange={(e) => onUpdate({ topP: Number(e.target.value) })}
+                    className="w-full accent-[#DCB263]"
+                  />
+                  <div className="flex justify-between text-[0.55rem] text-[#666666]">
+                    <span>Estricto (0)</span>
+                    <span>Flexible (1)</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[0.6875rem] font-medium text-[#999999] mb-1">
+                    Max tokens: {settings.maxTokens}
+                  </label>
+                  <input
+                    type="range"
+                    min={64}
+                    max={8192}
+                    step={64}
+                    value={settings.maxTokens}
+                    onChange={(e) => onUpdate({ maxTokens: Number(e.target.value) })}
+                    className="w-full accent-[#DCB263]"
+                  />
+                  <div className="flex justify-between text-[0.55rem] text-[#666666]">
+                    <span>64</span>
+                    <span>8192</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Model Management */}
+              {settings.defaultProvider === 'ollama' && (
+                <div className="pt-2 border-t border-[rgba(255,255,255,0.06)]">
+                  <label className="block text-[0.6875rem] font-medium text-[#00E5C9] mb-2 uppercase tracking-[0.05em]">Gestión de modelos Ollama</label>
+                  <ModelManager />
+                </div>
+              )}
+
               <div>
                 <label className="block text-[0.6875rem] font-medium text-[#999999] mb-1.5 uppercase tracking-[0.05em]">Idioma</label>
                 <div className="flex gap-2">
@@ -206,6 +280,32 @@ export default function SettingsPanel({
                   >
                     Exportar conversaciones
                   </button>
+                  <button
+                    onClick={() => {
+                      const input = document.createElement('input')
+                      input.type = 'file'
+                      input.accept = '.json'
+                      input.onchange = async (e) => {
+                        const file = (e.target as HTMLInputElement).files?.[0]
+                        if (!file) return
+                        try {
+                          const text = await file.text()
+                          const parsed = JSON.parse(text)
+                          if (!Array.isArray(parsed)) throw new Error('Formato inválido')
+                          const existing = localStorage.getItem('solaria-conversations')
+                          const existingArr = existing ? JSON.parse(existing) : []
+                          localStorage.setItem('solaria-conversations', JSON.stringify([...parsed, ...existingArr]))
+                          window.location.reload()
+                        } catch {
+                          alert('Error: archivo JSON inválido')
+                        }
+                      }
+                      input.click()
+                    }}
+                    className="px-3 py-1.5 rounded-md bg-[#2A2A2A] border border-[rgba(255,255,255,0.08)] text-[0.75rem] text-[#E5E5E5] font-medium hover:bg-[#353535] transition-colors"
+                  >
+                    Importar conversaciones
+                  </button>
                 </div>
               </div>
             </>
@@ -252,6 +352,10 @@ export default function SettingsPanel({
                 />
               </div>
             </>
+          )}
+
+          {tab === 'plugins' && (
+            <PluginManager />
           )}
 
           {tab === 'agent' && agentConfig && onUpdateAgentConfig && (
@@ -322,6 +426,72 @@ export default function SettingsPanel({
                 <p className="text-[0.55rem] text-[#666666] mt-0.5">
                   Si lanzas Solaria desde una terminal, la carpeta actual se detecta automáticamente.
                 </p>
+              </div>
+
+              {/* Docker Sandbox */}
+              <div className="pt-2 border-t border-[rgba(255,255,255,0.06)]">
+                <label className="block text-[0.6875rem] font-medium text-[#DCB263] mb-2 uppercase tracking-[0.05em]">Sandbox Docker</label>
+                <p className="text-[0.625rem] text-[#666666] mb-2">Ejecuta herramientas del agente dentro de un contenedor Docker para mayor seguridad y aislamiento.</p>
+
+                <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#2A2A2A] border border-[rgba(255,255,255,0.08)] mb-2">
+                  <div>
+                    <div className="text-[0.75rem] font-medium text-white">Sandbox</div>
+                    <div className="text-[0.625rem] text-[#999999]">Aislar en contenedor Docker</div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (agentConfig.sandboxEnabled) {
+                        import('@tauri-apps/api/core').then(({ invoke }) => {
+                          invoke('stop_sandbox').catch(() => {})
+                        })
+                      }
+                      onUpdateAgentConfig({ sandboxEnabled: !agentConfig.sandboxEnabled })
+                    }}
+                    className={`relative w-10 h-5 rounded-full transition-colors ${
+                      agentConfig.sandboxEnabled ? 'bg-[#DCB263]' : 'bg-[#666666]'
+                    }`}
+                  >
+                    <div className={`absolute top-[2px] w-4 h-4 rounded-full bg-white transition-all ${
+                      agentConfig.sandboxEnabled ? 'left-5' : 'left-[2px]'
+                    }`} />
+                  </button>
+                </div>
+
+                {agentConfig.sandboxEnabled && (
+                  <>
+                    <div className="mb-2">
+                      <label className="block text-[0.6875rem] font-medium text-[#999999] mb-1 uppercase tracking-[0.05em]">Imagen Docker</label>
+                      <input
+                        value={agentConfig.sandboxImage}
+                        onChange={(e) => onUpdateAgentConfig({ sandboxImage: e.target.value })}
+                        placeholder="ubuntu:latest"
+                        className="w-full px-3 py-2 rounded-lg bg-[#2A2A2A] border border-[rgba(255,255,255,0.08)] text-[0.75rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors"
+                      />
+                      <p className="text-[0.55rem] text-[#666666] mt-0.5">
+                        La imagen debe tener <code className="text-[#DCB263]">sh</code> disponible (ubuntu, alpine, debian, etc.)
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={async () => {
+                        try {
+                          const { invoke } = await import('@tauri-apps/api/core')
+                          const available = await invoke<boolean>('check_docker')
+                          if (available) {
+                            alert('✅ Docker está disponible en tu sistema')
+                          } else {
+                            alert('❌ Docker no está disponible. Instálalo o verifica que el servicio esté ejecutándose.')
+                          }
+                        } catch {
+                          alert('❌ No se pudo verificar Docker')
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-md bg-[#2A2A2A] border border-[rgba(255,255,255,0.08)] text-[0.65rem] text-[#999999] hover:text-white hover:border-[#DCB263] transition-colors cursor-pointer inline-block"
+                    >
+                      Verificar Docker
+                    </button>
+                  </>
+                )}
               </div>
 
               {/* Allowed Tools */}
@@ -618,6 +788,62 @@ function AuditTab() {
   )
 }
 
+function PluginManager() {
+  const [plugins, setPlugins] = useState<{ name: string; description: string; parameters: { name: string; description: string }[] }[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core')
+        const list = await invoke<typeof plugins>('list_plugins')
+        setPlugins(list)
+      } catch {}
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  return (
+    <div>
+      <p className="text-[0.6875rem] text-[#666666] mb-3">
+        Los plugins son scripts shell en <code className="text-[#DCB263]">~/.solaria/plugins/</code> que el agente puede usar como herramientas.
+        Crea un archivo <code className="text-[#DCB263]">.sh</code> con metadatos en comentarios para registrarlo automáticamente.
+      </p>
+
+      {loading ? (
+        <div className="text-[0.75rem] text-[#666666]">Cargando...</div>
+      ) : plugins.length === 0 ? (
+        <div className="text-center py-8 px-4 rounded-lg bg-[#2A2A2A] border border-dashed border-[rgba(255,255,255,0.08)]">
+          <p className="text-[0.75rem] text-[#666666]">Sin plugins instalados</p>
+          <p className="text-[0.625rem] text-[#666666] opacity-70 mt-1">
+            Crea scripts en <code className="text-[#DCB263]">~/.solaria/plugins/</code> para añadir herramientas personalizadas.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {plugins.map(p => (
+            <div key={p.name} className="px-3 py-2 rounded-lg bg-[#2A2A2A] border border-[rgba(255,255,255,0.08)]">
+              <div className="flex items-center gap-2">
+                <span className="text-[0.75rem] font-semibold text-[#DCB263] font-mono">{p.name}</span>
+                <span className="text-[0.6rem] text-[#00E5C9] px-1.5 py-0.5 rounded bg-[rgba(0,229,201,0.06)]">Plugin</span>
+              </div>
+              <p className="text-[0.65rem] text-[#E5E5E5] mt-0.5">{p.description}</p>
+              {p.parameters.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {p.parameters.map(pp => (
+                    <span key={pp.name} className="text-[0.5rem] text-[#666666] bg-[rgba(255,255,255,0.04)] px-1 py-0.5 rounded font-mono">{pp.name}: {pp.description}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function formatAuditArgs(_tool: string, args: string): string {
   try {
     const parsed = JSON.parse(args)
@@ -629,4 +855,112 @@ function formatAuditArgs(_tool: string, args: string): string {
     }
   } catch {}
   return args
+}
+
+function ModelManager() {
+  const [models, setModels] = useState<string[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [pullName, setPullName] = useState('')
+  const [pulling, setPulling] = useState(false)
+  const [message, setMessage] = useState<string | null>(null)
+
+  const loadModels = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      const list = await invoke<string[]>('ollama_models')
+      setModels(list)
+    } catch (e: any) {
+      setError(e?.toString() || 'Error cargando modelos')
+    }
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { loadModels() }, [loadModels])
+
+  const handlePull = useCallback(async () => {
+    const name = pullName.trim()
+    if (!name) return
+    setPulling(true)
+    setMessage(null)
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      const result = await invoke<string>('ollama_pull_model', { modelName: name })
+      setMessage(result)
+      setPullName('')
+      loadModels()
+    } catch (e: any) {
+      setMessage(`Error: ${e?.toString() || 'Error desconocido'}`)
+    }
+    setPulling(false)
+  }, [pullName, loadModels])
+
+  const handleDelete = useCallback(async (name: string) => {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      const result = await invoke<string>('ollama_delete_model', { modelName: name })
+      setMessage(result)
+      loadModels()
+    } catch (e: any) {
+      setMessage(`Error: ${e?.toString() || 'Error desconocido'}`)
+    }
+  }, [loadModels])
+
+  return (
+    <div>
+      {/* Installed models */}
+      <div className="mb-2">
+        <label className="block text-[0.625rem] font-medium text-[#999999] mb-1">Modelos instalados</label>
+        {loading ? (
+          <div className="text-[0.65rem] text-[#666666]">Cargando...</div>
+        ) : error ? (
+          <div className="text-[0.65rem] text-[#ef4444]">{error}</div>
+        ) : models.length === 0 ? (
+          <div className="text-[0.65rem] text-[#666666]">No hay modelos instalados</div>
+        ) : (
+          <div className="flex flex-wrap gap-1 max-h-[120px] overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
+            {models.map(m => (
+              <div key={m} className="flex items-center gap-1 px-2 py-0.5 rounded bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)]">
+                <span className="text-[0.6rem] text-[#E5E5E5] font-mono">{m}</span>
+                <button
+                  onClick={() => handleDelete(m)}
+                  className="flex items-center justify-center w-3.5 h-3.5 rounded hover:bg-[rgba(239,68,68,0.15)] text-[#666666] hover:text-[#ef4444] transition-colors"
+                  title="Eliminar modelo"
+                >
+                  <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Pull new model */}
+      <div className="flex gap-1.5">
+        <input
+          value={pullName}
+          onChange={(e) => setPullName(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handlePull()}
+          placeholder="Ej: qwen3.5, llama3.2, mistral..."
+          disabled={pulling}
+          className="flex-1 px-2 py-1.5 rounded-md bg-[#2A2A2A] border border-[rgba(255,255,255,0.08)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors disabled:opacity-50"
+        />
+        <button
+          onClick={handlePull}
+          disabled={pulling || !pullName.trim()}
+          className="shrink-0 px-2.5 py-1.5 rounded-md bg-[#2A2A2A] border border-[rgba(255,255,255,0.08)] text-[0.65rem] text-[#00E5C9] font-medium hover:bg-[rgba(0,229,201,0.1)] hover:border-[rgba(0,229,201,0.3)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {pulling ? 'Descargando...' : 'Descargar'}
+        </button>
+      </div>
+
+      {message && (
+        <div className={`mt-1 text-[0.6rem] ${message.startsWith('Error') ? 'text-[#ef4444]' : 'text-[#00E5C9]'}`}>
+          {message}
+        </div>
+      )}
+    </div>
+  )
 }

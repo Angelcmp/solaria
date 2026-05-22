@@ -4,13 +4,14 @@ import type { AgentStep } from '../hooks/useAgent'
 interface AgentAsideProps {
   steps: AgentStep[]
   isRunning: boolean
+  liveThinking?: string
   workingDirectory?: string
   onClose: () => void
   onStop: () => void
   onConfirmTool?: (allow: boolean) => void
 }
 
-export default function AgentAside({ steps, isRunning, workingDirectory, onClose, onStop, onConfirmTool }: AgentAsideProps) {
+export default function AgentAside({ steps, isRunning, liveThinking, workingDirectory, onClose, onStop, onConfirmTool }: AgentAsideProps) {
   const hasFinalStep = steps.some(s => s.type === 'final')
   if (steps.length === 0 && !isRunning) return null
 
@@ -55,6 +56,22 @@ export default function AgentAside({ steps, isRunning, workingDirectory, onClose
         {steps.map((step, i) => (
           <StepCard key={step.id} step={step} isLast={i === steps.length - 1} isRunning={isRunning} onConfirmTool={onConfirmTool} />
         ))}
+        {liveThinking && isRunning && (
+          <div className="border-l-2 border-l-[rgba(220,178,99,0.4)] pl-2 py-1 animate-[msgFadeIn_0.3s_ease-out]">
+            <div className="flex items-center gap-1.5">
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#DCB263" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+              <span className="text-[0.65rem] font-medium text-[#999999]">Razonando...</span>
+              <div className="flex gap-[2px] ml-1">
+                {[0, 0.2, 0.4].map((delay, i) => (
+                  <div key={i} className="w-1 h-1 bg-[#DCB263] rounded-full animate-[typingDot_1.4s_ease-in-out_infinite]" style={{ animationDelay: `${delay}s` }} />
+                ))}
+              </div>
+            </div>
+            <div className="text-[0.6875rem] text-[#E5E5E5] leading-[1.5] mt-0.5 line-clamp-4 whitespace-pre-wrap">
+              {liveThinking}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Footer */}

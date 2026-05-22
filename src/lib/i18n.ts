@@ -1,0 +1,113 @@
+export type Lang = 'es' | 'en'
+
+type Translations = Record<string, {
+  es: string
+  en: string
+}>
+
+const translations: Translations = {
+  // Chat
+  'chat.welcome.title': { es: 'Bienvenido a Solaria', en: 'Welcome to Solaria' },
+  'chat.welcome.agent': { es: 'Modo Agente', en: 'Agent Mode' },
+  'chat.welcome.desc': { es: 'Tu asistente de IA privado que funciona 100% offline. Elige una acción rápida o escribe tu mensaje.', en: 'Your private AI assistant that works 100% offline. Choose a quick action or type your message.' },
+  'chat.welcome.agent_desc': { es: 'El modo agente permite al modelo ejecutar herramientas en tu sistema. Dale instrucciones como "explora este proyecto" o "encuentra y corrige bugs".', en: 'Agent mode allows the model to execute tools on your system. Give instructions like "explore this project" or "find and fix bugs".' },
+  'chat.placeholder': { es: 'Escribe un mensaje...', en: 'Type a message...' },
+  'chat.placeholder.agent': { es: 'Dale una tarea al agente...', en: 'Give the agent a task...' },
+  'chat.templates': { es: 'Plantillas', en: 'Templates' },
+  'chat.search_web': { es: 'Activar búsqueda web', en: 'Activate web search' },
+  'chat.search_web.off': { es: 'Desactivar búsqueda web', en: 'Deactivate web search' },
+  'chat.copy': { es: 'Copiar', en: 'Copy' },
+  'chat.regenerate': { es: 'Regenerar respuesta', en: 'Regenerate response' },
+  'chat.tokens': { es: 'tokens', en: 'tokens' },
+  'chat.error': { es: 'Error', en: 'Error' },
+  'chat.session_locked': { es: 'Sesión bloqueada por inactividad', en: 'Session locked due to inactivity' },
+  'chat.resume': { es: 'Reanudar', en: 'Resume' },
+  'chat.agent': { es: 'Agent', en: 'Agent' },
+  'chat.clear': { es: 'Limpiar chat', en: 'Clear chat' },
+  'chat.settings': { es: 'Configuración', en: 'Settings' },
+  'chat.drop_files': { es: 'Suelta archivos aquí', en: 'Drop files here' },
+  'chat.attach_file': { es: 'Adjuntar archivo', en: 'Attach file' },
+  'chat.ollama_free': { es: 'Ollama es gratuito (local)', en: 'Ollama is free (local)' },
+
+  // Quick actions
+  'action.learn': { es: 'Aprender', en: 'Learn' },
+  'action.summarize': { es: 'Resumir', en: 'Summarize' },
+  'action.translate': { es: 'Traducir', en: 'Translate' },
+  'action.analyze': { es: 'Analizar', en: 'Analyze' },
+  'action.code': { es: 'Código', en: 'Code' },
+  'action.write': { es: 'Escribir', en: 'Write' },
+  'action.ideas': { es: 'Ideas', en: 'Brainstorm' },
+  'action.improve': { es: 'Mejorar', en: 'Improve' },
+  'action.data': { es: 'Datos', en: 'Data' },
+
+  // Quick action prompts
+  'action.learn.prompt': { es: 'Eres Solaria, un tutor educativo. Ayuda al usuario a entender el tema. Sigue estos pasos:\n1. Evalúa el nivel de conocimiento actual del usuario\n2. Explica el concepto fundamental de forma simple\n3. Profundiza progresivamente con ejemplos\n4. Verifica la comprensión con preguntas\n5. Resume los puntos clave', en: 'You are Solaria, an educational tutor. Help the user understand the topic. Follow these steps:\n1. Assess the user\'s current knowledge level\n2. Explain the core concept simply\n3. Deepen progressively with examples\n4. Verify understanding with questions\n5. Summarize key points' },
+  'action.summarize.prompt': { es: 'Eres Solaria, un asistente de resúmenes. Resume el contenido proporcionado de forma clara y concisa. Destaca los puntos principales, datos clave y conclusiones. Usa viñetas para mejor legibilidad.', en: 'You are Solaria, a summarization assistant. Summarize the provided content clearly and concisely. Highlight key points, data, and conclusions. Use bullet points for readability.' },
+  'action.translate.prompt': { es: 'Eres Solaria, un traductor experto. Traduce el texto proporcionado manteniendo el tono, estilo y significado original.', en: 'You are Solaria, an expert translator. Translate the provided text while preserving the original tone, style, and meaning.' },
+  'action.analyze.prompt': { es: 'Eres Solaria, un analista experto. Analiza el contenido proporcionado en profundidad.', en: 'You are Solaria, an expert analyst. Analyze the provided content in depth.' },
+  'action.code.prompt': { es: 'Eres Solaria, un asistente de programación. Escribe código limpio y bien comentado.', en: 'You are Solaria, a programming assistant. Write clean, well-commented code.' },
+  'action.write.prompt': { es: 'Eres Solaria, un asistente de escritura. Ayuda a redactar contenido claro y persuasivo.', en: 'You are Solaria, a writing assistant. Help craft clear and persuasive content.' },
+  'action.ideas.prompt': { es: 'Eres Solaria, un generador de ideas. Genera 5-7 ideas creativas y prácticas.', en: 'You are Solaria, an idea generator. Generate 5-7 creative and practical ideas.' },
+  'action.improve.prompt': { es: 'Eres Solaria, un asistente de mejora. Revisa y sugiere mejoras específicas.', en: 'You are Solaria, an improvement assistant. Review and suggest specific improvements.' },
+  'action.data.prompt': { es: 'Eres Solaria, un analista de datos. Interpreta datos y proporciona conclusiones.', en: 'You are Solaria, a data analyst. Interpret data and provide conclusions.' },
+
+  // Sidebar
+  'sidebar.new': { es: 'Nueva conversación', en: 'New conversation' },
+  'sidebar.search': { es: 'Buscar conversaciones...', en: 'Search conversations...' },
+  'sidebar.no_results': { es: 'Sin resultados', en: 'No results' },
+  'sidebar.empty': { es: 'Sin conversaciones', en: 'No conversations' },
+  'sidebar.pinned': { es: 'Anclados', en: 'Pinned' },
+  'sidebar.today': { es: 'Hoy', en: 'Today' },
+  'sidebar.yesterday': { es: 'Ayer', en: 'Yesterday' },
+  'sidebar.older': { es: 'Anteriores', en: 'Earlier' },
+  'sidebar.pin': { es: 'Anclar', en: 'Pin' },
+  'sidebar.unpin': { es: 'Desanclar', en: 'Unpin' },
+  'sidebar.delete': { es: 'Eliminar', en: 'Delete' },
+  'sidebar.collapse': { es: 'Colapsar', en: 'Collapse' },
+  'sidebar.expand': { es: 'Expandir', en: 'Expand' },
+
+  // Settings
+  'settings.title': { es: 'Configuración', en: 'Settings' },
+  'settings.general': { es: 'General', en: 'General' },
+  'settings.providers': { es: 'API Keys', en: 'API Keys' },
+  'settings.search': { es: 'Búsqueda', en: 'Search' },
+  'settings.agent': { es: 'Agente', en: 'Agent' },
+  'settings.audit': { es: 'Auditoría', en: 'Audit' },
+  'settings.default_provider': { es: 'Proveedor por defecto', en: 'Default provider' },
+  'settings.default_model': { es: 'Modelo por defecto', en: 'Default model' },
+  'settings.language': { es: 'Idioma', en: 'Language' },
+  'settings.llm_params': { es: 'Parámetros del modelo', en: 'Model parameters' },
+  'settings.temperature': { es: 'Temperatura', en: 'Temperature' },
+  'settings.top_p': { es: 'Top P', en: 'Top P' },
+  'settings.max_tokens': { es: 'Max tokens', en: 'Max tokens' },
+  'settings.storage': { es: 'Almacenamiento', en: 'Storage' },
+  'settings.clear_history': { es: 'Limpiar historial', en: 'Clear history' },
+  'settings.export': { es: 'Exportar conversaciones', en: 'Export conversations' },
+  'settings.import': { es: 'Importar conversaciones', en: 'Import conversations' },
+  'settings.tavily_key': { es: 'Tavily API Key', en: 'Tavily API Key' },
+  'settings.agent_desc': { es: 'Configura el comportamiento del agente de IA.', en: 'Configure agent behavior.' },
+  'settings.docker_sandbox': { es: 'Sandbox Docker', en: 'Docker Sandbox' },
+  'settings.docker_desc': { es: 'Ejecuta herramientas del agente dentro de un contenedor Docker para mayor seguridad.', en: 'Run agent tools inside a Docker container for isolation.' },
+  'settings.docker_check': { es: 'Verificar Docker', en: 'Check Docker' },
+
+  // Agent
+  'agent.running': { es: 'ejecutando...', en: 'running...' },
+  'agent.completed': { es: 'completado', en: 'completed' },
+  'agent.steps': { es: 'paso', en: 'step' },
+  'agent.reasoning': { es: 'Razonando', en: 'Reasoning' },
+  'agent.reasoning_ellipsis': { es: 'Razonando...', en: 'Reasoning...' },
+  'agent.final': { es: 'Respuesta final → Chat central', en: 'Final answer → Main chat' },
+  'agent.stop': { es: 'Detener agente', en: 'Stop agent' },
+  'agent.close': { es: 'Cerrar panel', en: 'Close panel' },
+  'agent.init': { es: 'Iniciando agente...', en: 'Starting agent...' },
+}
+
+export function t(key: string, lang: Lang): string {
+  const entry = translations[key]
+  if (!entry) return key
+  return entry[lang]
+}
+
+export function useTranslation(lang: Lang) {
+  return (key: string) => t(key, lang)
+}

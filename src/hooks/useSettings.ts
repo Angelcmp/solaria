@@ -17,6 +17,9 @@ export interface AppSettings {
   ollamaTimeout: number
   defaultModel: string
   defaultProvider: 'ollama' | 'openai' | 'anthropic' | 'deepseek' | 'groq' | 'google' | 'cohere' | 'kimi' | 'glm'
+  temperature: number
+  topP: number
+  maxTokens: number
   language: 'es' | 'en'
   tavilyKey: string
   apiKeys: ApiKeys
@@ -27,6 +30,9 @@ const DEFAULT_SETTINGS: AppSettings = {
   ollamaTimeout: 120,
   defaultModel: 'llama3.2',
   defaultProvider: 'ollama',
+  temperature: 0.7,
+  topP: 0.9,
+  maxTokens: 2048,
   language: 'es',
   tavilyKey: '',
   apiKeys: {

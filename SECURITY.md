@@ -106,9 +106,9 @@ font-src 'self'; frame-src 'none'; object-src 'none'
 - Content Security Policy (CSP)
 - Sanitización XSS en renderizador Markdown
 
-### ❌ Planeado
+### ✅ Implementado
 
-- Sandboxing del agente en contenedores
+- Sandboxing del agente en contenedores Docker
 
 ---
 

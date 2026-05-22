@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 const TAVILY_URL: &str = "https://api.tavily.com/search";
 

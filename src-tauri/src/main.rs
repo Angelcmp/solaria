@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    homeangelsolaria_lib::run()
+    solaria_desktop_lib::run()
 }

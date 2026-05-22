@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { useChat } from './hooks/useChat'
 import { useSettings } from './hooks/useSettings'
 import { useAgent } from './hooks/useAgent'
@@ -28,6 +28,7 @@ function App() {
     messages,
     isStreaming,
     sendMessage,
+    regenerate,
     startAgentPrompt,
     completeAssistantMessage,
     updateToolSummary,
@@ -35,6 +36,8 @@ function App() {
     newConversation,
     deleteConversation,
     togglePin,
+    archiveConversation,
+    restoreConversation,
     renameConversation,
     selectConversation,
   } = useChat()
@@ -43,6 +46,7 @@ function App() {
     isRunning: agentIsRunning,
     sessionLocked,
     agentConfig,
+    liveThinking,
     updateAgentConfig,
     runAgent,
     stopAgent,
@@ -66,12 +70,6 @@ function App() {
     setAgentSteps([])
     newConversation()
   }, [resetAgent, newConversation])
-
-  const handleSelectConversation = useCallback((id: string) => {
-    resetAgent()
-    setAgentSteps([])
-    selectConversation(id)
-  }, [resetAgent, selectConversation])
 
   const handleAgentStep = useCallback((step: AgentStep) => {
     setAgentSteps(prev => [...prev, step])
@@ -97,6 +95,40 @@ function App() {
     }
   }, [completeAssistantMessage, updateToolSummary, agentSteps, conversations])
 
+  const getModelParams = useCallback(() => ({
+    temperature: settings.temperature,
+    topP: settings.topP,
+    maxTokens: settings.maxTokens,
+  }), [settings])
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const ctrl = e.ctrlKey || e.metaKey
+      if (!ctrl) return
+      switch (e.key.toLowerCase()) {
+        case 'n':
+          e.preventDefault()
+          handleNewConversation()
+          break
+        case ',':
+          e.preventDefault()
+          setShowSettings(true)
+          break
+        case 'l':
+          e.preventDefault()
+          handleClear()
+          break
+        case 'e':
+          e.preventDefault()
+          handleToggleAgent()
+          break
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [handleNewConversation, handleClear, handleToggleAgent])
+
   const handleSend = useCallback((content: string) => {
     if (agentConfig.enabled) {
       setAgentSteps([])
@@ -106,15 +138,17 @@ function App() {
         type: settings.defaultProvider,
         model: settings.defaultModel,
         apiKey: settings.defaultProvider !== 'ollama' ? settings.apiKeys[settings.defaultProvider] : undefined,
+        ...getModelParams(),
       }, handleAgentStep, handleAgentComplete)
     } else {
       sendMessage(content, {
         type: settings.defaultProvider,
         model: settings.defaultModel,
         apiKey: settings.defaultProvider !== 'ollama' ? settings.apiKeys[settings.defaultProvider] : undefined,
+        ...getModelParams(),
       })
     }
-  }, [agentConfig.enabled, settings, sendMessage, startAgentPrompt, runAgent, handleAgentStep, handleAgentComplete])
+  }, [agentConfig.enabled, settings, sendMessage, startAgentPrompt, runAgent, handleAgentStep, handleAgentComplete, getModelParams])
 
   return (
     <div className="flex h-screen bg-[#131313] overflow-hidden">
@@ -123,10 +157,12 @@ function App() {
         activeConvId={activeConvId}
         isCollapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-        onSelect={handleSelectConversation}
+        onSelect={selectConversation}
         onNew={handleNewConversation}
         onDelete={deleteConversation}
         onPin={togglePin}
+        onArchive={archiveConversation}
+        onRestore={restoreConversation}
         onRename={renameConversation}
       />
       <Chat
@@ -135,6 +171,13 @@ function App() {
         onSend={handleSend}
         onStop={agentIsRunning ? stopAgent : stopGeneration}
         onClear={handleClear}
+        lang={settings.language}
+        onRegenerate={agentConfig.enabled ? undefined : () => regenerate({
+          type: settings.defaultProvider,
+          model: settings.defaultModel,
+          apiKey: settings.defaultProvider !== 'ollama' ? settings.apiKeys[settings.defaultProvider] : undefined,
+          ...getModelParams(),
+        })}
         settings={settings}
         onShowSettings={() => setShowSettings(true)}
         agentConfig={agentConfig}
@@ -146,6 +189,7 @@ function App() {
       <AgentAside
         steps={agentSteps}
         isRunning={agentIsRunning}
+        liveThinking={liveThinking}
         workingDirectory={agentConfig.workingDirectory}
         onClose={() => setAgentSteps([])}
         onStop={stopAgent}

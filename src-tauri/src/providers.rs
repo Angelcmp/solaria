@@ -1,4 +1,7 @@
 use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Emitter};
+use futures_util::StreamExt;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 #[derive(Serialize, Deserialize, Clone)]
 struct ChatMessage {
@@ -153,6 +156,13 @@ pub struct ProviderConfig {
     pub base_url: String,
     pub model: String,
     pub api_type: String,
+}
+
+#[derive(Clone)]
+pub struct ModelParams {
+    pub temperature: Option<f32>,
+    pub top_p: Option<f32>,
+    pub max_tokens: Option<u32>,
 }
 
 pub fn get_provider_config(provider: &str, model: &str) -> Option<ProviderConfig> {
@@ -510,5 +520,375 @@ pub async fn route_chat(
         "google" => chat_google(api_key, config, system_prompt, messages_str).await,
         "cohere" => chat_cohere(api_key, config, system_prompt, messages_str).await,
         _ => chat_openai_compatible(api_key, config, system_prompt, messages_str).await,
+    }
+}
+
+// ── Streaming ────────────────────────────────────────────────────────────────
+
+async fn stream_sse(
+    app: &AppHandle,
+    stream_id: &str,
+    cancel_flag: &AtomicBool,
+    response: reqwest::Response,
+) -> String {
+    let mut full_content = String::new();
+    let mut stream = response.bytes_stream();
+    while let Some(chunk_result) = stream.next().await {
+        if cancel_flag.load(Ordering::SeqCst) {
+            return full_content;
+        }
+        match chunk_result {
+            Ok(chunk) => {
+                let chunk_str = String::from_utf8_lossy(&chunk);
+                for line in chunk_str.lines() {
+                    let line = line.trim();
+                    if line.is_empty() { continue; }
+                    if line == "data: [DONE]" { return full_content; }
+                    if let Some(data) = line.strip_prefix("data: ") {
+                        if let Ok(val) = serde_json::from_str::<serde_json::Value>(data) {
+                            if let Some(content) = val["choices"][0]["delta"]["content"].as_str() {
+                                full_content.push_str(content);
+                                let _ = app.emit("stream://token", serde_json::json!({
+                                    "stream_id": stream_id,
+                                    "token": content,
+                                }));
+                            }
+                        }
+                    }
+                }
+            }
+            Err(_) => return full_content,
+        }
+    }
+    full_content
+}
+
+fn build_messages_for_stream(
+    system_prompt: Option<String>,
+    messages_str: &str,
+) -> Vec<ChatMessage> {
+    build_messages(system_prompt, messages_str)
+}
+
+pub async fn stream_openai_compatible(
+    app: AppHandle,
+    stream_id: String,
+    api_key: String,
+    config: ProviderConfig,
+    system_prompt: Option<String>,
+    messages_str: String,
+    params: ModelParams,
+) {
+    let cancel_flag = crate::register_cancel(&stream_id);
+
+    let client = reqwest::Client::new();
+    let chat_messages = build_messages_for_stream(system_prompt, &messages_str);
+    let mut request = serde_json::json!({
+        "model": config.model,
+        "messages": chat_messages,
+        "stream": true,
+    });
+    if let Some(t) = params.temperature { request["temperature"] = serde_json::json!(t); }
+    if let Some(p) = params.top_p { request["top_p"] = serde_json::json!(p); }
+    if let Some(m) = params.max_tokens { request["max_tokens"] = serde_json::json!(m); }
+
+    match client
+        .post(&config.base_url)
+        .header("Authorization", format!("Bearer {}", api_key))
+        .json(&request)
+        .send()
+        .await
+    {
+        Ok(resp) => {
+            if !resp.status().is_success() {
+                let _ = app.emit("stream://error", serde_json::json!({
+                    "stream_id": stream_id, "error": format!("HTTP {}", resp.status().as_u16()),
+                }));
+                return;
+            }
+            let full = stream_sse(&app, &stream_id, &cancel_flag, resp).await;
+            let _ = app.emit("stream://done", serde_json::json!({
+                "stream_id": stream_id, "full_content": full, "cancelled": false,
+            }));
+        }
+        Err(e) => {
+            let _ = app.emit("stream://error", serde_json::json!({
+                "stream_id": stream_id, "error": format!("Error de conexión: {}", e),
+            }));
+        }
+    }
+
+    crate::unregister_cancel(&stream_id);
+}
+
+pub async fn stream_anthropic(
+    app: AppHandle,
+    stream_id: String,
+    api_key: String,
+    config: ProviderConfig,
+    system_prompt: Option<String>,
+    messages_str: String,
+    params: ModelParams,
+) {
+    let cancel_flag = crate::register_cancel(&stream_id);
+
+    let client = reqwest::Client::new();
+    let chat_messages = build_messages_for_stream(system_prompt, &messages_str);
+
+    let system = chat_messages.iter()
+        .filter(|m| m.role == "system")
+        .map(|m| m.content.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let non_system: Vec<AnthropicChatMessage> = chat_messages.iter()
+        .filter(|m| m.role != "system")
+        .map(|m| AnthropicChatMessage { role: m.role.clone(), content: m.content.clone() })
+        .collect();
+
+    let mut request = serde_json::json!({
+        "model": config.model,
+        "max_tokens": params.max_tokens.unwrap_or(4096),
+        "stream": true,
+        "system": if system.is_empty() { serde_json::Value::Null } else { serde_json::Value::String(system) },
+        "messages": non_system,
+    });
+    if let Some(t) = params.temperature { request["temperature"] = serde_json::json!(t); }
+    if let Some(p) = params.top_p { request["top_p"] = serde_json::json!(p); }
+
+    match client
+        .post(&config.base_url)
+        .header("x-api-key", &api_key)
+        .header("anthropic-version", "2023-06-01")
+        .json(&request)
+        .send()
+        .await
+    {
+        Ok(resp) => {
+            if !resp.status().is_success() {
+                let _ = app.emit("stream://error", serde_json::json!({
+                    "stream_id": stream_id, "error": format!("Anthropic HTTP {}", resp.status().as_u16()),
+                }));
+                return;
+            }
+            let mut full_content = String::new();
+            let mut stream = resp.bytes_stream();
+            while let Some(chunk_result) = stream.next().await {
+                if cancel_flag.load(Ordering::SeqCst) { break; }
+                if let Ok(chunk) = chunk_result {
+                    let chunk_str = String::from_utf8_lossy(&chunk);
+                    for line in chunk_str.lines() {
+                        let line = line.trim();
+                        if line.is_empty() { continue; }
+                        if let Some(data) = line.strip_prefix("data: ") {
+                            if let Ok(val) = serde_json::from_str::<serde_json::Value>(data) {
+                                if val.get("type").and_then(|t| t.as_str()) == Some("content_block_delta") {
+                                    if let Some(text) = val["delta"]["text"].as_str() {
+                                        full_content.push_str(text);
+                                        let _ = app.emit("stream://token", serde_json::json!({
+                                            "stream_id": stream_id, "token": text,
+                                        }));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            let _ = app.emit("stream://done", serde_json::json!({
+                "stream_id": stream_id, "full_content": full_content, "cancelled": false,
+            }));
+        }
+        Err(e) => {
+            let _ = app.emit("stream://error", serde_json::json!({
+                "stream_id": stream_id, "error": format!("Error Anthropic: {}", e),
+            }));
+        }
+    }
+
+    crate::unregister_cancel(&stream_id);
+}
+
+pub async fn stream_google(
+    app: AppHandle,
+    stream_id: String,
+    api_key: String,
+    config: ProviderConfig,
+    system_prompt: Option<String>,
+    messages_str: String,
+    params: ModelParams,
+) {
+    let cancel_flag = crate::register_cancel(&stream_id);
+
+    let client = reqwest::Client::new();
+    let chat_messages = build_messages_for_stream(system_prompt, &messages_str);
+
+    let system_text: String = chat_messages.iter()
+        .filter(|m| m.role == "system")
+        .map(|m| m.content.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let contents: Vec<serde_json::Value> = chat_messages.iter()
+        .filter(|m| m.role != "system")
+        .map(|m| {
+            let role = if m.role == "assistant" { "model".into() } else { m.role.clone() };
+            serde_json::json!({
+                "role": role,
+                "parts": [{"text": m.content}],
+            })
+        })
+        .collect();
+
+    let mut request = serde_json::json!({
+        "system_instruction": if system_text.is_empty() {
+            serde_json::Value::Null
+        } else {
+            serde_json::json!({ "parts": [{"text": system_text}] })
+        },
+        "contents": contents,
+    });
+    let mut generation_config = serde_json::Map::new();
+    if let Some(t) = params.temperature { generation_config.insert("temperature".into(), serde_json::json!(t)); }
+    if let Some(p) = params.top_p { generation_config.insert("topP".into(), serde_json::json!(p)); }
+    if let Some(m) = params.max_tokens { generation_config.insert("maxOutputTokens".into(), serde_json::json!(m)); }
+    if !generation_config.is_empty() {
+        request["generationConfig"] = serde_json::json!(generation_config);
+    }
+
+    let url = format!("{}/{}:streamGenerateContent?alt=sse&key={}", config.base_url, config.model, api_key);
+
+    match client.post(&url).json(&request).send().await {
+        Ok(resp) => {
+            if !resp.status().is_success() {
+                let _ = app.emit("stream://error", serde_json::json!({
+                    "stream_id": stream_id, "error": format!("Google HTTP {}", resp.status().as_u16()),
+                }));
+                return;
+            }
+            let mut full_content = String::new();
+            let mut stream = resp.bytes_stream();
+            while let Some(chunk_result) = stream.next().await {
+                if cancel_flag.load(Ordering::SeqCst) { break; }
+                if let Ok(chunk) = chunk_result {
+                    let chunk_str = String::from_utf8_lossy(&chunk);
+                    for line in chunk_str.lines() {
+                        let line = line.trim();
+                        if line.is_empty() { continue; }
+                        if let Some(data) = line.strip_prefix("data: ") {
+                            if let Ok(val) = serde_json::from_str::<serde_json::Value>(data) {
+                                if let Some(text) = val["candidates"][0]["content"]["parts"][0]["text"].as_str() {
+                                    full_content.push_str(text);
+                                    let _ = app.emit("stream://token", serde_json::json!({
+                                        "stream_id": stream_id, "token": text,
+                                    }));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            let _ = app.emit("stream://done", serde_json::json!({
+                "stream_id": stream_id, "full_content": full_content, "cancelled": false,
+            }));
+        }
+        Err(e) => {
+            let _ = app.emit("stream://error", serde_json::json!({
+                "stream_id": stream_id, "error": format!("Error Google: {}", e),
+            }));
+        }
+    }
+
+    crate::unregister_cancel(&stream_id);
+}
+
+pub async fn stream_cohere(
+    app: AppHandle,
+    stream_id: String,
+    api_key: String,
+    config: ProviderConfig,
+    system_prompt: Option<String>,
+    messages_str: String,
+    params: ModelParams,
+) {
+    let cancel_flag = crate::register_cancel(&stream_id);
+
+    let client = reqwest::Client::new();
+    let chat_messages = build_messages_for_stream(system_prompt, &messages_str);
+
+    let mut request = serde_json::json!({
+        "model": config.model,
+        "messages": chat_messages,
+        "stream": true,
+    });
+    if let Some(t) = params.temperature { request["temperature"] = serde_json::json!(t); }
+    if let Some(p) = params.top_p { request["p"] = serde_json::json!(p); }
+    if let Some(m) = params.max_tokens { request["max_tokens"] = serde_json::json!(m); }
+
+    match client
+        .post(&config.base_url)
+        .header("Authorization", format!("Bearer {}", api_key))
+        .json(&request)
+        .send()
+        .await
+    {
+        Ok(resp) => {
+            if !resp.status().is_success() {
+                let _ = app.emit("stream://error", serde_json::json!({
+                    "stream_id": stream_id, "error": format!("Cohere HTTP {}", resp.status().as_u16()),
+                }));
+                return;
+            }
+            let mut full_content = String::new();
+            let mut stream = resp.bytes_stream();
+            while let Some(chunk_result) = stream.next().await {
+                if cancel_flag.load(Ordering::SeqCst) { break; }
+                if let Ok(chunk) = chunk_result {
+                    let chunk_str = String::from_utf8_lossy(&chunk);
+                    for line in chunk_str.lines() {
+                        let line = line.trim();
+                        if line.is_empty() { continue; }
+                        if let Some(data) = line.strip_prefix("data: ") {
+                            if let Ok(val) = serde_json::from_str::<serde_json::Value>(data) {
+                                if let Some(text) = val["text"].as_str() {
+                                    full_content.push_str(text);
+                                    let _ = app.emit("stream://token", serde_json::json!({
+                                        "stream_id": stream_id, "token": text,
+                                    }));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            let _ = app.emit("stream://done", serde_json::json!({
+                "stream_id": stream_id, "full_content": full_content, "cancelled": false,
+            }));
+        }
+        Err(e) => {
+            let _ = app.emit("stream://error", serde_json::json!({
+                "stream_id": stream_id, "error": format!("Error Cohere: {}", e),
+            }));
+        }
+    }
+
+    crate::unregister_cancel(&stream_id);
+}
+
+pub async fn route_chat_stream(
+    app: AppHandle,
+    stream_id: String,
+    api_type: String,
+    api_key: String,
+    config: ProviderConfig,
+    system_prompt: Option<String>,
+    messages_str: String,
+    params: ModelParams,
+) {
+    match api_type.as_str() {
+        "anthropic" => stream_anthropic(app, stream_id, api_key, config, system_prompt, messages_str, params).await,
+        "google" => stream_google(app, stream_id, api_key, config, system_prompt, messages_str, params).await,
+        "cohere" => stream_cohere(app, stream_id, api_key, config, system_prompt, messages_str, params).await,
+        _ => stream_openai_compatible(app, stream_id, api_key, config, system_prompt, messages_str, params).await,
     }
 }

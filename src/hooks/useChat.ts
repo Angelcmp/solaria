@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
+import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 
 export interface Message {
   id: string
@@ -15,6 +16,7 @@ export interface Conversation {
   createdAt: number
   updatedAt: number
   pinned: boolean
+  archived?: boolean
   type: 'chat' | 'agent'
   toolSummary?: Record<string, number>
 }
@@ -24,6 +26,9 @@ export interface ProviderConfig {
   model: string
   apiKey?: string
   systemPrompt?: string
+  temperature?: number
+  topP?: number
+  maxTokens?: number
 }
 
 const STORAGE_KEY = 'solaria-conversations'
@@ -45,7 +50,8 @@ export function useChat() {
   const [conversations, setConversations] = useState<Conversation[]>(loadConversations)
   const [activeConvId, setActiveConvId] = useState<string | null>(null)
   const [isStreaming, setIsStreaming] = useState(false)
-  const abortControllerRef = useRef<AbortController | null>(null)
+  const streamIdRef = useRef<string | null>(null)
+  const unlistenRef = useRef<UnlistenFn[]>([])
 
   const activeConv = conversations.find(c => c.id === activeConvId) || null
   const messages = activeConv?.messages || []
@@ -54,6 +60,13 @@ export function useChat() {
     saveConversations(conversations)
   }, [conversations])
 
+  const cleanupStreamListeners = useCallback(() => {
+    for (const unlisten of unlistenRef.current) {
+      unlisten()
+    }
+    unlistenRef.current = []
+  }, [])
+
   const updateConv = useCallback((convId: string, updates: Partial<Conversation>) => {
     setConversations(prev => prev.map(c =>
       c.id === convId ? { ...c, ...updates, updatedAt: Date.now() } : c
@@ -61,7 +74,8 @@ export function useChat() {
   }, [])
 
   const newConversation = useCallback(() => {
-    abortControllerRef.current?.abort()
+    streamIdRef.current = null
+    cleanupStreamListeners()
     setIsStreaming(false)
     const conv: Conversation = {
       id: crypto.randomUUID(),
@@ -74,9 +88,12 @@ export function useChat() {
     }
     setConversations(prev => [conv, ...prev])
     setActiveConvId(conv.id)
-  }, [])
+  }, [cleanupStreamListeners])
 
   const deleteConversation = useCallback((convId: string) => {
+    streamIdRef.current = null
+    cleanupStreamListeners()
+    setIsStreaming(false)
     setConversations(prev => {
       const updated = prev.filter(c => c.id !== convId)
       if (activeConvId === convId) {
@@ -85,11 +102,23 @@ export function useChat() {
       }
       return updated
     })
-  }, [activeConvId])
+  }, [activeConvId, cleanupStreamListeners])
 
   const togglePin = useCallback((convId: string) => {
     setConversations(prev => prev.map(c =>
       c.id === convId ? { ...c, pinned: !c.pinned } : c
+    ))
+  }, [])
+
+  const archiveConversation = useCallback((convId: string) => {
+    setConversations(prev => prev.map(c =>
+      c.id === convId ? { ...c, archived: true } : c
+    ))
+  }, [])
+
+  const restoreConversation = useCallback((convId: string) => {
+    setConversations(prev => prev.map(c =>
+      c.id === convId ? { ...c, archived: false } : c
     ))
   }, [])
 
@@ -98,10 +127,170 @@ export function useChat() {
   }, [updateConv])
 
   const selectConversation = useCallback((convId: string) => {
-    abortControllerRef.current?.abort()
+    streamIdRef.current = null
+    cleanupStreamListeners()
     setIsStreaming(false)
     setActiveConvId(convId)
+  }, [cleanupStreamListeners])
+
+  const appendToAssistantMessage = useCallback((convId: string, assistantId: string, token: string) => {
+    setConversations(prev => prev.map(c => {
+      if (c.id !== convId) return c
+      return {
+        ...c,
+        messages: c.messages.map(m =>
+          m.id === assistantId ? { ...m, content: m.content + token } : m
+        ),
+        updatedAt: Date.now(),
+      }
+    }))
   }, [])
+
+  const autoName = useCallback(async (convId: string, provider: ProviderConfig) => {
+    const conv = conversations.find(c => c.id === convId)
+    if (!conv || conv.messages.length < 2) return
+    const firstUserMsg = conv.messages.find(m => m.role === 'user')
+    if (!firstUserMsg) return
+    const content = firstUserMsg.content.slice(0, 200)
+
+    try {
+      let result: { success: boolean; content: string }
+      if (provider.type === 'ollama') {
+        result = await invoke('ollama_chat', {
+          model: provider.model,
+          messages: JSON.stringify([
+            { role: 'user', content: `Genera un título corto (máx 6 palabras, en español) para una conversación que empieza con: "${content}". Responde SOLO el título, sin comillas ni puntuación extra.` },
+          ]),
+          systemPrompt: 'Eres un asistente que genera títulos cortos y descriptivos.',
+        })
+      } else {
+        result = await invoke('provider_chat', {
+          provider: provider.type,
+          model: provider.model,
+          apiKey: provider.apiKey || '',
+          messages: JSON.stringify([
+            { role: 'user', content: `Genera un título corto (máx 6 palabras, en español) para una conversación que empieza con: "${content}". Responde SOLO el título, sin comillas ni puntuación extra.` },
+          ]),
+          systemPrompt: 'Eres un asistente que genera títulos cortos y descriptivos.',
+        })
+      }
+
+      if (result.success && result.content) {
+        const title = result.content.replace(/[""«»]/g, '').trim().slice(0, 60)
+        if (title.length > 3) {
+          updateConv(convId, { title })
+        }
+      }
+    } catch {
+      // Silent fail - keep the original title
+    }
+  }, [conversations, updateConv])
+
+  const startStream = useCallback(async (
+    convId: string,
+    assistantId: string,
+    historyMessages: { role: string; content: string }[],
+    provider: ProviderConfig,
+  ) => {
+    streamIdRef.current = null
+    cleanupStreamListeners()
+
+    const streamId = crypto.randomUUID()
+    streamIdRef.current = streamId
+    setIsStreaming(true)
+
+    const unlistenToken = await listen<{ stream_id: string; token: string }>('stream://token', (event) => {
+      if (event.payload.stream_id !== streamId) return
+      appendToAssistantMessage(convId, assistantId, event.payload.token)
+    })
+    unlistenRef.current.push(unlistenToken)
+
+    let settled = false
+
+    const unlistenDone = await listen<{ stream_id: string; full_content: string; cancelled: boolean }>('stream://done', (event) => {
+      if (event.payload.stream_id !== streamId) return
+      if (settled) return
+      settled = true
+      cleanupStreamListeners()
+      streamIdRef.current = null
+      setIsStreaming(false)
+
+      // Auto-name on first response
+      if (historyMessages.length <= 1) {
+        autoName(convId, provider)
+      }
+    })
+    unlistenRef.current.push(unlistenDone)
+
+    const unlistenError = await listen<{ stream_id: string; error: string }>('stream://error', (event) => {
+      if (event.payload.stream_id !== streamId) return
+      if (settled) return
+      settled = true
+      const errorMsg = event.payload.error
+      setConversations(prev => prev.map(c => {
+        if (c.id !== convId) return c
+        return {
+          ...c,
+          messages: c.messages.map(m =>
+            m.id === assistantId ? { ...m, content: m.content || 'Error: ' + errorMsg } : m
+          ),
+        }
+      }))
+      cleanupStreamListeners()
+      streamIdRef.current = null
+      setIsStreaming(false)
+    })
+    unlistenRef.current.push(unlistenError)
+
+    try {
+      const modelParams = {
+        temperature: provider.temperature ?? null,
+        topP: provider.topP ?? null,
+        maxTokens: provider.maxTokens ?? null,
+      }
+
+      if (provider.type === 'ollama') {
+        await invoke('ollama_chat_stream', {
+          streamId,
+          model: provider.model,
+          messages: JSON.stringify(historyMessages),
+          systemPrompt: provider.systemPrompt || null,
+          temperature: modelParams.temperature,
+          topP: modelParams.topP,
+          maxTokens: modelParams.maxTokens,
+        })
+      } else {
+        await invoke('provider_chat_stream', {
+          streamId,
+          provider: provider.type,
+          model: provider.model,
+          apiKey: provider.apiKey || '',
+          messages: JSON.stringify(historyMessages),
+          systemPrompt: provider.systemPrompt || null,
+          temperature: modelParams.temperature,
+          topP: modelParams.topP,
+          maxTokens: modelParams.maxTokens,
+        })
+      }
+    } catch (error: any) {
+      if (settled) return
+      settled = true
+      if (error?.toString?.()?.includes('AbortError')) return
+      const errorMsg = error?.message || error?.toString() || 'Error de conexión'
+      setConversations(prev => prev.map(c => {
+        if (c.id !== convId) return c
+        return {
+          ...c,
+          messages: c.messages.map(m =>
+            m.id === assistantId ? { ...m, content: m.content || 'Error: ' + errorMsg } : m
+          ),
+        }
+      }))
+      cleanupStreamListeners()
+      streamIdRef.current = null
+      setIsStreaming(false)
+    }
+  }, [appendToAssistantMessage, cleanupStreamListeners])
 
   const sendMessage = useCallback(async (content: string, provider: ProviderConfig) => {
     let convId = activeConvId
@@ -153,70 +342,58 @@ export function useChat() {
       }
     }))
 
-    setIsStreaming(true)
+    const historyMessages = existingMessages.map(m => ({
+      role: m.role,
+      content: m.content,
+    }))
 
-    try {
-      abortControllerRef.current = new AbortController()
+    await startStream(convId, assistantId, historyMessages, provider)
+  }, [activeConvId, messages, startStream])
 
-      const historyMessages = existingMessages.map(m => ({
-        role: m.role,
-        content: m.content,
-      }))
+  const regenerate = useCallback(async (provider: ProviderConfig) => {
+    const conv = conversations.find(c => c.id === activeConvId)
+    if (!conv) return
 
-      let reply = ''
+    const userMessages = conv.messages.filter(m => m.role === 'user')
+    if (userMessages.length === 0) return
+    const lastUserMsg = userMessages[userMessages.length - 1]
 
-      if (provider.type === 'ollama') {
-        const result = await invoke<{ success: boolean; content: string; error: string | null }>('ollama_chat', {
-          model: provider.model,
-          messages: JSON.stringify(historyMessages),
-          systemPrompt: provider.systemPrompt || null,
-        })
-        if (!result.success) throw new Error(result.error || 'Error')
-        reply = result.content
-      } else {
-        const result = await invoke<{ success: boolean; content: string; error: string | null }>('provider_chat', {
-          provider: provider.type,
-          model: provider.model,
-          apiKey: provider.apiKey || '',
-          messages: JSON.stringify(historyMessages),
-          systemPrompt: provider.systemPrompt || null,
-        })
-        if (!result.success) throw new Error(result.error || 'Error')
-        reply = result.content
+    const assistantId = crypto.randomUUID()
+
+    // Truncate messages: keep everything up to and including the last user message
+    const lastUserIdx = (() => {
+      for (let i = conv.messages.length - 1; i >= 0; i--) {
+        if (conv.messages[i].id === lastUserMsg.id) return i
       }
+      return -1
+    })()
+    const truncatedMessages = lastUserIdx >= 0
+      ? conv.messages.slice(0, lastUserIdx + 1)
+      : []
 
-      setConversations(prev => prev.map(c => {
-        if (c.id !== convId) return c
-        return {
-          ...c,
-          messages: c.messages.map(m =>
-            m.id === assistantId ? { ...m, content: reply } : m
-          ),
-        }
-      }))
-    } catch (error: any) {
-      if (error.name === 'AbortError') return
-      const errorMsg = error?.message || error?.toString() || 'No se pudo conectar con Ollama'
-      setConversations(prev => prev.map(c => {
-        if (c.id !== convId) return c
-        return {
-          ...c,
-          messages: c.messages.map(m =>
-            m.id === assistantId
-              ? { ...m, content: 'Error: ' + errorMsg }
-              : m
-          ),
-        }
-      }))
-    } finally {
-      setIsStreaming(false)
-    }
-  }, [activeConvId, messages])
+    setConversations(prev => prev.map(c => {
+      if (c.id !== conv.id) return c
+      return {
+        ...c,
+        messages: [
+          ...truncatedMessages,
+          { id: assistantId, role: 'assistant', content: '', timestamp: Date.now() },
+        ],
+        updatedAt: Date.now(),
+      }
+    }))
+
+    // History: all messages before and including the last user message, minus the duplicate assistant
+    const historyMessages = lastUserIdx >= 0
+      ? conv.messages.slice(0, lastUserIdx + 1).map(m => ({ role: m.role, content: m.content }))
+      : [{ role: 'user' as const, content: lastUserMsg.content }]
+
+    await startStream(conv.id, assistantId, historyMessages, provider)
+  }, [activeConvId, conversations, startStream])
 
   const startAgentPrompt = useCallback((userContent: string) => {
     const existingConv = conversations.find(c => c.id === activeConvId)
 
-    // Reuse active conversation if it's already an agent session
     if (existingConv && existingConv.type === 'agent') {
       const assistantId = crypto.randomUUID()
       setConversations(prev => prev.map(c => {
@@ -234,7 +411,6 @@ export function useChat() {
       return { convId: existingConv.id, assistantId }
     }
 
-    // Otherwise create a new agent conversation
     const convId = crypto.randomUUID()
     const assistantId = crypto.randomUUID()
     const title = userContent.slice(0, 55).trim() + (userContent.length > 55 ? '...' : '')
@@ -275,16 +451,25 @@ export function useChat() {
     ))
   }, [])
 
-  const clearChat = useCallback(() => {
-    if (activeConvId) {
-      deleteConversation(activeConvId)
-    }
-  }, [activeConvId, deleteConversation])
-
   const stopGeneration = useCallback(() => {
-    abortControllerRef.current?.abort()
+    const sid = streamIdRef.current
+    if (sid) {
+      invoke('stop_stream', { streamId: sid }).catch(() => {})
+      streamIdRef.current = null
+    }
+    cleanupStreamListeners()
     setIsStreaming(false)
-  }, [])
+  }, [cleanupStreamListeners])
+
+  useEffect(() => {
+    return () => {
+      const sid = streamIdRef.current
+      if (sid) {
+        invoke('stop_stream', { streamId: sid }).catch(() => {})
+      }
+      cleanupStreamListeners()
+    }
+  }, [cleanupStreamListeners])
 
   return {
     conversations,
@@ -292,14 +477,17 @@ export function useChat() {
     messages,
     isStreaming,
     sendMessage,
+    regenerate,
+    autoName,
     startAgentPrompt,
     completeAssistantMessage,
     updateToolSummary,
-    clearChat,
     stopGeneration,
     newConversation,
     deleteConversation,
     togglePin,
+    archiveConversation,
+    restoreConversation,
     renameConversation,
     selectConversation,
   }

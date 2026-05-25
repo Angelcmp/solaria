@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import type { Message } from '../hooks/useChat'
 import type { AppSettings } from '../hooks/useSettings'
 import type { AgentConfig } from '../hooks/useAgent'
@@ -171,6 +171,7 @@ export default function Chat({
   }, [])
 
   const isAgentEnabled = agentConfig?.enabled ?? false
+  const welcomeText = useMemo(() => getWelcomeVariant(isAgentEnabled, lang), [isAgentEnabled, lang, messages.length === 0])
 
   const readFileAsText = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -342,7 +343,7 @@ export default function Chat({
                   {getTimeGreeting(lang)}
                 </p>
                 <p className="text-[1.375rem] text-[#E5E5E5]" style={{ fontFamily: "'IBM Plex Sans', 'Inter', system-ui, sans-serif", fontWeight: 350 }}>
-                  {getWelcomeVariant(isAgentEnabled, lang)}
+                  {welcomeText}
                 </p>
               </div>
             </div>

@@ -132,6 +132,12 @@
 - [x] **Cost tracking** — Precios por modelo (OpenAI, Anthropic, etc), tooltip en contador de tokens.
 - [x] **Plugins / herramientas extensibles** — Scripts en `~/.solaria/plugins/*.sh` registrados automáticamente.
 
+### P5 — Arquitectura de Agente Seguro (inspirado en Self-Hosted Build Agents)
+
+- [ ] **Modo efímero por tool call** — Spawnear y destruir un contenedor Docker **por cada invocación de herramienta** en vez de mantenerlo vivo toda la sesión. Máximo aislamiento entre calls.
+- [ ] **Perfiles de seguridad** — Dos modos seleccionables: "Explorar" (permisivo, contenedor persistente, red habilitada, auto-confirm) vs "Ejecutar" (efímero, air-gapped, sin red, todas las confirmaciones manuales).
+- [ ] **Sandbox sin red (air-gapped mode)** — Flag para bloquear todo tráfico de red dentro del contenedor del agente. Solo permite comunicación vía stdin/stdout con el host.
+
 ---
 
 ## 3. Bugs / Deuda técnica

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import type { Conversation } from '../hooks/useChat'
 
 interface WorkspaceAsideProps {
@@ -49,6 +49,86 @@ function groupConversations(convs: Conversation[]) {
   if (older.length) groups.push({ label: 'Anteriores', convs: older })
 
   return groups
+}
+
+function ConvDropdown({ conv, showArchived, onPin, onArchive, onRestore, onRename, onDelete }: {
+  conv: Conversation
+  showArchived: boolean
+  onPin: (id: string) => void
+  onArchive: (id: string) => void
+  onRestore: (id: string) => void
+  onRename: (id: string, title: string) => void
+  onDelete: (id: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={(e) => { e.stopPropagation(); setOpen(!open) }}
+        className={'flex items-center justify-center w-5 h-5 rounded transition-colors ' + (open ? 'text-white bg-[rgba(255,255,255,0.08)]' : 'text-[#666666] opacity-0 group-hover:opacity-100 hover:text-white hover:bg-[rgba(255,255,255,0.06)]')}
+        style={{ opacity: open ? 1 : undefined }}
+        title="Más opciones"
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+      </button>
+      {open && (
+        <div className="absolute right-0 top-6 w-40 bg-[#1C1B1B] border border-[rgba(255,255,255,0.1)] rounded-lg shadow-2xl overflow-hidden animate-[fadeIn_0.1s_ease] z-50">
+          {showArchived ? (
+            <button
+              onClick={(e) => { e.stopPropagation(); onRestore(conv.id); setOpen(false) }}
+              className="flex items-center gap-2 w-full px-3 py-2 text-[0.6875rem] text-[#E5E5E5] hover:bg-[rgba(0,229,201,0.08)] hover:text-[#00E5C9] transition-colors"
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+              Restaurar
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={(e) => { e.stopPropagation(); const newTitle = prompt('Renombrar:', conv.title); if (newTitle?.trim()) onRename(conv.id, newTitle.trim()); setOpen(false) }}
+                className="flex items-center gap-2 w-full px-3 py-2 text-[0.6875rem] text-[#E5E5E5] hover:bg-[rgba(255,255,255,0.06)] hover:text-white transition-colors"
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.828 2.828 0 114 4L7 21l-4 1 1-4L17 3z"/></svg>
+                Editar título
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onPin(conv.id); setOpen(false) }}
+                className="flex items-center gap-2 w-full px-3 py-2 text-[0.6875rem] text-[#E5E5E5] hover:bg-[rgba(220,178,99,0.08)] hover:text-[#DCB263] transition-colors"
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill={conv.pinned ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                {conv.pinned ? 'Desanclar' : 'Anclar'}
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onArchive(conv.id); setOpen(false) }}
+                className="flex items-center gap-2 w-full px-3 py-2 text-[0.6875rem] text-[#E5E5E5] hover:bg-[rgba(255,255,255,0.06)] hover:text-white transition-colors"
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/></svg>
+                Archivar
+              </button>
+            </>
+          )}
+          <button
+            onClick={(e) => { e.stopPropagation(); onDelete(conv.id); setOpen(false) }}
+            className="flex items-center gap-2 w-full px-3 py-2 text-[0.6875rem] text-[#ef4444] hover:bg-[rgba(239,68,68,0.08)] transition-colors"
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+            Eliminar
+          </button>
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function WorkspaceAside({
@@ -182,41 +262,15 @@ export default function WorkspaceAside({
                         )}
                       </div>
 
-                      <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {showArchived ? (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); onRestore(conv.id) }}
-                            className="flex items-center justify-center w-5 h-5 rounded hover:bg-[rgba(0,229,201,0.15)] hover:text-[#00E5C9] text-[#666666] transition-colors"
-                            title="Restaurar"
-                          >
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
-                          </button>
-                        ) : (
-                          <>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); onPin(conv.id) }}
-                              className={`flex items-center justify-center w-5 h-5 rounded hover:bg-[rgba(220,178,99,0.15)] hover:text-[#DCB263] transition-colors ${conv.pinned ? 'text-[#DCB263]' : 'text-[#666666]'}`}
-                              title={conv.pinned ? 'Desanclar' : 'Anclar'}
-                            >
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill={conv.pinned ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-                            </button>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); onArchive(conv.id) }}
-                              className="flex items-center justify-center w-5 h-5 rounded hover:bg-[rgba(220,178,99,0.15)] hover:text-[#DCB263] text-[#666666] transition-colors"
-                              title="Archivar"
-                            >
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/></svg>
-                            </button>
-                          </>
-                        )}
-                        <button
-                          onClick={(e) => { e.stopPropagation(); onDelete(conv.id) }}
-                          className="flex items-center justify-center w-5 h-5 rounded hover:bg-[rgba(239,68,68,0.15)] hover:text-[#ef4444] text-[#666666] transition-colors"
-                          title="Eliminar"
-                        >
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
-                        </button>
-                      </div>
+                      <ConvDropdown
+                        conv={conv}
+                        showArchived={showArchived}
+                        onPin={onPin}
+                        onArchive={onArchive}
+                        onRestore={onRestore}
+                        onRename={onRename}
+                        onDelete={onDelete}
+                      />
                     </div>
                   ))}
                 </div>

@@ -1,10 +1,6 @@
 #!/bin/bash
-# Solaria Desktop - CLI wrapper
+# Solaria Agent - CLI wrapper
 # Pasa el directorio actual como working directory a Solaria.
-#
-# Instalación:
-#   sudo cp scripts/solaria /usr/local/bin/
-#   chmod +x /usr/local/bin/solaria
 #
 # Uso:
 #   cd /mi/proyecto
@@ -15,7 +11,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BIN_DIR="$(cd "$SCRIPT_DIR/../src-tauri/target/release" && pwd 2>/dev/null || echo "$SCRIPT_DIR")"
-BINARY="homeangelsolaria"
+BINARY="solaria-agent"
 
 # Look for the binary in common locations
 if [ -f "$BIN_DIR/$BINARY" ]; then
@@ -27,7 +23,7 @@ elif command -v "$BINARY" &>/dev/null; then
 else
   echo "Error: no se encuentra el binario de Solaria."
   echo "Busca en: $BIN_DIR/$BINARY"
-  echo "O instálalo con: sudo cp src-tauri/target/release/$BINARY /usr/local/lib/solaria/"
+  echo "Instálalo con: curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/scripts/install.sh | bash"
   exit 1
 fi
 

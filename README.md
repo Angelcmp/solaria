@@ -1,14 +1,14 @@
-# Solaria Desktop
+# Solaria Agent
 
-**Tu asistente de IA, local y privado.**
+**Tu agente de IA, local y privado.**
 
-Solaria es un asistente de inteligencia artificial que corre directamente en tu computadora. Sin cuentas, sin nube, sin enviar tus datos a nadie. Habla con modelos locales vía Ollama o conecta tus propias API keys de OpenAI, Anthropic, DeepSeek, Kimi y más. Activa el modo agente y deja que la IA ejecute comandos, explore archivos y automatice tareas por ti.
+Solaria es un agente de inteligencia artificial que corre directamente en tu computadora. Sin cuentas, sin nube, sin enviar tus datos a nadie. Habla con modelos locales vía Ollama o conecta tus propias API keys de OpenAI, Anthropic, DeepSeek, Kimi y más. Activa el modo agente y deja que la IA ejecute comandos, explore archivos y automatice tareas por ti.
 
 ---
 
 ## Nuestra Visión
 
-Solaria nació con una idea simple: **hacer que la inteligencia artificial sea útil y accesible para todos.**
+Solaria Agent nació con una idea simple: **hacer que la inteligencia artificial sea útil y accesible para todos.**
 
 No queremos que la IA reemplace tu pensamiento, sino que lo potencie. Que puedas hacer en segundos lo que antes tomaba horas. Que tengas el control total sobre tus datos, tus modelos y tu experiencia.
 
@@ -70,10 +70,20 @@ sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev \
 
 ## Instalación
 
+### Rápida (recomendada)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/scripts/install.sh | bash
+```
+
+El script instala automáticamente Rust, Node.js, dependencias del sistema, clona el repositorio y compila Solaria.
+
+### Manual
+
 ```bash
 # Clonar
-git clone https://github.com/tu-usuario/solaria-desktop
-cd solaria-desktop
+git clone https://github.com/Angelcmp/solaria
+cd solaria
 
 # Instalar dependencias
 npm install

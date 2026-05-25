@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Solaria",
-  "version": "0.1.0",
-  "identifier": "im.solaria.app",
+"productName": "Solaria Agent",
+"version": "0.1.0",
+"identifier": "im.solaria.agent",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",

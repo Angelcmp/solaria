@@ -150,6 +150,8 @@ function App() {
     }
   }, [agentConfig.enabled, settings, sendMessage, startAgentPrompt, runAgent, handleAgentStep, handleAgentComplete, getModelParams])
 
+  const activeConv = conversations.find(c => c.id === activeConvId)
+
   return (
     <div className="flex h-screen bg-[#131313] overflow-hidden">
       <WorkspaceAside
@@ -185,6 +187,7 @@ function App() {
         agentLocked={sessionLocked}
         onToggleAgent={handleToggleAgent}
         onResumeSession={resumeSession}
+        conversationTitle={activeConv?.title}
       />
       <AgentAside
         steps={agentSteps}

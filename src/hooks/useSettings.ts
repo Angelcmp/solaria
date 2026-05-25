@@ -28,8 +28,8 @@ export interface AppSettings {
 const DEFAULT_SETTINGS: AppSettings = {
   ollamaHost: 'http://localhost:11434',
   ollamaTimeout: 120,
-  defaultModel: 'llama3.2',
-  defaultProvider: 'ollama',
+  defaultModel: 'gpt-4o-mini',
+  defaultProvider: 'openai',
   temperature: 0.7,
   topP: 0.9,
   maxTokens: 2048,

@@ -1,8 +1,8 @@
 {
-  "name": "solaria-desktop",
-  "private": true,
-  "version": "0.1.0",
-  "description": "AI-powered desktop chat with local models and agent tools",
+"name": "solaria-agent",
+"private": true,
+"version": "0.1.0",
+"description": "AI agent with chat, tools, sandboxing, and local models",
   "author": "Angelcmp",
   "license": "MIT",
   "type": "module",

@@ -64,35 +64,73 @@ function applyPythonHighlight(code: string): string {
 
 function renderInline(text: string): string {
   return text
-    .replace(/\*\*(.+?)\*\*/g, '<strong class="text-white font-semibold">$1</strong>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong class="text-white font-medium">$1</strong>')
     .replace(/`([^`]+)`/g, '<code class="hl-inline">$1</code>')
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m: string, text: string, url: string) =>
       `<a href="${sanitizeUrl(url)}" target="_blank" rel="noopener noreferrer" class="text-[#00E5C9] hover:underline">${text}</a>`
     )
 }
 
-function renderTable(lines: string[]): string {
-  if (lines.length < 2) return lines.join('\n')
-  const align = lines[1]
-  if (!align || !align.includes('---')) return lines.join('\n')
+function renderTable(block: string): string {
+  const lines = block.split('\n').filter(l => l.trim())
+  if (lines.length < 2) return escapeHtml(block)
 
-  const headers = lines[0].split('|').filter(c => c.trim()).map(c => c.trim())
-  const rows = lines.slice(1).filter((_, i) => i > 0)
+  const separatorIdx = lines.findIndex(l => /^\|?\s*[-|]+\s*\|?\s*$/.test(l))
+  if (separatorIdx < 0) {
+    // Not a real table, render as heading body if starts with #
+    const hm = lines[0].match(/^(#{1,3})\s+(.+)/)
+    if (hm) {
+      const level = hm[1].length
+      const size = level === 1 ? 'text-base' : level === 2 ? 'text-sm' : 'text-xs'
+      return `<h${level} class="${size} font-medium text-white mt-4 mb-2" style="letter-spacing:0.01em">${renderInline(escapeHtml(hm[2]))}</h${level}>`
+    }
+    return escapeHtml(block)
+  }
 
-  let html = '<div class="overflow-x-auto my-2"><table class="w-full text-[0.75rem] border-collapse">'
+  const beforeSep = lines.slice(0, separatorIdx)
+  const afterSep = lines.slice(separatorIdx + 1)
+
+  let html = ''
+
+  // Render heading lines before the separator
+  for (const line of beforeSep) {
+    const hm = line.match(/^(#{1,3})\s+(.+)/)
+    if (hm) {
+      const level = hm[1].length
+      const size = level === 1 ? 'text-base' : level === 2 ? 'text-sm' : 'text-xs'
+      const title = hm[2].split('|')[0].trim()
+      html += `<h${level} class="${size} font-medium text-white mt-4 mb-2" style="letter-spacing:0.01em">${renderInline(escapeHtml(title))}</h${level}>`
+    }
+  }
+
+  // Extract table headers from the last line before separator
+  let headers: string[] = []
+  const lastBefore = beforeSep[beforeSep.length - 1]
+  if (lastBefore) {
+    const hm = lastBefore.match(/^(#{1,3})\s+(.+)/)
+    if (hm) {
+      headers = hm[2].split('|').slice(1).map(s => s.trim()).filter(Boolean)
+    } else {
+      headers = lastBefore.split('|').filter(c => c.trim()).map(c => c.trim())
+    }
+  }
+
+  if (headers.length === 0) return html
+
+  html += '<div class="overflow-x-auto my-3"><table class="w-full text-[0.75rem] border-collapse" style="font-family:\'IBM Plex Sans\',\'Inter\',system-ui,sans-serif;letter-spacing:0.01em">'
   html += '<thead><tr>'
   for (const h of headers) {
-    html += `<th class="border border-[rgba(255,255,255,0.1)] px-2 py-1 text-left font-semibold text-[#DCB263]">${renderInline(escapeHtml(h))}</th>`
+    html += `<th class="border border-[rgba(255,255,255,0.1)] px-3 py-1.5 text-left font-medium text-[#DCB263]" style="font-weight:450;letter-spacing:0.02em">${renderInline(escapeHtml(h))}</th>`
   }
   html += '</tr></thead><tbody>'
 
-  for (const row of rows) {
-    if (row.includes('---')) continue
+  for (const row of afterSep) {
+    if (/^\|?\s*[-|]+\s*\|?\s*$/.test(row)) continue
     const cols = row.split('|').filter(c => c.trim()).map(c => c.trim())
     if (cols.length === 0) continue
     html += '<tr>'
     for (const c of cols) {
-      html += `<td class="border border-[rgba(255,255,255,0.1)] px-2 py-1">${renderInline(escapeHtml(c))}</td>`
+      html += `<td class="border border-[rgba(255,255,255,0.1)] px-3 py-1.5" style="font-weight:350;letter-spacing:0.01em">${renderInline(escapeHtml(c))}</td>`
     }
     html += '</tr>'
   }
@@ -109,8 +147,8 @@ function renderList(text: string): string {
   for (const line of lines) {
     const listMatch = line.match(/^(\s*)[-*+]\s+(.+)/)
     if (listMatch) {
-      if (!inUl) { result.push('<ul class="list-disc pl-5 my-1 space-y-0.5">'); inUl = true }
-      result.push(`<li>${renderInline(escapeHtml(listMatch[2]))}</li>`)
+      if (!inUl) { result.push('<ul class="list-disc pl-5 my-1.5 space-y-1">'); inUl = true }
+      result.push(`<li style="font-weight:400">${renderInline(escapeHtml(listMatch[2]))}</li>`)
     } else {
       if (inUl) { result.push('</ul>'); inUl = false }
       result.push(line)
@@ -143,18 +181,19 @@ export default function Markdown({ content, compact }: MarkdownProps) {
       for (const para of paragraphs) {
         if (!para.trim()) continue
 
-        const tableLines = para.split('\n')
-        const isTable = tableLines.some(l => l.includes('|')) && tableLines.length >= 2
+        const lines = para.split('\n').filter(l => l.trim())
+        const separatorIdx = lines.findIndex(l => l.match(/^\|?\s*[-|]+\s*\|?\s*$/))
+        const hasTable = separatorIdx >= 0 && lines.some((l, i) => l.includes('|') && i !== separatorIdx)
 
-        if (isTable) {
-          htmlParts.push(renderTable(tableLines))
+        if (hasTable) {
+          htmlParts.push(renderTable(para))
         } else if (para.startsWith('#')) {
           const match = para.match(/^(#{1,3})\s+(.+)/)
           if (match) {
             const level = match[1].length
             const size = level === 1 ? 'text-base' : level === 2 ? 'text-sm' : 'text-xs'
             htmlParts.push(
-              `<h${level} class="${size} font-bold text-white mt-2 mb-1">${renderInline(escapeHtml(match[2]))}</h${level}>`
+              `<h${level} class="${size} font-medium text-white mt-3 mb-1.5" style="letter-spacing:0.01em">${renderInline(escapeHtml(match[2]))}</h${level}>`
             )
           }
         } else {
@@ -165,8 +204,8 @@ export default function Markdown({ content, compact }: MarkdownProps) {
             .filter(l => l)
             .map(l => {
               if (l.startsWith('<')) return l
-              if (l.startsWith('---')) return `<hr class="border-[rgba(255,255,255,0.08)] my-2" />`
-              return `<p class="my-1 leading-[1.6]">${renderInline(escapeHtml(l))}</p>`
+              if (l.startsWith('---')) return `<hr class="border-[rgba(255,255,255,0.08)] my-3" />`
+              return `<p class="my-1.5 leading-[1.7]" style="font-weight:400;letter-spacing:0.01em">${renderInline(escapeHtml(l))}</p>`
             })
             .join('\n')
           htmlParts.push(withInline)
@@ -177,7 +216,8 @@ export default function Markdown({ content, compact }: MarkdownProps) {
 
   return (
     <div
-      className={`markdown-body ${compact ? 'text-[0.75rem]' : 'text-[0.875rem]'} leading-[1.6] text-[#E5E5E5]`}
+      className={`markdown-body ${compact ? 'text-[0.75rem]' : 'text-[0.875rem]'} leading-[1.7] text-[#E5E5E5]`}
+      style={{ fontFamily: "'IBM Plex Sans', 'Inter', system-ui, sans-serif", fontWeight: 400, letterSpacing: '0.01em' }}
       dangerouslySetInnerHTML={{ __html: htmlParts.join('\n') }}
     />
   )

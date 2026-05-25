@@ -117,7 +117,7 @@ export default function SettingsPanel({
               ))}
             </div>
             <div className="px-4 pt-2 mt-1 border-t border-[rgba(255,255,255,0.04)]">
-              <div className="text-[0.5rem] text-[#4a4a4a]">Solaria Agent v0.1.0</div>
+              <div className="text-[0.5rem] text-[#4a4a4a]">Solaria Agent v0.2.1</div>
             </div>
           </div>
 

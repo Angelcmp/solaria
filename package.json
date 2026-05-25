@@ -1,7 +1,7 @@
 {
 "name": "solaria-agent",
 "private": true,
-"version": "0.1.0",
+"version": "0.2.1",
 "description": "AI agent with chat, tools, sandboxing, and local models",
   "author": "Angelcmp",
   "license": "MIT",

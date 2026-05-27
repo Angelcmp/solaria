@@ -272,6 +272,7 @@ pub async fn execute_tool(
     rate_limit: u32,
     use_allowlist: bool,
     command_allowlist: String,
+    auto_confirm: bool,
 ) -> ToolResult {
     if let Err(msg) = check_rate_limit(rate_limit) {
         return ToolResult {
@@ -283,10 +284,12 @@ pub async fn execute_tool(
         };
     }
 
+    let effective_confirmed = confirmed || auto_confirm;
+
     match name {
-        "shell" => shell_execute(args, confirmed, use_allowlist, &command_allowlist).await,
-        "read_file" => read_file_execute(args, &working_dir, confirmed, restrict_to_workdir).await,
-        "write_file" => write_file_execute(args, &working_dir, confirmed, restrict_to_workdir).await,
+        "shell" => shell_execute(args, effective_confirmed, use_allowlist, &command_allowlist).await,
+        "read_file" => read_file_execute(args, &working_dir, effective_confirmed, restrict_to_workdir).await,
+        "write_file" => write_file_execute(args, &working_dir, effective_confirmed, restrict_to_workdir).await,
         "glob" => glob_execute(args).await,
         "grep" => grep_execute(args).await,
         "web_search" => web_search_execute(args).await,

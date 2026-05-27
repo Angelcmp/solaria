@@ -19,6 +19,8 @@ export interface Conversation {
   archived?: boolean
   type: 'chat' | 'agent'
   toolSummary?: Record<string, number>
+  provider?: string
+  model?: string
 }
 
 export interface ProviderConfig {
@@ -73,7 +75,7 @@ export function useChat() {
     ))
   }, [])
 
-  const newConversation = useCallback(() => {
+  const newConversation = useCallback((initialProvider?: string, initialModel?: string) => {
     streamIdRef.current = null
     cleanupStreamListeners()
     setIsStreaming(false)
@@ -85,6 +87,8 @@ export function useChat() {
       updatedAt: Date.now(),
       pinned: false,
       type: 'chat',
+      provider: initialProvider,
+      model: initialModel,
     }
     setConversations(prev => [conv, ...prev])
     setActiveConvId(conv.id)
@@ -307,6 +311,8 @@ export function useChat() {
         updatedAt: Date.now(),
         pinned: false,
         type: 'chat',
+        provider: provider.type,
+        model: provider.model,
       }
       setConversations(prev => [newConv, ...prev])
       setActiveConvId(convId)
@@ -426,6 +432,8 @@ export function useChat() {
       updatedAt: Date.now(),
       pinned: false,
       type: 'agent',
+      provider: prev.find(c => c.id === activeConvId)?.provider,
+      model: prev.find(c => c.id === activeConvId)?.model,
     }, ...prev])
     setActiveConvId(convId)
 
@@ -443,6 +451,12 @@ export function useChat() {
         updatedAt: Date.now(),
       }
     }))
+  }, [])
+
+  const updateConvModel = useCallback((convId: string, provider: string, model: string) => {
+    setConversations(prev => prev.map(c =>
+      c.id === convId ? { ...c, provider, model, updatedAt: Date.now() } : c
+    ))
   }, [])
 
   const updateToolSummary = useCallback((convId: string, summary: Record<string, number>) => {
@@ -481,6 +495,7 @@ export function useChat() {
     autoName,
     startAgentPrompt,
     completeAssistantMessage,
+    updateConvModel,
     updateToolSummary,
     stopGeneration,
     newConversation,

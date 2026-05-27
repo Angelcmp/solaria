@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { useChat } from './hooks/useChat'
+import { useChat, type ProviderConfig } from './hooks/useChat'
 import { useSettings } from './hooks/useSettings'
 import { useAgent } from './hooks/useAgent'
 import type { AgentStep } from './hooks/useAgent'
@@ -7,6 +7,18 @@ import Chat from './components/Chat'
 import WorkspaceAside from './components/WorkspaceAside'
 import SettingsPanel from './components/SettingsPanel'
 import AgentAside from './components/AgentAside'
+
+const PROVIDERS: { id: string; label: string; models: string[]; local: boolean }[] = [
+  { id: 'ollama', label: 'Ollama (Local)', models: ['qwen3.5', 'llama3.2', 'llama3.1', 'mistral', 'phi3', 'deepseek-r1', 'gemma3', 'gemma4'], local: true },
+  { id: 'openai', label: 'OpenAI', models: ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo', 'gpt-5.5', 'o1', 'o3-mini'], local: false },
+  { id: 'anthropic', label: 'Anthropic', models: ['claude-haiku-4-5', 'claude-sonnet-4-6', 'claude-opus-4-7'], local: false },
+  { id: 'deepseek', label: 'DeepSeek', models: ['deepseek-v4-flash', 'deepseek-v4-pro'], local: false },
+  { id: 'groq', label: 'Groq', models: ['llama-3.3-70b-versatile', 'llama-4-scout-17b-16e-instruct'], local: false },
+  { id: 'google', label: 'Google', models: ['gemini-2.0-flash', 'gemini-3.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.5-pro-preview-03-25'], local: false },
+  { id: 'cohere', label: 'Cohere', models: ['command-r7b-12-2024', 'command-r-plus-08-2024'], local: false },
+  { id: 'kimi', label: 'Kimi (Moonshot)', models: ['kimi-k2.6', 'kimi-k2-0905-preview'], local: false },
+  { id: 'glm', label: 'GLM (Z.AI)', models: ['glm-4.7', 'glm-4.7-flash', 'glm-5.1', 'glm-5', 'glm-5-turbo', 'glm-4.5', 'glm-4.5-flash'], local: false },
+]
 
 function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -31,6 +43,7 @@ function App() {
     regenerate,
     startAgentPrompt,
     completeAssistantMessage,
+    updateConvModel,
     updateToolSummary,
     stopGeneration,
     newConversation,
@@ -56,6 +69,15 @@ function App() {
   } = useAgent()
 
   const [agentSteps, setAgentSteps] = useState<AgentStep[]>([])
+  const completeMsgRef = useRef(completeAssistantMessage)
+  const updateToolSummaryRef = useRef(updateToolSummary)
+  const agentStepsRef = useRef(agentSteps)
+  const conversationsRef = useRef(conversations)
+
+  useEffect(() => { completeMsgRef.current = completeAssistantMessage }, [completeAssistantMessage])
+  useEffect(() => { updateToolSummaryRef.current = updateToolSummary }, [updateToolSummary])
+  useEffect(() => { agentStepsRef.current = agentSteps }, [agentSteps])
+  useEffect(() => { conversationsRef.current = conversations }, [conversations])
 
   const handleToggleAgent = useCallback(() => {
     updateAgentConfig({ enabled: !agentConfig.enabled })
@@ -68,8 +90,8 @@ function App() {
   const handleNewConversation = useCallback(() => {
     resetAgent()
     setAgentSteps([])
-    newConversation()
-  }, [resetAgent, newConversation])
+    newConversation(settings.defaultProvider, settings.defaultModel)
+  }, [resetAgent, newConversation, settings])
 
   const handleAgentStep = useCallback((step: AgentStep) => {
     setAgentSteps(prev => [...prev, step])
@@ -78,22 +100,21 @@ function App() {
   const handleAgentComplete = useCallback((finalContent: string) => {
     const ids = agentIdsRef.current
     if (ids) {
-      completeAssistantMessage(ids.convId, ids.assistantId, finalContent)
-      // Calculate tool summary from agentSteps, merged with existing
-      const currentConv = conversations.find(c => c.id === ids.convId)
+      completeMsgRef.current(ids.convId, ids.assistantId, finalContent)
+      const currentConv = conversationsRef.current.find(c => c.id === ids.convId)
       const existing = currentConv?.toolSummary || {}
       const stepSummary: Record<string, number> = { ...existing }
-      for (const step of agentSteps) {
+      for (const step of agentStepsRef.current) {
         if (step.type === 'tool_result' && step.toolName) {
           stepSummary[step.toolName] = (stepSummary[step.toolName] || 0) + 1
         }
       }
       if (Object.keys(stepSummary).length > 0) {
-        updateToolSummary(ids.convId, stepSummary)
+        updateToolSummaryRef.current(ids.convId, stepSummary)
       }
       agentIdsRef.current = null
     }
-  }, [completeAssistantMessage, updateToolSummary, agentSteps, conversations])
+  }, [])
 
   const getModelParams = useCallback(() => ({
     temperature: settings.temperature,
@@ -130,25 +151,26 @@ function App() {
   }, [handleNewConversation, handleClear, handleToggleAgent])
 
   const handleSend = useCallback((content: string) => {
+    const activeConv = conversations.find(c => c.id === activeConvId)
+    const convProvider = activeConv?.provider || settings.defaultProvider
+    const convModel = activeConv?.model || settings.defaultModel
+    const apiKey = convProvider !== 'ollama' ? settings.apiKeys[convProvider as keyof typeof settings.apiKeys] : undefined
+    const providerConfig = {
+      type: convProvider as ProviderConfig['type'],
+      model: convModel,
+      apiKey,
+      ...getModelParams(),
+    }
+
     if (agentConfig.enabled) {
       setAgentSteps([])
       const ids = startAgentPrompt(content)
       agentIdsRef.current = ids
-      runAgent(content, {
-        type: settings.defaultProvider,
-        model: settings.defaultModel,
-        apiKey: settings.defaultProvider !== 'ollama' ? settings.apiKeys[settings.defaultProvider] : undefined,
-        ...getModelParams(),
-      }, handleAgentStep, handleAgentComplete)
+      runAgent(content, providerConfig, handleAgentStep, handleAgentComplete)
     } else {
-      sendMessage(content, {
-        type: settings.defaultProvider,
-        model: settings.defaultModel,
-        apiKey: settings.defaultProvider !== 'ollama' ? settings.apiKeys[settings.defaultProvider] : undefined,
-        ...getModelParams(),
-      })
+      sendMessage(content, providerConfig)
     }
-  }, [agentConfig.enabled, settings, sendMessage, startAgentPrompt, runAgent, handleAgentStep, handleAgentComplete, getModelParams])
+  }, [agentConfig.enabled, settings, conversations, activeConvId, sendMessage, startAgentPrompt, runAgent, handleAgentStep, handleAgentComplete, getModelParams])
 
   const activeConv = conversations.find(c => c.id === activeConvId)
 
@@ -174,12 +196,17 @@ function App() {
         onStop={agentIsRunning ? stopAgent : stopGeneration}
         onClear={handleClear}
         lang={settings.language}
-        onRegenerate={agentConfig.enabled ? undefined : () => regenerate({
-          type: settings.defaultProvider,
-          model: settings.defaultModel,
-          apiKey: settings.defaultProvider !== 'ollama' ? settings.apiKeys[settings.defaultProvider] : undefined,
-          ...getModelParams(),
-        })}
+        onRegenerate={agentConfig.enabled ? undefined : () => {
+          const activeConv = conversations.find(c => c.id === activeConvId)
+          const regenProvider = activeConv?.provider || settings.defaultProvider
+          const regenModel = activeConv?.model || settings.defaultModel
+          regenerate({
+            type: regenProvider as ProviderConfig['type'],
+            model: regenModel,
+            apiKey: regenProvider !== 'ollama' ? settings.apiKeys[regenProvider as keyof typeof settings.apiKeys] : undefined,
+            ...getModelParams(),
+          })
+        }}
         settings={settings}
         onShowSettings={() => setShowSettings(true)}
         agentConfig={agentConfig}
@@ -188,6 +215,9 @@ function App() {
         onToggleAgent={handleToggleAgent}
         onResumeSession={resumeSession}
         conversationTitle={activeConv?.title}
+        activeConversation={activeConv || null}
+        onUpdateConvModel={updateConvModel}
+        providers={PROVIDERS}
       />
       <AgentAside
         steps={agentSteps}

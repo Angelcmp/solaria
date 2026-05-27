@@ -12,6 +12,8 @@ export interface ApiKeys {
   glm: string
 }
 
+export type SecurityProfile = 'explore' | 'execute'
+
 export interface AppSettings {
   ollamaHost: string
   ollamaTimeout: number
@@ -23,6 +25,7 @@ export interface AppSettings {
   language: 'es' | 'en'
   tavilyKey: string
   apiKeys: ApiKeys
+  securityProfile: SecurityProfile
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -45,6 +48,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     kimi: '',
     glm: '',
   },
+  securityProfile: 'explore',
 }
 
 const STORAGE_KEY = 'solaria-settings'

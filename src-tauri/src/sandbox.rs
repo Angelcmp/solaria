@@ -16,18 +16,23 @@ pub fn check_docker_available() -> bool {
         .unwrap_or(false)
 }
 
-pub fn create_container(image: &str, mount_dir: &str) -> Result<String, String> {
-    let mut cmd = Command::new("docker");
-    cmd.args([
+pub fn create_container(image: &str, mount_dir: &str, network_enabled: bool) -> Result<String, String> {
+    let mut args = vec![
         "create",
         "--rm",
         "-i",
-        "--network", "none",
         "--security-opt", "no-new-privileges",
         "--read-only",
         "--tmpfs", "/tmp:rw,noexec,nosuid,size=64m",
         "--tmpfs", "/workspace:rw,noexec,nosuid,size=256m",
-    ]);
+    ];
+
+    if !network_enabled {
+        args.extend(["--network", "none"]);
+    }
+
+    let mut cmd = Command::new("docker");
+    cmd.args(&args);
 
     if !mount_dir.is_empty() {
         let mount_arg = format!("type=bind,source={},target=/workspace", mount_dir);

@@ -125,17 +125,19 @@ body {
 /* Markdown body tables */
 .markdown-body table {
   border-collapse: collapse;
+  width: 100%;
 }
 
 .markdown-body th, .markdown-body td {
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.markdown-body a {
-  color: #00E5C9;
-  text-decoration: none;
+.markdown-body th {
+  font-weight: 450;
+  letter-spacing: 0.02em;
 }
 
-.markdown-body a:hover {
-  text-decoration: underline;
+.markdown-body td {
+  font-weight: 350;
+  letter-spacing: 0.01em;
 }

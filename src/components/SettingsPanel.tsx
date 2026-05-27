@@ -117,7 +117,7 @@ export default function SettingsPanel({
               ))}
             </div>
             <div className="px-4 pt-2 mt-1 border-t border-[rgba(255,255,255,0.04)]">
-              <div className="text-[0.5rem] text-[#4a4a4a]">Solaria Agent v0.1.0</div>
+              <div className="text-[0.5rem] text-[#4a4a4a]">Solaria Agent v0.2.1</div>
             </div>
           </div>
 
@@ -384,6 +384,56 @@ export default function SettingsPanel({
                   </button>
                 </div>
 
+                <div className="pt-2 border-t border-[rgba(255,255,255,0.06)]">
+                  <label className="block text-[0.6875rem] font-medium text-[#00E5C9] mb-2 uppercase tracking-[0.05em]">Perfil de Seguridad</label>
+                  <p className="text-[0.625rem] text-[#666666] mb-2">Define el nivel de aislamiento y permisos del agente.</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => {
+                        onUpdateAgentConfig({
+                          securityProfile: 'explore',
+                          autoConfirm: true,
+                          sandboxEnabled: agentConfig.sandboxEnabled,
+                        })
+                      }}
+                      className={`px-3 py-2.5 rounded-lg border text-left transition-all ${
+                        agentConfig.securityProfile === 'explore'
+                          ? 'bg-[rgba(0,229,201,0.08)] border-[rgba(0,229,201,0.3)]'
+                          : 'bg-[#2A2A2A] border-[rgba(255,255,255,0.08)] hover:border-[rgba(255,255,255,0.15)]'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[0.75rem] font-semibold" style={{ color: agentConfig.securityProfile === 'explore' ? '#00E5C9' : '#E5E5E5' }}>Explorar</span>
+                        <span className="text-[0.5rem] px-1.5 py-0.5 rounded bg-[rgba(0,229,201,0.1)] text-[#00E5C9]">Auto-confirm</span>
+                      </div>
+                      <div className="text-[0.6rem] text-[#999999] leading-relaxed">
+                        Sandbox con red, contenedor persistente, auto-confirmación de herramientas.
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => {
+                        onUpdateAgentConfig({
+                          securityProfile: 'execute',
+                          autoConfirm: false,
+                        })
+                      }}
+                      className={`px-3 py-2.5 rounded-lg border text-left transition-all ${
+                        agentConfig.securityProfile === 'execute'
+                          ? 'bg-[rgba(220,178,99,0.08)] border-[rgba(220,178,99,0.3)]'
+                          : 'bg-[#2A2A2A] border-[rgba(255,255,255,0.08)] hover:border-[rgba(255,255,255,0.15)]'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[0.75rem] font-semibold" style={{ color: agentConfig.securityProfile === 'execute' ? '#DCB263' : '#E5E5E5' }}>Ejecutar</span>
+                        <span className="text-[0.5rem] px-1.5 py-0.5 rounded bg-[rgba(220,178,99,0.1)] text-[#DCB263]">Manual</span>
+                      </div>
+                      <div className="text-[0.6rem] text-[#999999] leading-relaxed">
+                        Sandbox air-gapped, sin red, todas las herramientas requieren confirmación manual.
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-[0.6875rem] font-medium text-[#999999] mb-1 uppercase tracking-[0.05em]">
                     Máximo de iteraciones: {agentConfig.maxIterations}
@@ -432,7 +482,7 @@ export default function SettingsPanel({
 
                 <div className="pt-2 border-t border-[rgba(255,255,255,0.06)]">
                   <label className="block text-[0.6875rem] font-medium text-[#DCB263] mb-2 uppercase tracking-[0.05em]">Sandbox Docker</label>
-                  <p className="text-[0.625rem] text-[#666666] mb-2">Ejecuta herramientas del agente dentro de un contenedor Docker para mayor seguridad y aislamiento.</p>
+                  <p className="text-[0.625rem] text-[#666666] mb-2">Ejecuta herramientas del agente dentro de un contenedor Docker para mayor seguridad y aislamiento. El modo air-gapped bloquea toda conexión de red.</p>
 
                   <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#2A2A2A] border border-[rgba(255,255,255,0.08)] mb-2">
                     <div>
@@ -456,6 +506,19 @@ export default function SettingsPanel({
 
                   {agentConfig.sandboxEnabled && (
                     <>
+                      <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#2A2A2A] border border-[rgba(255,255,255,0.08)] mb-2">
+                        <div>
+                          <div className="text-[0.75rem] font-medium text-white">Air-gapped</div>
+                          <div className="text-[0.625rem] text-[#999999]">Bloquear todo tráfico de red en el contenedor</div>
+                        </div>
+                        <button
+                          onClick={() => onUpdateAgentConfig({ sandboxAirGapped: !agentConfig.sandboxAirGapped })}
+                          className={`relative w-10 h-5 rounded-full transition-colors ${agentConfig.sandboxAirGapped ? 'bg-[#DCB263]' : 'bg-[#666666]'}`}
+                        >
+                          <div className={`absolute top-[2px] w-4 h-4 rounded-full bg-white transition-all ${agentConfig.sandboxAirGapped ? 'left-5' : 'left-[2px]'}`} />
+                        </button>
+                      </div>
+
                       <div className="mb-2">
                         <label className="block text-[0.6875rem] font-medium text-[#999999] mb-1 uppercase tracking-[0.05em]">Imagen Docker</label>
                         <input

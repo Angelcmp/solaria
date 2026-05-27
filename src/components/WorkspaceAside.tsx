@@ -251,6 +251,11 @@ export default function WorkspaceAside({
                             >
                               {conv.title}
                             </span>
+                            {(conv.provider || conv.model) && (
+                              <span className="text-[0.5rem] text-[#4a4a4a] font-mono ml-0.5">
+                                {conv.provider}/{conv.model}
+                              </span>
+                            )}
                           </div>
                         )}
                         {conv.toolSummary && Object.keys(conv.toolSummary).length > 0 && (

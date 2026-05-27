@@ -24,13 +24,13 @@
 | Conversaciones con IA | ✅ | Ollama local + 8 providers cloud |
 | Streaming de respuestas | ✅ | Tauri events + SSE, todos los providers |
 | Historial persistente (localStorage) | ✅ | |
-| Template selector (40+ templates) | 🟡 | El botón para abrirlo no está visible en la UI (`showTemplates` nunca se activa) |
+| Template selector (40+ templates) | ✅ | Botón en toolbar del chat |
 | Acciones rápidas (8 botones) | ✅ | |
 | Renderizado Markdown | ✅ | Con syntax highlighting básico |
 | Búsqueda web (Tavily) | ✅ | Modo chat y modo agente |
-| Adjuntar archivos / imágenes | ❌ | |
+| Adjuntar archivos / imágenes | ✅ | Drag & drop + file button, texto plano hasta 1MB |
 | Regenerar respuesta | ✅ | |
-| Multi-modelo por conversación | ❌ | El modelo es fijo por conversación |
+| Multi-modelo por conversación | ✅ | Selector en header, modelo por conversación |
 
 ### Modo Agente
 
@@ -46,7 +46,9 @@
 | Auditoría local (`~/.solaria/audit.log`) | ✅ | |
 | Streaming de pasos del agente | ✅ | Live reasoning via `liveThinking` + event stream |
 | Web search dentro del agente | ✅ | Tavily como herramienta del agente |
-| Sandboxing en contenedores | ✅ | Docker con --read-only, tmpfs, sin red |
+| Sandboxing en contenedores | ✅ | Docker con --read-only, tmpfs |
+| Red configurable (air-gapped on/off) | ✅ | Según perfil de seguridad |
+| Perfiles de seguridad (Explorar / Ejecutar) | ✅ | Auto-confirm + red vs manual + air-gapped |
 | Herramienta `fetch_url` / navegación web | ✅ | Con límite de 15KB, validación de tipo |
 
 ### Providers
@@ -56,8 +58,8 @@
 | Ollama (local) | ✅ | |
 | OpenAI, Anthropic, DeepSeek, Groq, Google, Cohere, Kimi, GLM | ✅ | BYOK |
 | Almacenamiento de API keys en keyring del SO | ✅ | Fallback a localStorage |
-| Configuración de temperatura/top_p/etc | ❌ | No hay controles de parámetros del modelo |
-| Cost tracking / uso de tokens | ❌ | |
+| Configuración de temperatura/top_p/etc | ✅ | Temperatura, top_p, max_tokens configurables por provider |
+| Cost tracking / uso de tokens | ✅ | Precios por modelo, tooltip en contador de tokens |
 
 ### UI/UX
 
@@ -67,11 +69,11 @@
 | Anclar / renombrar / eliminar conversaciones | ✅ | |
 | Tema oscuro | ✅ | Solo existe tema oscuro |
 | Tema claro | ❌ | |
-| Internacionalización (i18n) | 🟡 | Settings tiene selector `es`/`en` pero no cambia ningún string |
-| Atajos de teclado | ❌ | |
-| Búsqueda de conversaciones | ❌ | |
-| Exportar conversaciones | 🟡 | Solo exportación manual, sin importación |
-| Importar conversaciones | ❌ | |
+| Internacionalización (i18n) | ✅ | Sistema de traducciones es/en con `t(key, lang)` cubriendo toda la UI |
+| Atajos de teclado | ✅ | `Ctrl+N`, `Ctrl+,`, `Ctrl+L`, `Ctrl+E` |
+| Búsqueda de conversaciones | ✅ | Filtro en el sidebar |
+| Exportar conversaciones | 🟡 | Solo exportación manual |
+| Importar conversaciones | ✅ | Desde JSON exportado |
 
 ### Backend (Rust)
 
@@ -80,17 +82,17 @@
 | Comandos IPC Tauri | ✅ | 12 comandos registrados |
 | Rate limiter | ✅ | Global (no por conversación) |
 | CSP configurada | ✅ | |
-| Consultas síncronas en agent tools | 🟡 | `glob_execute` y `grep_execute` usan `std::process::Command` síncrono en vez de `tokio::process` |
+| Consultas síncronas en agent tools | ✅ | Migrados a `tokio::process::Command` |
 
 ### Testing y CI
 
 | Feature | Estado | Notas |
 |---------|--------|-------|
-| Tests unitarios (frontend) | ❌ | No hay tests |
-| Tests unitarios (backend) | ❌ | No hay tests |
-| Tests de integración | ❌ | No hay tests |
-| CI/CD (GitHub Actions) | ❌ | No hay workflows |
-| Lint / typecheck en CI | ❌ | |
+| Tests unitarios (frontend) | ✅ | Vitest + React Testing Library, 11 tests |
+| Tests unitarios (backend) | ✅ | 5 tests con `cargo test` |
+| Tests de integración | ✅ | 40 tests: tool execution (20), provider config (10), audit log (5), unitarios (5) |
+| CI/CD (GitHub Actions) | ✅ | tsc + vitest + vite build + cargo check + test + clippy |
+| Lint / typecheck en CI | ✅ | Incluido en CI |
 
 ---
 
@@ -121,8 +123,10 @@
 
 - [x] **Tests unitarios (frontend)** — Vitest + React Testing Library.
 - [x] **Tests unitarios (backend)** — Tests Rust con `cargo test`.
+- [x] **Tests de integración** — 40 tests: tool execution pipeline (20), provider config (10), audit log (5), unitarios (5).
 - [x] **CI/CD (GitHub Actions)** — Lint, typecheck, test, build en cada PR.
 - [x] **Model download UI para Ollama** — Interfaz para descargar modelos desde la app.
+- [x] **Multi-modelo por conversación** — Cada conversación almacena su propio provider/model. Selector visual en el header del Chat con dropdown agrupado (Local/Cloud).
 
 ### P4 — Extras
 
@@ -131,6 +135,12 @@
 - [x] **Conversaciones archivadas** — Vista toggle en sidebar, botón Archive/Restore/Delete.
 - [x] **Cost tracking** — Precios por modelo (OpenAI, Anthropic, etc), tooltip en contador de tokens.
 - [x] **Plugins / herramientas extensibles** — Scripts en `~/.solaria/plugins/*.sh` registrados automáticamente.
+
+### P5 — Arquitectura de Agente Seguro (inspirado en Self-Hosted Build Agents)
+
+- [ ] **Modo efímero por tool call** — Spawnear y destruir un contenedor Docker **por cada invocación de herramienta** en vez de mantenerlo vivo toda la sesión. Máximo aislamiento entre calls.
+- [x] **Perfiles de seguridad** — Dos modos seleccionables: "Explorar" (permisivo, contenedor persistente, red habilitada, auto-confirm) vs "Ejecutar" (air-gapped, sin red, todas las confirmaciones manuales).
+- [x] **Sandbox sin red (air-gapped mode)** — Flag para bloquear todo tráfico de red dentro del contenedor del agente. Solo permite comunicación vía stdin/stdout con el host.
 
 ---
 

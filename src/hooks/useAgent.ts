@@ -18,6 +18,8 @@ export interface AgentConfig {
   workingDirectory: string
   sandboxEnabled: boolean
   sandboxImage: string
+  sandboxAirGapped: boolean
+  securityProfile: string
 }
 
 const DEFAULT_AGENT_CONFIG: AgentConfig = {
@@ -34,6 +36,8 @@ const DEFAULT_AGENT_CONFIG: AgentConfig = {
   workingDirectory: '',
   sandboxEnabled: false,
   sandboxImage: 'ubuntu:latest',
+  sandboxAirGapped: true,
+  securityProfile: 'explore',
 }
 
 export interface AgentStep {
@@ -52,23 +56,21 @@ export interface AgentMessage {
   content: string
 }
 
-const AGENT_SYSTEM_PROMPT = `Eres Solaria Agent, un asistente de IA que puede ejecutar herramientas para ayudar al usuario.
+const AGENT_SYSTEM_PROMPT = `Eres Solaria Agent. Ejecutas herramientas en el sistema del usuario.
 
-Tienes acceso a las siguientes herramientas. Cuando necesites usar una herramienta, responde EXCLUSIVAMENTE con este formato:
+Para usar una herramienta, pon SOLO esto al final de tu respuesta:
 
 <tool_call>
-{"name": "shell", "arguments": {"command": "el comando aquí"}}
+{"name": "shell", "arguments": {"command": "el comando"}}
 </tool_call>
 
-REGLAS IMPORTANTES:
-1. Solo puedes llamar UNA herramienta a la vez. Espera el resultado antes de continuar.
-2. Lee el resultado de la herramienta y decide el siguiente paso.
-3. Cuando hayas completado la tarea, da una respuesta final clara sin tool_calls.
-4. Si un comando falla, intenta una alternativa.
-5. Para operaciones de escritura, muestra siempre confirmación del contenido.
-6. Trabaja en el directorio de trabajo especificado a menos que se indique lo contrario.
-7. Analiza los resultados de herramientas y explica lo que encontraste.
-8. Si necesitas más información del usuario, pregúntala directamente.`
+Reglas:
+- Una herramienta a la vez. Espera el resultado antes de continuar.
+- Al terminar, da la respuesta final sin tool_calls.
+- Si un comando falla, intenta otra ruta. Si falla 2 veces, cambia de enfoque.
+- Usa write_file para escribir, no uses echo > en shell.
+- Empieza siempre con pwd para confirmar el directorio.
+- Si no encuentras un archivo, navega hacia la raíz con cd ..`
 
 async function discoverPlugins(): Promise<ToolDefinition[]> {
   try {
@@ -131,10 +133,10 @@ function getToolDescriptions(allowedTools: string[]): string {
     },
     {
       name: 'grep',
-      description: 'Busca texto en archivos usando regex.',
+      description: 'Busca texto en archivos usando regex. Solo acepta pattern y path. Para filtrar por extensión usa shell: grep -rl "pattern" --include="*.ext"',
       parameters: [
-        { name: 'pattern', param_type: 'string', description: 'Regex a buscar', required: true },
-        { name: 'path', param_type: 'string', description: 'Directorio (opcional)', required: false },
+        { name: 'pattern', param_type: 'string', description: 'Regex a buscar (requerido)', required: true },
+        { name: 'path', param_type: 'string', description: 'Directorio donde buscar (opcional, por defecto .)', required: false },
       ],
     },
     {
@@ -166,20 +168,82 @@ ${params}`
 }
 
 function extractToolCall(text: string): { name: string; arguments: Record<string, string> } | null {
-  const match = text.match(/<tool_call>\s*({[\s\S]*?})\s*<\/tool_call>/)
-  if (!match) return null
+  return extractToolCallFromNormalized(normalizeToolTags(text))
+}
+
+function tryFindToolJson(text: string): string | null {
+  // Try strict JSON first (with opening brace)
+  let jsonMatch = text.match(/\{[\s\S]*?"name"[\s\S]*?"arguments"[\s\S]*?\}/)
+  let candidate = jsonMatch?.[0]
+
+  // If no match, try to fix common LLM truncation: missing opening brace
+  if (!candidate) {
+    const brokenMatch = text.match(/("name"\s*:\s*"[^"]+"[\s\S]*?"arguments"\s*:\s*\{[\s\S]*?\}\s*\})/)
+    if (brokenMatch) {
+      candidate = '{' + brokenMatch[1]
+    }
+  }
+
+  if (!candidate) return null
 
   try {
-    const parsed = JSON.parse(match[1])
+    const parsed = JSON.parse(candidate)
+    if (parsed.name && parsed.arguments) return candidate
+  } catch {}
+  return null
+}
+
+function normalizeToolTags(text: string): string {
+  // Normalize various TOOL: formats and legacy <tool_call> formats
+  let result = text
+    // New format: TOOL: {...} at end of message
+    .replace(/TOOL\s*:\s*/gi, 'TOOL:')
+
+  // Legacy: normalize XML-like tag variants
+  result = result
+    .replace(/[{\[\(]*<\/?[Tt]ool[_-]?[Cc]all>/g, (m) => m.includes('/') ? '</tool_call>' : '<tool_call>')
+    .replace(/"?\s*[{\[\(]+tool_call[>\]\)]/gi, '<tool_call>')
+
+  return result
+}
+
+function cleanToolCalls(text: string): string {
+  const normalized = normalizeToolTags(text)
+
+  // Remove new format: TOOL: {...}
+  let cleaned = normalized.replace(/TOOL:\s*\{[\s\S]*?\}\s*/g, '').trim()
+
+  // Remove legacy format: <tool_call>...</tool_call>
+  cleaned = cleaned.replace(/<tool_call>[\s\S]*?<\/tool_call>\s*/g, '').trim()
+
+  // Remove broken tool JSON (with or without opening brace)
+  cleaned = cleaned.replace(/"?\s*"name"\s*:\s*"[^"]+"[\s\S]*?"arguments"\s*:\s*\{[\s\S]*?\}\s*\}?\s*/g, '').trim()
+
+  return cleaned
+}
+
+function extractToolCallFromNormalized(text: string): { name: string; arguments: Record<string, string> } | null {
+  // Try new format: TOOL: {...}
+  const toolMatch = text.match(/TOOL:\s*(\{[\s\S]*?\})/)
+  if (toolMatch) {
+    try {
+      const parsed = JSON.parse(toolMatch[1])
+      if (parsed.name && parsed.arguments) return { name: parsed.name, arguments: parsed.arguments }
+    } catch {}
+  }
+
+  // Try legacy format with tags
+  const match = text.match(/<tool_call>\s*({[\s\S]*?})\s*<\/tool_call>/)
+  const jsonStr = match ? match[1] : tryFindToolJson(text)
+  if (!jsonStr) return null
+
+  try {
+    const parsed = JSON.parse(jsonStr)
     if (!parsed.name || !parsed.arguments) return null
     return { name: parsed.name, arguments: parsed.arguments }
   } catch {
     return null
   }
-}
-
-function cleanToolCalls(text: string): string {
-  return text.replace(/<tool_call>[\s\S]*?<\/tool_call>\s*/g, '').trim()
 }
 
 export function useAgent() {
@@ -259,16 +323,21 @@ export function useAgent() {
         })
         unlistenRef.current.push(unlistenToken)
 
+        const clearTimeoutFn = () => clearTimeout(timeoutId)
+
         const unlistenDone = await listen<{ stream_id: string; full_content: string; cancelled: boolean }>('stream://done', async (event) => {
           if (event.payload.stream_id !== streamId) return
           if (settled) return
           settled = true
+          clearTimeoutFn()
           cleanupStreamListeners()
           streamIdRef.current = null
-          // Use the accumulated content, not the event's full_content
-          // (the event fires before the last token is processed)
-          await new Promise(r => setTimeout(r, 50))
-          resolve(fullContent)
+          // Allow last token event to be processed
+          await new Promise(r => setTimeout(r, 100))
+          // Use the longer accumulated content
+          const finalContent = fullContent.length > event.payload.full_content.length
+            ? fullContent : event.payload.full_content
+          resolve(finalContent)
         })
         unlistenRef.current.push(unlistenDone)
 
@@ -276,11 +345,26 @@ export function useAgent() {
           if (event.payload.stream_id !== streamId) return
           if (settled) return
           settled = true
+          clearTimeoutFn()
           cleanupStreamListeners()
           streamIdRef.current = null
           reject(new Error(event.payload.error))
         })
         unlistenRef.current.push(unlistenError)
+
+        // Timeout: if no done/error event within 30s, treat as completed with partial content
+        const timeoutId = setTimeout(() => {
+          if (settled) return
+          settled = true
+          invoke('stop_stream', { streamId }).catch(() => {})
+          cleanupStreamListeners()
+          streamIdRef.current = null
+          if (fullContent.trim()) {
+            resolve(fullContent.trim())
+          } else {
+            reject(new Error('Tiempo de espera agotado (30s). El modelo no generó respuesta.'))
+          }
+        }, 60000)
 
         const historyMessages = messages.map(m => ({
           role: m.role === 'tool' ? 'user' as const : m.role,
@@ -314,6 +398,7 @@ export function useAgent() {
         } catch (error: any) {
           if (settled) return
           settled = true
+          clearTimeoutFn()
           cleanupStreamListeners()
           streamIdRef.current = null
           reject(error)
@@ -335,6 +420,8 @@ export function useAgent() {
     commandAllowlist: string,
     sandboxEnabled?: boolean,
     sandboxImage?: string,
+    securityProfile?: string,
+    sandboxAirGapped?: boolean,
   ): Promise<import('../lib/tools').ToolResult> => {
     return invoke<import('../lib/tools').ToolResult>('execute_tool', {
       name,
@@ -347,6 +434,9 @@ export function useAgent() {
       commandAllowlist,
       sandboxEnabled: sandboxEnabled ?? false,
       sandboxImage: sandboxImage || null,
+      securityProfile: securityProfile || 'explore',
+      autoConfirm: securityProfile === 'explore',
+      sandboxAirGapped: sandboxAirGapped ?? true,
     })
   }, [])
 
@@ -430,16 +520,14 @@ export function useAgent() {
           continue
         }
 
-        const argsStr = Object.entries(toolCall.arguments)
-          .map(([k, v]) => `${k}: ${v.slice(0, 200)}${v.length > 200 ? '...' : ''}`)
-          .join(', ')
+        const argsJson = JSON.stringify(toolCall.arguments, null, 2)
 
         onStep(makeStep('tool_call', toolCall.name, {
           toolName: toolCall.name,
-          toolArgs: argsStr,
+          toolArgs: argsJson,
         }))
 
-        let toolResult = await executeToolCall(toolCall.name, toolCall.arguments, agentConfig.workingDirectory, false, agentConfig.restrictToWorkDir, agentConfig.rateLimit, agentConfig.useAllowlist, agentConfig.commandAllowlist, agentConfig.sandboxEnabled, agentConfig.sandboxImage)
+        let toolResult = await executeToolCall(toolCall.name, toolCall.arguments, agentConfig.workingDirectory, false, agentConfig.restrictToWorkDir, agentConfig.rateLimit, agentConfig.useAllowlist, agentConfig.commandAllowlist, agentConfig.sandboxEnabled, agentConfig.sandboxImage, agentConfig.securityProfile, agentConfig.sandboxAirGapped)
         touchActivity()
 
         const needsConfirm = toolResult.requires_confirmation ||
@@ -469,7 +557,7 @@ export function useAgent() {
             continue
           }
 
-          toolResult = await executeToolCall(toolCall.name, toolCall.arguments, agentConfig.workingDirectory, true, agentConfig.restrictToWorkDir, agentConfig.rateLimit, agentConfig.useAllowlist, agentConfig.commandAllowlist, agentConfig.sandboxEnabled, agentConfig.sandboxImage)
+          toolResult = await executeToolCall(toolCall.name, toolCall.arguments, agentConfig.workingDirectory, true, agentConfig.restrictToWorkDir, agentConfig.rateLimit, agentConfig.useAllowlist, agentConfig.commandAllowlist, agentConfig.sandboxEnabled, agentConfig.sandboxImage, agentConfig.securityProfile, agentConfig.sandboxAirGapped)
           touchActivity()
         }
 
@@ -485,7 +573,7 @@ export function useAgent() {
           ? `Resultado de ${toolCall.name}:\n\`\`\`\n${toolResult.output.slice(0, 5000)}\n\`\`\`${toolResult.output.length > 5000 ? '\n...(resultado truncado)' : ''}`
           : `Error ejecutando ${toolCall.name}: ${toolResult.error || 'Error desconocido'}`
 
-        messages.push({ role: 'assistant', content: response })
+        messages.push({ role: 'assistant', content: cleanedResponse || response })
         messages.push({ role: 'tool', content: resultContent })
       }
 

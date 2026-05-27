@@ -1,11 +1,11 @@
-mod audit;
+pub mod audit;
 mod keyring;
 mod ollama;
 mod plugins;
-mod providers;
+pub mod providers;
 mod sandbox;
 mod search;
-mod tools;
+pub mod tools;
 
 use std::sync::OnceLock;
 use std::sync::Arc;
@@ -18,21 +18,36 @@ static LAUNCH_CWD: OnceLock<String> = OnceLock::new();
 
 // ── Sandbox container management ────────────────────────────────────────────
 
-fn sandbox_container() -> &'static Mutex<Option<String>> {
-    static CONTAINER: OnceLock<Mutex<Option<String>>> = OnceLock::new();
-    CONTAINER.get_or_init(|| Mutex::new(None))
+struct SandboxState {
+    container_id: String,
+    network_enabled: bool,
+    image: String,
 }
 
-pub fn get_or_create_sandbox(image: String, mount_dir: String) -> Result<String, String> {
-    let mut guard = sandbox_container().lock().map_err(|e| e.to_string())?;
-    if let Some(id) = guard.as_ref() {
+fn sandbox_state() -> &'static Mutex<Option<SandboxState>> {
+    static STATE: OnceLock<Mutex<Option<SandboxState>>> = OnceLock::new();
+    STATE.get_or_init(|| Mutex::new(None))
+}
+
+pub fn get_or_create_sandbox(image: String, mount_dir: String, network_enabled: bool) -> Result<String, String> {
+    let mut guard = sandbox_state().lock().map_err(|e| e.to_string())?;
+
+    // If profile or image changed, recreate container
+    if let Some(state) = guard.as_ref() {
+        if state.network_enabled != network_enabled || state.image != image {
+            let _ = sandbox::remove_container(&state.container_id);
+            *guard = None;
+        }
+    }
+
+    if let Some(state) = guard.as_ref() {
         // Verify container still exists
         let check = std::process::Command::new("docker")
-            .args(["inspect", "--format", "{{.State.Status}}", id])
+            .args(["inspect", "--format", "{{.State.Status}}", &state.container_id])
             .output();
         match check {
             Ok(out) if String::from_utf8_lossy(&out.stdout).trim() == "running" => {
-                return Ok(id.clone());
+                return Ok(state.container_id.clone());
             }
             _ => {
                 // Container is gone, remove stale reference
@@ -41,17 +56,21 @@ pub fn get_or_create_sandbox(image: String, mount_dir: String) -> Result<String,
         }
     }
 
-    let id = sandbox::create_container(&image, &mount_dir)?;
-    *guard = Some(id.clone());
+    let id = sandbox::create_container(&image, &mount_dir, network_enabled)?;
+    *guard = Some(SandboxState {
+        container_id: id.clone(),
+        network_enabled,
+        image: image.clone(),
+    });
     Ok(id)
 }
 
 pub fn remove_sandbox() -> String {
-    let mut guard = sandbox_container().lock().unwrap_or_else(|e| e.into_inner());
-    if let Some(id) = guard.take() {
-        let result = sandbox::remove_container(&id);
+    let mut guard = sandbox_state().lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(state) = guard.take() {
+        let result = sandbox::remove_container(&state.container_id);
         if result.success {
-            format!("Contenedor sandbox eliminado: {}", id)
+            format!("Contenedor sandbox eliminado: {}", state.container_id)
         } else {
             format!("Error eliminando sandbox: {}", result.error.unwrap_or_default())
         }
@@ -166,13 +185,23 @@ async fn execute_tool(
     command_allowlist: String,
     sandbox_enabled: Option<bool>,
     sandbox_image: Option<String>,
+    security_profile: Option<String>,
+    auto_confirm: Option<bool>,
+    sandbox_air_gapped: Option<bool>,
 ) -> tools::ToolResult {
     let wd = working_dir.as_deref();
+    let profile = security_profile.as_deref().unwrap_or("explore");
+    let network_enabled = if sandbox_air_gapped.unwrap_or(false) {
+        false
+    } else {
+        profile == "explore"
+    };
 
     if sandbox_enabled.unwrap_or(false) {
         match get_or_create_sandbox(
             sandbox_image.unwrap_or_else(|| "ubuntu:latest".into()),
             working_dir.clone().unwrap_or_default(),
+            network_enabled,
         ) {
             Ok(container_id) => {
                 let result = tools::execute_tool_sandboxed(
@@ -198,6 +227,7 @@ async fn execute_tool(
     let result = tools::execute_tool(
         &name, &args, working_dir.clone(), confirmed,
         restrict_to_workdir, rate_limit, use_allowlist, command_allowlist,
+        auto_confirm.unwrap_or(false),
     ).await;
 
     audit::log_execution(

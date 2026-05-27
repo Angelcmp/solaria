@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
-import type { Message } from '../hooks/useChat'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import type { Message, Conversation } from '../hooks/useChat'
 import type { AppSettings } from '../hooks/useSettings'
 import type { AgentConfig } from '../hooks/useAgent'
 import type { Template } from '../lib/templates'
@@ -26,6 +26,9 @@ interface ChatProps {
   onResumeSession?: () => void
   lang?: Lang
   conversationTitle?: string
+  activeConversation?: Conversation | null
+  onUpdateConvModel?: (convId: string, provider: string, model: string) => void
+  providers?: { id: string; label: string; models: string[]; local: boolean }[]
 }
 
 interface QuickAction {
@@ -118,12 +121,17 @@ export default function Chat({
   onResumeSession,
   lang = 'es',
   conversationTitle,
+  activeConversation,
+  onUpdateConvModel,
+  providers,
 }: ChatProps) {
   const [input, setInput] = useState('')
   const [activePrompt, setActivePrompt] = useState<string | null>(null)
   const [activeAction, setActiveAction] = useState<string | null>(null)
   const [showTemplates, setShowTemplates] = useState(false)
   const [showQuickActions, setShowQuickActions] = useState(false)
+  const [showModelPicker, setShowModelPicker] = useState(false)
+  const modelPickerRef = useRef<HTMLDivElement>(null)
   const [webSearchActive, setWebSearchActive] = useState(false)
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
@@ -157,6 +165,9 @@ export default function Chat({
       if (qaDropdownRef.current && !qaDropdownRef.current.contains(e.target as Node)) {
         setShowQuickActions(false)
       }
+      if (modelPickerRef.current && !modelPickerRef.current.contains(e.target as Node)) {
+        setShowModelPicker(false)
+      }
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
@@ -171,6 +182,7 @@ export default function Chat({
   }, [])
 
   const isAgentEnabled = agentConfig?.enabled ?? false
+  const welcomeText = useMemo(() => getWelcomeVariant(isAgentEnabled, lang), [isAgentEnabled, lang, messages.length === 0])
 
   const readFileAsText = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -251,6 +263,9 @@ export default function Chat({
     }
 
     setInput('')
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto'
+    }
     setUserScrolledUp(false)
     setShowQuickActions(false)
     if (activePrompt) {
@@ -299,10 +314,56 @@ export default function Chat({
               <span>Agent{agentIsRunning ? '...' : ''}</span>
             </div>
           )}
-          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[rgba(0,229,201,0.08)] border border-[rgba(0,229,201,0.2)] text-[#00E5C9] text-[0.6875rem] font-medium">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="21.17" y1="8" x2="12" y2="8"/><line x1="3.95" y1="6.06" x2="8.54" y2="14"/><line x1="10.88" y1="21.94" x2="15.46" y2="14"/></svg>
-            <span className="max-w-[100px] truncate">{settings.defaultModel}</span>
+          <div className="relative" ref={modelPickerRef}>
+            <button
+              onClick={() => setShowModelPicker(!showModelPicker)}
+              className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[rgba(0,229,201,0.08)] border border-[rgba(0,229,201,0.2)] text-[#00E5C9] text-[0.6875rem] font-medium hover:bg-[rgba(0,229,201,0.12)] transition-colors cursor-pointer whitespace-nowrap"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="21.17" y1="8" x2="12" y2="8"/><line x1="3.95" y1="6.06" x2="8.54" y2="14"/><line x1="10.88" y1="21.94" x2="15.46" y2="14"/></svg>
+              <span className="max-w-[100px] truncate">
+                {activeConversation?.model || settings.defaultModel}
+              </span>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            {showModelPicker && providers && (
+              <div className="absolute top-full right-0 mt-1 w-[260px] max-h-[300px] overflow-y-auto bg-[#1C1B1B] border border-[rgba(255,255,255,0.1)] rounded-lg shadow-2xl z-50 py-1" style={{ scrollbarWidth: 'thin' }}>
+                {providers.map(p => (
+                  <div key={p.id}>
+                    <div className="text-[0.55rem] text-[#666666] uppercase tracking-[0.06em] px-3 py-1.5 mt-1 first:mt-0">{p.label}</div>
+                    {p.models.map(m => {
+                      const isActive = (activeConversation?.provider || settings.defaultProvider) === p.id
+                        && (activeConversation?.model || settings.defaultModel) === m
+                      return (
+                        <button
+                          key={m}
+                          onClick={() => {
+                            if (activeConversation && activeConversation.id && onUpdateConvModel) {
+                              onUpdateConvModel(activeConversation.id, p.id, m)
+                            }
+                            setShowModelPicker(false)
+                          }}
+                          className={`w-full text-left px-3 py-1.5 text-[0.6875rem] transition-colors ${
+                            isActive
+                              ? 'bg-[rgba(0,229,201,0.08)] text-[#00E5C9]'
+                              : 'text-[#E5E5E5] hover:bg-[rgba(255,255,255,0.04)]'
+                          }`}
+                        >
+                          <span className="font-mono">{m}</span>
+                          {isActive && <span className="ml-1.5 text-[0.55rem] opacity-60">✓</span>}
+                        </button>
+                      )
+                    })}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
+          {isAgentEnabled && agentConfig?.workingDirectory && (
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.06)] text-[#666666] text-[0.6rem] font-mono max-w-[180px] truncate" title={agentConfig.workingDirectory}>
+              <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#666666" strokeWidth="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+              <span className="truncate">{agentConfig.workingDirectory}</span>
+            </div>
+          )}
           <div className="flex-1" />
           <button onClick={onShowSettings} className="flex items-center justify-center w-7 h-7 rounded-md hover:bg-[rgba(255,255,255,0.08)] text-[#999999] hover:text-white transition-colors" title={t('chat.settings', lang)}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -342,7 +403,7 @@ export default function Chat({
                   {getTimeGreeting(lang)}
                 </p>
                 <p className="text-[1.375rem] text-[#E5E5E5]" style={{ fontFamily: "'IBM Plex Sans', 'Inter', system-ui, sans-serif", fontWeight: 350 }}>
-                  {getWelcomeVariant(isAgentEnabled, lang)}
+                  {welcomeText}
                 </p>
               </div>
             </div>

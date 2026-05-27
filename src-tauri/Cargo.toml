@@ -1,6 +1,6 @@
 [package]
 name = "solaria-agent"
-version = "0.1.0"
+version = "0.2.1"
 description = "AI agent with chat, tools, sandboxing, and local models"
 authors = ["you"]
 edition = "2021"

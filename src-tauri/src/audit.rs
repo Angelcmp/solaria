@@ -183,3 +183,47 @@ pub fn clear_log() -> Result<(), String> {
         Ok(())
     }
 }
+
+// ── MCP settings persistence ─────────────────────────────────────────────────
+
+fn mcp_settings_path() -> PathBuf {
+    log_dir().join("mcp_servers.json")
+}
+
+pub fn load_mcp_settings() -> Result<Vec<crate::mcp::McpServerConfig>, String> {
+    let path = mcp_settings_path();
+    if !path.exists() {
+        return Ok(default_mcp_servers());
+    }
+    let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    if content.trim().is_empty() {
+        return Ok(default_mcp_servers());
+    }
+    serde_json::from_str(&content).map_err(|e| e.to_string())
+}
+
+pub fn save_mcp_settings(servers: &[crate::mcp::McpServerConfig]) -> Result<(), String> {
+    let dir = log_dir();
+    if !dir.exists() {
+        fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    }
+    let json = serde_json::to_string_pretty(servers).map_err(|e| e.to_string())?;
+    fs::write(mcp_settings_path(), json).map_err(|e| e.to_string())
+}
+
+fn default_mcp_servers() -> Vec<crate::mcp::McpServerConfig> {
+    vec![
+        crate::mcp::McpServerConfig {
+            name: "GitHub".into(),
+            command: "npx".into(),
+            args: vec!["-y".into(), "@modelcontextprotocol/server-github".into()],
+            enabled: false,
+        },
+        crate::mcp::McpServerConfig {
+            name: "Filesystem".into(),
+            command: "npx".into(),
+            args: vec!["-y".into(), "@modelcontextprotocol/server-filesystem".into(), "/".into()],
+            enabled: false,
+        },
+    ]
+}

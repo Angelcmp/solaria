@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::path::Path;
 use std::sync::Mutex;
 use std::sync::OnceLock;
@@ -103,7 +104,7 @@ fn get_rate_limiter() -> &'static Mutex<RateLimiter> {
 }
 
 pub fn get_all_tools() -> Vec<ToolDefinition> {
-    vec![
+    let mut tools: Vec<ToolDefinition> = vec![
         ToolDefinition {
             name: "shell".into(),
             description: "Ejecuta un comando en la terminal del sistema. Útil para comandos del sistema, git, npm, etc.".into(),
@@ -180,17 +181,25 @@ pub fn get_all_tools() -> Vec<ToolDefinition> {
                 required: true,
             }],
         },
-        ToolDefinition {
-            name: "fetch_url".into(),
-            description: "Obtiene el contenido de una URL y lo devuelve como texto. Útil para leer documentación, APIs, o páginas web.".into(),
-            parameters: vec![ToolParam {
-                name: "url".into(),
-                param_type: "string".into(),
-                description: "URL completa a fetch (incluyendo https://)".into(),
-                required: true,
-            }],
-        },
-    ]
+            ToolDefinition {
+                name: "fetch_url".into(),
+                description: "Obtiene el contenido de una URL y lo devuelve como texto. Útil para leer documentación, APIs, o páginas web.".into(),
+                parameters: vec![ToolParam {
+                    name: "url".into(),
+                    param_type: "string".into(),
+                    description: "URL completa a fetch (incluyendo https://)".into(),
+                    required: true,
+                }],
+            },
+    ];
+
+    // Add git tools
+    tools.extend(crate::git::get_git_tool_definitions());
+
+    // Add MCP tools
+    tools.extend(crate::mcp::get_mcp_tool_definitions());
+
+    tools
 }
 
 fn check_dangerous_shell(command: &str) -> Option<&'static str> {
@@ -294,6 +303,17 @@ pub async fn execute_tool(
         "grep" => grep_execute(args).await,
         "web_search" => web_search_execute(args).await,
         "fetch_url" => fetch_url_execute(args).await,
+        // Git tools
+        "git_status" => git_execute("status", args, &working_dir).await,
+        "git_log" => git_execute("log", args, &working_dir).await,
+        "git_branches" => git_execute("branches", args, &working_dir).await,
+        "git_add" => git_execute("add", args, &working_dir).await,
+        "git_commit" => git_execute("commit", args, &working_dir).await,
+        "git_push" => git_execute("push", args, &working_dir).await,
+        "git_checkout" => git_execute("checkout", args, &working_dir).await,
+        "git_diff" => git_execute("diff", args, &working_dir).await,
+        // MCP tools
+        name if name.starts_with("mcp__") => mcp_tool_execute(name, args).await,
         _ => {
             // Try plugin
             let plugin_result = crate::plugins::execute_plugin(name, args);
@@ -783,6 +803,149 @@ async fn fetch_url_execute(args: &str) -> ToolResult {
     }
 }
 
+// ── Git execution ────────────────────────────────────────────────────────────
+
+pub async fn git_execute(action: &str, args: &str, working_dir: &Option<String>) -> ToolResult {
+    let wd = working_dir.clone().unwrap_or_else(|| ".".to_string());
+
+    let result = match action {
+        "status" => {
+            match crate::git::git_status(&wd).await {
+                Ok(s) => {
+                    let mut output = format!("📍 Rama: {}\n", s.branch);
+                    if s.ahead > 0 || s.behind > 0 {
+                        output.push_str(&format!("📤 {} ahead, 📥 {} behind\n", s.ahead, s.behind));
+                    }
+                    if s.has_conflicts {
+                        output.push_str("⚠️  Hay conflictos de merge\n");
+                    }
+                    if !s.staged.is_empty() {
+                        output.push_str(&format!("\n✅ Staged ({}):\n", s.staged.len()));
+                        for f in &s.staged {
+                            output.push_str(&format!("  {} {}\n", f.status, f.path));
+                        }
+                    }
+                    if !s.unstaged.is_empty() {
+                        output.push_str(&format!("\n📝 Unstaged ({}):\n", s.unstaged.len()));
+                        for f in &s.unstaged {
+                            output.push_str(&format!("  {} {}\n", f.status, f.path));
+                        }
+                    }
+                    if !s.untracked.is_empty() {
+                        output.push_str(&format!("\n❓ Untracked ({}):\n", s.untracked.len()));
+                        for f in &s.untracked {
+                            output.push_str(&format!("  {}\n", f));
+                        }
+                    }
+                    if s.staged.is_empty() && s.unstaged.is_empty() && s.untracked.is_empty() {
+                        output.push_str("Working tree limpio\n");
+                    }
+                    ToolResult { success: true, output, error: None, requires_confirmation: false, preview: None }
+                }
+                Err(e) => ToolResult { success: false, output: String::new(), error: Some(e), requires_confirmation: false, preview: None },
+            }
+        }
+        "log" => {
+            let parsed: Result<serde_json::Value, _> = serde_json::from_str(args);
+            let max_count = parsed.ok().and_then(|v| v["max_count"].as_u64()).unwrap_or(10) as u32;
+            match crate::git::git_log(&wd, max_count).await {
+                Ok(entries) => {
+                    let output = entries.iter().map(|e| {
+                        format!("{} | {} | {} | {}", &e.hash[..8], e.author, e.date, e.message)
+                    }).collect::<Vec<_>>().join("\n");
+                    ToolResult { success: true, output, error: None, requires_confirmation: false, preview: None }
+                }
+                Err(e) => ToolResult { success: false, output: String::new(), error: Some(e), requires_confirmation: false, preview: None },
+            }
+        }
+        "branches" => {
+            match crate::git::git_branches(&wd).await {
+                Ok(branches) => {
+                    let output = branches.iter().map(|b| {
+                        if b.current { format!("* {}", b.name) } else { format!("  {}", b.name) }
+                    }).collect::<Vec<_>>().join("\n");
+                    ToolResult { success: true, output, error: None, requires_confirmation: false, preview: None }
+                }
+                Err(e) => ToolResult { success: false, output: String::new(), error: Some(e), requires_confirmation: false, preview: None },
+            }
+        }
+        "add" => {
+            let parsed: Result<serde_json::Value, _> = serde_json::from_str(args);
+            let files = parsed.ok().and_then(|v| v["files"].as_str().map(String::from)).unwrap_or(".".into());
+            match crate::git::git_add(&wd, &files).await {
+                Ok(_) => ToolResult { success: true, output: format!("✅ Archivos añadidos: {}", files), error: None, requires_confirmation: true, preview: Some(format!("Añadir '{}' al staging", files)) },
+                Err(e) => ToolResult { success: false, output: String::new(), error: Some(e), requires_confirmation: false, preview: None },
+            }
+        }
+        "commit" => {
+            let parsed: Result<serde_json::Value, _> = serde_json::from_str(args);
+            let message = parsed.ok().and_then(|v| v["message"].as_str().map(String::from)).unwrap_or_default();
+            if message.is_empty() {
+                return ToolResult { success: false, output: String::new(), error: Some("Mensaje de commit requerido".into()), requires_confirmation: false, preview: None };
+            }
+            match crate::git::git_commit(&wd, &message).await {
+                Ok(o) => ToolResult { success: true, output: format!("✅ Commit creado: {}", o), error: None, requires_confirmation: true, preview: Some(format!("Commit: '{}'", message)) },
+                Err(e) => ToolResult { success: false, output: String::new(), error: Some(e), requires_confirmation: false, preview: None },
+            }
+        }
+        "push" => {
+            let parsed: Result<serde_json::Value, _> = serde_json::from_str(args);
+            let branch = parsed.ok().and_then(|v| v["branch"].as_str().map(String::from)).unwrap_or_default();
+            match crate::git::git_push(&wd, &branch).await {
+                Ok(o) => ToolResult { success: true, output: format!("✅ Push exitoso: {}", o), error: None, requires_confirmation: true, preview: Some(format!("Push a origin/{}", if branch.is_empty() { "actual" } else { &branch })) },
+                Err(e) => ToolResult { success: false, output: String::new(), error: Some(e), requires_confirmation: false, preview: None },
+            }
+        }
+        "checkout" => {
+            let parsed: Result<serde_json::Value, _> = serde_json::from_str(args);
+            let parsed = parsed.unwrap_or(json!({}));
+            let branch = parsed["branch"].as_str().map(String::from).unwrap_or_default();
+            let create = parsed["create"].as_bool().unwrap_or(false);
+            if branch.is_empty() {
+                return ToolResult { success: false, output: String::new(), error: Some("Nombre de rama requerido".into()), requires_confirmation: false, preview: None };
+            }
+            match crate::git::git_checkout(&wd, &branch, create).await {
+                Ok(o) => ToolResult { success: true, output: format!("✅ {}", o), error: None, requires_confirmation: true, preview: Some(format!("Cambiar a rama '{}'{}", branch, if create { " (nueva)" } else { "" })) },
+                Err(e) => ToolResult { success: false, output: String::new(), error: Some(e), requires_confirmation: false, preview: None },
+            }
+        }
+        "diff" => {
+            let parsed: Result<serde_json::Value, _> = serde_json::from_str(args);
+            let parsed = parsed.unwrap_or(json!({}));
+            let staged = parsed["staged"].as_bool().unwrap_or(false);
+            let path = parsed["path"].as_str().map(String::from).unwrap_or_default();
+            match crate::git::git_diff(&wd, staged, &path).await {
+                Ok(o) => ToolResult { success: true, output: o, error: None, requires_confirmation: false, preview: None },
+                Err(e) => ToolResult { success: false, output: String::new(), error: Some(e), requires_confirmation: false, preview: None },
+            }
+        }
+        _ => ToolResult { success: false, output: String::new(), error: Some(format!("Acción git desconocida: {}", action)), requires_confirmation: false, preview: None },
+    };
+
+    result
+}
+
+// ── MCP execution ────────────────────────────────────────────────────────────
+
+pub async fn mcp_tool_execute(name: &str, args: &str) -> ToolResult {
+    match crate::mcp::call_mcp_tool(name, args).await {
+        Ok(output) => ToolResult {
+            success: true,
+            output,
+            error: None,
+            requires_confirmation: false,
+            preview: None,
+        },
+        Err(e) => ToolResult {
+            success: false,
+            output: String::new(),
+            error: Some(e),
+            requires_confirmation: false,
+            preview: None,
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -916,6 +1079,8 @@ pub async fn execute_tool_sandboxed(
         }
         "web_search" => web_search_execute(args).await,
         "fetch_url" => fetch_url_execute(args).await,
+        // Git/MCP tools fallback to local (operate on host filesystem)
+        name if name.starts_with("git_") || name.starts_with("mcp__") => crate::tools::execute_tool(name, args, None, true, false, 999, false, String::new(), true).await,
         _ => {
             let plugin_result = crate::plugins::execute_plugin(name, args);
             if plugin_result.success || plugin_result.error.as_deref() != Some(&format!("Plugin '{}' no encontrado", name)) {

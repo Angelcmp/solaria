@@ -25,7 +25,7 @@ export interface AgentConfig {
 const DEFAULT_AGENT_CONFIG: AgentConfig = {
   enabled: false,
   maxIterations: 10,
-  allowedTools: ['shell', 'read_file', 'write_file', 'glob', 'grep', 'web_search', 'fetch_url'],
+  allowedTools: ['shell', 'read_file', 'write_file', 'glob', 'grep', 'web_search', 'fetch_url', 'git_status', 'git_log', 'git_branches', 'git_add', 'git_commit', 'git_push', 'git_checkout', 'git_diff'],
   autoConfirm: false,
   confirmWrite: false,
   restrictToWorkDir: false,
@@ -42,7 +42,7 @@ const DEFAULT_AGENT_CONFIG: AgentConfig = {
 
 export interface AgentStep {
   id: string
-  type: 'reasoning' | 'tool_call' | 'tool_result' | 'final'
+  type: 'reasoning' | 'tool_call' | 'tool_result' | 'final' | 'chat_update'
   content: string
   toolName?: string
   toolArgs?: string
@@ -64,11 +64,25 @@ Para usar una herramienta, pon SOLO esto al final de tu respuesta:
 {"name": "shell", "arguments": {"command": "el comando"}}
 </tool_call>
 
+Para herramientas sin parámetros:
+<tool_call>
+{"name": "git_status", "arguments": {}}
+</tool_call>
+
+<tool_call>
+{"name": "git_branches", "arguments": {}}
+</tool_call>
+
+SIEMPRE incluye "arguments": {}, incluso si la herramienta no necesita parámetros. No omitas el campo arguments.
+
 Reglas:
 - Una herramienta a la vez. Espera el resultado antes de continuar.
 - Al terminar, da la respuesta final sin tool_calls.
 - Si un comando falla, intenta otra ruta. Si falla 2 veces, cambia de enfoque.
-- Usa write_file para escribir, no uses echo > en shell.
+- Usa write_file para ESCRIBIR código a archivos. No uses echo > ni redirecciones en shell.
+- Si hablas de código en el chat, envuélvelo SIEMPRE en bloques markdown (tres backticks + lenguaje, como html, css, tsx).
+- Todo el código que generes debe ser 100% funcional, sin errores de sintaxis, probado mentalmente.
+- NO generes CSS/HTML como texto plano en el chat. O lo escribes a un archivo con write_file, o lo pones en un bloque markdown.
 - Empieza siempre con pwd para confirmar el directorio.
 - Si no encuentras un archivo, navega hacia la raíz con cd ..`
 
@@ -153,6 +167,61 @@ function getToolDescriptions(allowedTools: string[]): string {
         { name: 'url', param_type: 'string', description: 'URL completa', required: true },
       ],
     },
+    // Git tools
+    {
+      name: 'git_status',
+      description: 'Muestra el estado del repo git: rama actual, cambios staged/unstaged, untracked.',
+      parameters: [],
+    },
+    {
+      name: 'git_log',
+      description: 'Muestra los últimos commits del repositorio.',
+      parameters: [
+        { name: 'max_count', param_type: 'number', description: 'Número de commits (default 10)', required: false },
+      ],
+    },
+    {
+      name: 'git_branches',
+      description: 'Lista las ramas locales del repositorio.',
+      parameters: [],
+    },
+    {
+      name: 'git_add',
+      description: 'Añade archivos al staging area para commitear.',
+      parameters: [
+        { name: 'files', param_type: 'string', description: 'Archivos a añadir (ej: src/main.ts o . para todo)', required: true },
+      ],
+    },
+    {
+      name: 'git_commit',
+      description: 'Crea un commit con mensaje descriptivo.',
+      parameters: [
+        { name: 'message', param_type: 'string', description: 'Mensaje del commit', required: true },
+      ],
+    },
+    {
+      name: 'git_push',
+      description: 'Sube commits al repositorio remoto.',
+      parameters: [
+        { name: 'branch', param_type: 'string', description: 'Rama (opcional si ya tiene upstream)', required: false },
+      ],
+    },
+    {
+      name: 'git_checkout',
+      description: 'Cambia a otra rama o crea una nueva.',
+      parameters: [
+        { name: 'branch', param_type: 'string', description: 'Nombre de la rama', required: true },
+        { name: 'create', param_type: 'boolean', description: 'Crear rama si no existe (default: false)', required: false },
+      ],
+    },
+    {
+      name: 'git_diff',
+      description: 'Muestra diferencias del working tree o staging.',
+      parameters: [
+        { name: 'staged', param_type: 'boolean', description: 'Diff del staging (default: false)', required: false },
+        { name: 'path', param_type: 'string', description: 'Archivo específico (opcional)', required: false },
+      ],
+    },
   ]
 
   return tools
@@ -171,10 +240,53 @@ function extractToolCall(text: string): { name: string; arguments: Record<string
   return extractToolCallFromNormalized(normalizeToolTags(text))
 }
 
+function tryFixJson(raw: string): string {
+  try { JSON.parse(raw); return raw } catch {}
+
+  let fixed = raw
+
+  // Fix: "shell "arguments" → "shell", "arguments" (space instead of comma+space)
+  fixed = fixed.replace(/"(shell|read_file|write_file|glob|grep|web_search|fetch_url|git_status|git_log|git_branches|git_add|git_commit|git_push|git_checkout|git_diff|mcp__[\w_]+__[\w_]+)"\s*"(arguments|parametros)"/g, '"$1", "$2"')
+
+  // Fix: "name": "tool" "arguments" → "name": "tool", "arguments"
+  fixed = fixed.replace(/"name"\s*:\s*"[^"]+"\s+"(arguments|parametros)"/g, (m) => {
+    const before = m.substring(0, m.lastIndexOf('" '))
+    return before + '", "arguments"'
+  })
+
+  try { JSON.parse(fixed); return fixed } catch {}
+
+  // Try adding missing comma between name and arguments
+  fixed = raw.replace(/"\s*"\s*"arguments"/g, '", "arguments"')
+  try { JSON.parse(fixed); return fixed } catch {}
+
+  // Try removing extra quotes
+  fixed = raw.replace(/""/g, '"')
+  try { JSON.parse(fixed); return fixed } catch {}
+
+  // Try removing trailing garbage
+  const lastBrace = raw.lastIndexOf('}')
+  if (lastBrace > 0) {
+    const trimmed = raw.substring(0, lastBrace + 1)
+    try { JSON.parse(trimmed); return trimmed } catch {}
+  }
+
+  return raw
+}
+
 function tryFindToolJson(text: string): string | null {
-  // Try strict JSON first (with opening brace)
+  // Try strict JSON first (with name + arguments)
   let jsonMatch = text.match(/\{[\s\S]*?"name"[\s\S]*?"arguments"[\s\S]*?\}/)
   let candidate = jsonMatch?.[0]
+
+  // Fallback: match JSON with just "name" (tools without parameters)
+  if (!candidate) {
+    // Match { "name": "tool_name" } optionally followed by "arguments": {}
+    const nameOnly = text.match(/\{\s*"(?:name|nombre)"\s*:\s*"(shell|read_file|write_file|glob|grep|web_search|fetch_url|git_status|git_log|git_branches|git_add|git_commit|git_push|git_checkout|git_diff|mcp__[\w_]+__[\w_]+)"(\s*,\s*"(?:arguments|parametros)"\s*:\s*\{\}\s*)?\s*\}/)
+    if (nameOnly) {
+      candidate = nameOnly[0]
+    }
+  }
 
   // If no match, try to fix common LLM truncation: missing opening brace
   if (!candidate) {
@@ -188,8 +300,17 @@ function tryFindToolJson(text: string): string | null {
 
   try {
     const parsed = JSON.parse(candidate)
-    if (parsed.name && parsed.arguments) return candidate
-  } catch {}
+    if (parsed.name) return candidate
+  } catch {
+    // Try to fix malformed JSON and parse again
+    const fixed = tryFixJson(candidate)
+    if (fixed !== candidate) {
+      try {
+        const parsed = JSON.parse(fixed)
+        if (parsed.name) return fixed
+      } catch {}
+    }
+  }
   return null
 }
 
@@ -203,6 +324,10 @@ function normalizeToolTags(text: string): string {
   result = result
     .replace(/[{\[\(]*<\/?[Tt]ool[_-]?[Cc]all>/g, (m) => m.includes('/') ? '</tool_call>' : '<tool_call>')
     .replace(/"?\s*[{\[\(]+tool_call[>\]\)]/gi, '<tool_call>')
+    // Fix {tool_call> (missing < at start)
+    .replace(/\{(tool_call|TOOL)\s*>/g, '<$1>')
+    // Fix {tool_call without >
+    .replace(/\{(tool_call|TOOL)\s*$/gim, '<$1>')
 
   return result
 }
@@ -216,8 +341,8 @@ function cleanToolCalls(text: string): string {
   // Remove legacy format: <tool_call>...</tool_call>
   cleaned = cleaned.replace(/<tool_call>[\s\S]*?<\/tool_call>\s*/g, '').trim()
 
-  // Remove broken tool JSON (with or without opening brace)
-  cleaned = cleaned.replace(/"?\s*"name"\s*:\s*"[^"]+"[\s\S]*?"arguments"\s*:\s*\{[\s\S]*?\}\s*\}?\s*/g, '').trim()
+  // Remove broken tool JSON (with or without arguments)
+  cleaned = cleaned.replace(/"?\s*"name"\s*:\s*"[^"]+".*?\}\s*\}?\s*/g, '').trim()
 
   return cleaned
 }
@@ -228,7 +353,7 @@ function extractToolCallFromNormalized(text: string): { name: string; arguments:
   if (toolMatch) {
     try {
       const parsed = JSON.parse(toolMatch[1])
-      if (parsed.name && parsed.arguments) return { name: parsed.name, arguments: parsed.arguments }
+      if (parsed.name) return { name: parsed.name, arguments: parsed.arguments || {} }
     } catch {}
   }
 
@@ -239,9 +364,17 @@ function extractToolCallFromNormalized(text: string): { name: string; arguments:
 
   try {
     const parsed = JSON.parse(jsonStr)
-    if (!parsed.name || !parsed.arguments) return null
-    return { name: parsed.name, arguments: parsed.arguments }
+    if (!parsed.name) return null
+    return { name: parsed.name, arguments: parsed.arguments || {} }
   } catch {
+    // Try to fix malformed JSON
+    const fixed = tryFixJson(jsonStr)
+    if (fixed !== jsonStr) {
+      try {
+        const parsed = JSON.parse(fixed)
+        if (parsed.name) return { name: parsed.name, arguments: parsed.arguments || {} }
+      } catch {}
+    }
     return null
   }
 }
@@ -476,13 +609,24 @@ export function useAgent() {
           return `### ${p.name}\n${p.description}\nParámetros:\n${params}`
         }).join('\n\n')}`
       : ''
-    const systemPrompt = buildToolSystemPrompt(agentConfig) + pluginLines
+
+    let skillsPrompt = ''
+    try {
+      skillsPrompt = await invoke<string>('get_skills_prompt')
+    } catch {}
+
+    const systemPrompt = buildToolSystemPrompt(agentConfig) + pluginLines + skillsPrompt
     const messages: AgentMessage[] = [
       ...messageHistoryRef.current,
       { role: 'user', content: userInput },
     ]
 
     let iteration = 0
+    let fullAssistantContent = ''
+    const updateChatMsg = (content: string) => {
+      // Called via onStep with special type to update chat message content
+      onStep(makeStep('chat_update', content))
+    }
 
     try {
       while (iteration < agentConfig.maxIterations && !abortRef.current) {
@@ -502,13 +646,17 @@ export function useAgent() {
         const cleanedResponse = cleanToolCalls(response)
 
         if (cleanedResponse && toolCall) {
+          fullAssistantContent = fullAssistantContent
+            ? fullAssistantContent + '\n\n' + cleanedResponse
+            : cleanedResponse
           onStep(makeStep('reasoning', cleanedResponse))
+          updateChatMsg(fullAssistantContent)
         }
 
         if (!toolCall) {
           const finalContent = cleanedResponse || response
           messages.push({ role: 'assistant', content: finalContent })
-          callComplete(onComplete, finalContent, onStep)
+          callComplete(onComplete, fullAssistantContent || finalContent, onStep)
           break
         }
 
@@ -578,7 +726,7 @@ export function useAgent() {
       }
 
       if (iteration >= agentConfig.maxIterations) {
-        callComplete(onComplete, `Máximo de iteraciones alcanzado (${agentConfig.maxIterations}). La tarea puede estar incompleta.`, onStep)
+        callComplete(onComplete, fullAssistantContent || `Máximo de iteraciones alcanzado (${agentConfig.maxIterations}). La tarea puede estar incompleta.`, onStep)
       }
     } catch (error: any) {
       setLiveThinking('')

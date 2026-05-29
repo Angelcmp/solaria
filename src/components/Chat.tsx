@@ -358,10 +358,19 @@ export default function Chat({
               </div>
             )}
           </div>
-          {isAgentEnabled && agentConfig?.workingDirectory && (
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.06)] text-[#666666] text-[0.6rem] font-mono max-w-[180px] truncate" title={agentConfig.workingDirectory}>
-              <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#666666" strokeWidth="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
-              <span className="truncate">{agentConfig.workingDirectory}</span>
+          {isAgentEnabled && (
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.06)] text-[#666666] text-[0.6rem] font-mono" title={agentConfig?.workingDirectory || 'Sin directorio de trabajo. Haz clic para configurar.'}>
+              <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+              <span
+                className="cursor-pointer hover:text-[#00E5C9] transition-colors max-w-[200px] truncate"
+                onClick={onShowSettings}
+                title="Haz clic para cambiar el directorio en Settings"
+              >
+                {agentConfig?.workingDirectory || 'Seleccionar directorio...'}
+              </span>
+              {!agentConfig?.workingDirectory && (
+                <span className="text-[#DCB263] animate-pulse">⚠</span>
+              )}
             </div>
           )}
           <div className="flex-1" />
@@ -413,8 +422,8 @@ export default function Chat({
                 <div key={msg.id} className="mb-4 animate-[msgFadeIn_0.3s_ease-out]" style={{ animationDelay: i * 50 + 'ms' }}>
                   {msg.role === 'user' ? (
                     <div className="flex flex-col items-end">
-                      <div className="max-w-[75%] px-[0.75rem] py-[0.5rem] rounded-[14px_14px_4px_14px] border border-[rgba(220,178,99,0.15)] bg-[linear-gradient(135deg,rgba(220,178,99,0.1),rgba(220,178,99,0.05))] text-white text-[0.875rem] leading-[1.6]">
-                        <Markdown content={msg.content} />
+                      <div className="max-w-[70%] px-[0.6rem] py-[0.35rem] rounded-[12px_12px_4px_12px] border border-[rgba(220,178,99,0.12)] bg-[linear-gradient(135deg,rgba(220,178,99,0.08),rgba(220,178,99,0.03))] text-white text-[0.75rem] leading-[1.5]">
+                        <Markdown content={msg.content} compact />
                       </div>
                     </div>
                   ) : (
@@ -475,7 +484,18 @@ export default function Chat({
 
       <div className="sticky bottom-0 z-40 bg-[linear-gradient(to_top,#131313_70%,transparent)] backdrop-blur-[8px]" style={{ WebkitBackdropFilter: 'blur(8px)' }}>
         <div className="w-full max-w-[800px] mx-auto px-4 pb-2 pt-1">
-          <div className={'flex flex-col bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] rounded-[14px] p-2 gap-1 relative transition-all duration-300 focus-within:border-[rgba(220,178,99,0.4)] focus-within:shadow-[0_0_0_3px_rgba(220,178,99,0.08)] focus-within:bg-[rgba(255,255,255,0.06)] ' + ((agentIsRunning || agentLocked) ? 'opacity-40 pointer-events-none' : '')}>
+          <div className={'flex flex-col bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] rounded-[14px] pt-1.5 px-2 pb-2 gap-1 relative transition-all duration-300 focus-within:border-[rgba(220,178,99,0.4)] focus-within:shadow-[0_0_0_3px_rgba(220,178,99,0.08)] focus-within:bg-[rgba(255,255,255,0.06)] ' + ((agentIsRunning || agentLocked) ? 'opacity-40 pointer-events-none' : '')}>
+            {isAgentEnabled && agentConfig?.workingDirectory && (
+              <div className="flex items-center gap-1 px-2 text-[0.5rem] text-[#555555] font-mono">
+                <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                <span className="truncate max-w-[250px]" title={agentConfig.workingDirectory}>{agentConfig.workingDirectory}</span>
+              </div>
+            )}
+            {isAgentEnabled && !agentConfig?.workingDirectory && (
+              <div className="flex items-center gap-1 px-2 text-[0.5rem] text-[#DCB263] font-mono">
+                ⚠ Sin directorio de trabajo — configurar en Settings
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <textarea
                 ref={inputRef}

@@ -158,23 +158,60 @@ function renderList(text: string): string {
   return result.join('\n')
 }
 
+import { useRef, useEffect } from 'react'
+
 interface MarkdownProps {
   content: string
   compact?: boolean
 }
 
 export default function Markdown({ content, compact }: MarkdownProps) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const handler = (e: MouseEvent) => {
+      const btn = (e.target as HTMLElement).closest('.hl-copy-btn') as HTMLElement
+      if (!btn) return
+      const idx = btn.dataset.idx
+      if (idx === undefined) return
+      const blocks = content.split(/(```[\s\S]*?```)/g)
+      let codeIdx = 0
+      for (const block of blocks) {
+        const match = block.match(/^```(\w*)\n([\s\S]*?)```$/)
+        if (match) {
+          if (codeIdx === parseInt(idx)) {
+            navigator.clipboard.writeText(match[2]).then(() => {
+              btn.textContent = '✓'
+              setTimeout(() => { btn.textContent = 'Copiar' }, 1500)
+            })
+            return
+          }
+          codeIdx++
+        }
+      }
+    }
+    el.addEventListener('click', handler)
+    return () => el.removeEventListener('click', handler)
+  }, [content])
+
   const blocks = content.split(/(```[\s\S]*?```)/g)
   const htmlParts: string[] = []
+  let codeBlockIndex = 0
 
   for (const block of blocks) {
     const codeMatch = block.match(/^```(\w*)\n([\s\S]*?)```$/)
     if (codeMatch) {
       const lang = codeMatch[1]
       const highlighted = highlightCode(codeMatch[2], lang)
+      const idx = codeBlockIndex++
       const langLabel = lang ? `<span class="text-[0.625rem] text-[#666666] font-mono absolute top-1 right-2">${escapeHtml(lang)}</span>` : ''
       htmlParts.push(
-        `<div class="hl-block relative">${langLabel}<pre><code>${highlighted}</code></pre></div>`
+        `<div class="hl-block relative group">${langLabel}
+          <button class="hl-copy-btn absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity px-1.5 py-0.5 rounded text-[0.55rem] text-[#999999] bg-[#2A2A2A] hover:bg-[#353535] hover:text-white border border-[rgba(255,255,255,0.08)]" data-idx="${idx}">Copiar</button>
+          <pre><code>${highlighted}</code></pre>
+        </div>`
       )
     } else {
       const paragraphs = block.split('\n\n')

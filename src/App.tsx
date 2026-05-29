@@ -95,6 +95,10 @@ function App() {
 
   const handleAgentStep = useCallback((step: AgentStep) => {
     setAgentSteps(prev => [...prev, step])
+    // Chat updates progressivo durante la ejecución del agente
+    if (step.type === 'chat_update' && agentIdsRef.current) {
+      completeMsgRef.current(agentIdsRef.current.convId, agentIdsRef.current.assistantId, step.content)
+    }
   }, [])
 
   const handleAgentComplete = useCallback((finalContent: string) => {

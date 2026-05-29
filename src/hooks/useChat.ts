@@ -400,21 +400,32 @@ export function useChat() {
   const startAgentPrompt = useCallback((userContent: string) => {
     const existingConv = conversations.find(c => c.id === activeConvId)
 
-    if (existingConv && existingConv.type === 'agent') {
-      const assistantId = crypto.randomUUID()
-      setConversations(prev => prev.map(c => {
-        if (c.id !== existingConv.id) return c
-        return {
-          ...c,
-          messages: [
-            ...c.messages,
-            { id: crypto.randomUUID(), role: 'user', content: userContent, timestamp: Date.now() },
-            { id: assistantId, role: 'assistant', content: '', timestamp: Date.now() },
-          ],
-          updatedAt: Date.now(),
-        }
-      }))
-      return { convId: existingConv.id, assistantId }
+    // Si ya hay una conversación activa (incluso vacía tipo chat), la reusamos
+    if (existingConv) {
+      // Si es tipo chat vacía, la convertimos a agente
+      if (existingConv.type !== 'agent' && existingConv.messages.length === 0) {
+        setConversations(prev => prev.map(c =>
+          c.id === existingConv.id ? { ...c, type: 'agent' as const } : c
+        ))
+      }
+
+      if (existingConv.type === 'agent' || existingConv.messages.length === 0) {
+        const assistantId = crypto.randomUUID()
+        setConversations(prev => prev.map(c => {
+          if (c.id !== existingConv.id) return c
+          return {
+            ...c,
+            type: 'agent',
+            messages: [
+              ...c.messages,
+              { id: crypto.randomUUID(), role: 'user', content: userContent, timestamp: Date.now() },
+              { id: assistantId, role: 'assistant', content: '', timestamp: Date.now() },
+            ],
+            updatedAt: Date.now(),
+          }
+        }))
+        return { convId: existingConv.id, assistantId }
+      }
     }
 
     const convId = crypto.randomUUID()

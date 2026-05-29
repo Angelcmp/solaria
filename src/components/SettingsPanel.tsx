@@ -35,6 +35,14 @@ const AVAILABLE_TOOLS = [
   { id: 'grep', label: 'Grep', desc: 'Buscar texto en archivos' },
   { id: 'web_search', label: 'Web Search', desc: 'Buscar en internet (Tavily)' },
   { id: 'fetch_url', label: 'Fetch URL', desc: 'Obtener contenido de una URL' },
+  { id: 'git_status', label: 'Git Status', desc: 'Estado del repositorio git' },
+  { id: 'git_log', label: 'Git Log', desc: 'Historial de commits' },
+  { id: 'git_branches', label: 'Git Branches', desc: 'Listar ramas' },
+  { id: 'git_add', label: 'Git Add', desc: 'Añadir archivos al staging' },
+  { id: 'git_commit', label: 'Git Commit', desc: 'Crear commits' },
+  { id: 'git_push', label: 'Git Push', desc: 'Subir commits a remoto' },
+  { id: 'git_checkout', label: 'Git Checkout', desc: 'Cambiar/crear ramas' },
+  { id: 'git_diff', label: 'Git Diff', desc: 'Ver diferencias' },
 ]
 
 const TAB_ICONS: Record<string, string> = {
@@ -44,13 +52,17 @@ const TAB_ICONS: Record<string, string> = {
   agent: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="8" width="18" height="10" rx="2"/><circle cx="8" cy="13" r="1.5" fill="currentColor"/><circle cx="16" cy="13" r="1.5" fill="currentColor"/><path d="M12 3v3M12 16v3"/></svg>',
   audit: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>',
   plugins: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>',
+  mcp: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>',
+  skills: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>',
 }
 
-const TABS: { id: 'general' | 'providers' | 'search' | 'agent' | 'audit' | 'plugins'; labelKey: string }[] = [
+const TABS: { id: 'general' | 'providers' | 'search' | 'agent' | 'audit' | 'plugins' | 'mcp' | 'skills'; labelKey: string }[] = [
   { id: 'general', labelKey: 'settings.general' },
   { id: 'providers', labelKey: 'settings.providers' },
   { id: 'search', labelKey: 'settings.search' },
   { id: 'agent', labelKey: 'settings.agent' },
+  { id: 'skills', labelKey: '' },
+  { id: 'mcp', labelKey: '' },
   { id: 'audit', labelKey: 'settings.audit' },
   { id: 'plugins', labelKey: '' },
 ]
@@ -66,7 +78,7 @@ export default function SettingsPanel({
   onUpdateAgentConfig,
 }: SettingsPanelProps) {
   const lang = settings.language as Lang
-  const [tab, setTab] = useState<'general' | 'providers' | 'search' | 'agent' | 'audit' | 'plugins'>('general')
+  const [tab, setTab] = useState<'general' | 'providers' | 'search' | 'agent' | 'skills' | 'mcp' | 'audit' | 'plugins'>('general')
   const [selectedProvider, setSelectedProvider] = useState<AppSettings['defaultProvider']>('openai')
 
   useEffect(() => {
@@ -111,7 +123,7 @@ export default function SettingsPanel({
                   }`}
                   dangerouslySetInnerHTML={{
                     __html: (TAB_ICONS[tabKey.id] || '').replace('width="16"', 'width="14"').replace('height="16"', 'height="14"') +
-                      '<span>' + (tabKey.id === 'plugins' ? 'Plugins' : t(tabKey.labelKey, lang)) + '</span>'
+                      '<span>' + (tabKey.id === 'plugins' ? 'Plugins' : tabKey.id === 'skills' ? 'Skills' : tabKey.id === 'mcp' ? 'MCP' : t(tabKey.labelKey, lang)) + '</span>'
                   }}
                 />
               ))}
@@ -474,9 +486,22 @@ export default function SettingsPanel({
                     >
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
                     </button>
+                    <button
+                      onClick={async () => {
+                        try {
+                          const { open } = await import('@tauri-apps/plugin-dialog')
+                          const selected = await open({ directory: true, multiple: false, title: 'Seleccionar directorio de trabajo' })
+                          if (selected) onUpdateAgentConfig({ workingDirectory: selected as string })
+                        } catch {}
+                      }}
+                      className="shrink-0 px-2.5 py-2 rounded-lg bg-[#2A2A2A] border border-[rgba(255,255,255,0.08)] text-[0.65rem] text-[#00E5C9] hover:text-white hover:border-[#00E5C9] transition-colors"
+                      title="Explorar y seleccionar carpeta"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+                    </button>
                   </div>
                   <p className="text-[0.55rem] text-[#666666] mt-0.5">
-                    Si lanzas Solaria desde una terminal, la carpeta actual se detecta automáticamente.
+                    Haz clic en <span className="text-[#00E5C9]">⊕</span> para explorar carpetas con el selector nativo.
                   </p>
                 </div>
 
@@ -708,6 +733,14 @@ export default function SettingsPanel({
                   Recomendado para agentes locales: Qwen2.5 o DeepSeek (vía Ollama). Para cloud: Claude Sonnet o DeepSeek V4.
                 </div>
               </>
+            )}
+
+            {tab === 'skills' && (
+              <SkillsTab />
+            )}
+
+            {tab === 'mcp' && (
+              <McpTab />
             )}
 
             {tab === 'audit' && (
@@ -980,6 +1013,218 @@ function formatAuditArgs(_tool: string, args: string): string {
     }
   } catch {}
   return args
+}
+
+function SkillsTab() {
+  const [skills, setSkills] = useState<Array<{ name: string; description: string; enabled: boolean; path: string }>>([])
+  const [loading, setLoading] = useState(true)
+
+  const loadSkills = async () => {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      const list = await invoke<Array<{ name: string; description: string; enabled: boolean; path: string }>>('list_skills')
+      setSkills(list)
+    } catch {}
+    setLoading(false)
+  }
+
+  useEffect(() => { loadSkills() }, [])
+
+  const toggleSkill = async (name: string, enabled: boolean) => {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      await invoke('toggle_skill', { name, enabled })
+      await loadSkills()
+    } catch (e) {
+      console.error('Error toggling skill:', e)
+    }
+  }
+
+  if (loading) return <div className="text-[0.6875rem] text-[#666666]">Cargando skills...</div>
+
+  return (
+    <div>
+      <div className="mb-3">
+        <h3 className="text-[0.75rem] font-semibold text-[#E5E5E5]">Skills</h3>
+        <p className="text-[0.625rem] text-[#666666]">
+          Skills del ecosistema <a href="https://skills.sh" className="text-[#00E5C9] hover:underline">skills.sh</a>.
+          Instala nuevas skills con <code className="text-[#DCB263]">npx skills add &lt;repo&gt;@&lt;skill&gt; -g</code>.
+          Las skills activas se inyectan en el prompt del agente como guías de mejores prácticas.
+        </p>
+      </div>
+
+      {skills.length === 0 ? (
+        <div className="text-[0.65rem] text-[#666666] py-4 text-center">
+          No hay skills instaladas. Ejecuta <code className="text-[#DCB263]">npx skills add &lt;repo&gt;@&lt;skill&gt; -g</code> en tu terminal.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {skills.map((s, i) => (
+            <div key={i} className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#2A2A2A] border border-[rgba(255,255,255,0.08)]">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className={`w-1.5 h-1.5 rounded-full ${s.enabled ? 'bg-[#00E5C9]' : 'bg-[#666666]'}`} />
+                  <span className="text-[0.75rem] font-medium text-white truncate">{s.name}</span>
+                </div>
+                {s.description && (
+                  <div className="text-[0.6rem] text-[#999999] mt-0.5 line-clamp-2">{s.description}</div>
+                )}
+              </div>
+              <button
+                onClick={() => toggleSkill(s.name, !s.enabled)}
+                className={`relative w-10 h-5 rounded-full shrink-0 ml-2 transition-colors ${s.enabled ? 'bg-[#00E5C9]' : 'bg-[#666666]'}`}
+              >
+                <div className={`absolute top-[2px] w-4 h-4 rounded-full bg-white transition-all ${s.enabled ? 'left-5' : 'left-[2px]'}`} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function McpTab() {
+  const [servers, setServers] = useState<Array<{ name: string; command: string; args: string[]; enabled: boolean }>>([])
+  const [loading, setLoading] = useState(true)
+  const [newServer, setNewServer] = useState<{ name: string; command: string; args: string; enabled: boolean }>({ name: '', command: 'npx', args: '', enabled: true })
+  const [showAdd, setShowAdd] = useState(false)
+
+  const loadServers = async () => {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      const list = await invoke<Array<{ name: string; command: string; args: string[]; enabled: boolean }>>('mcp_list_servers')
+      setServers(list)
+    } catch {}
+    setLoading(false)
+  }
+
+  useEffect(() => { loadServers() }, [])
+
+  const saveServers = async (updated: Array<{ name: string; command: string; args: string[]; enabled: boolean }>) => {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      await invoke('mcp_save_servers', { servers: updated })
+      setServers(updated)
+      await invoke('mcp_restart_all')
+    } catch (e) {
+      alert('Error guardando servidores MCP: ' + e)
+    }
+  }
+
+  const toggleServer = async (idx: number) => {
+    const updated = [...servers]
+    updated[idx] = { ...updated[idx], enabled: !updated[idx].enabled }
+    await saveServers(updated)
+  }
+
+  const removeServer = async (idx: number) => {
+    const updated = servers.filter((_, i) => i !== idx)
+    await saveServers(updated)
+  }
+
+  const addServer = async () => {
+    if (!newServer.name.trim() || !newServer.command.trim()) return
+    const args = newServer.args.trim() ? newServer.args.split(' ').filter(Boolean) : []
+    const updated = [...servers, { name: newServer.name.trim(), command: newServer.command.trim(), args, enabled: newServer.enabled }]
+    await saveServers(updated)
+    setNewServer({ name: '', command: 'npx', args: '', enabled: true })
+    setShowAdd(false)
+  }
+
+  if (loading) return <div className="text-[0.6875rem] text-[#666666]">Cargando servidores MCP...</div>
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h3 className="text-[0.75rem] font-semibold text-[#E5E5E5]">Servidores MCP</h3>
+          <p className="text-[0.625rem] text-[#666666]">Model Context Protocol — conecta herramientas externas (GitHub, Filesystem, etc.).</p>
+        </div>
+        <button
+          onClick={() => setShowAdd(!showAdd)}
+          className="px-2.5 py-1.5 rounded-md bg-[#2A2A2A] border border-[rgba(255,255,255,0.08)] text-[0.65rem] text-[#00E5C9] hover:bg-[rgba(0,229,201,0.1)] transition-colors"
+        >
+          + Añadir servidor
+        </button>
+      </div>
+
+      {showAdd && (
+        <div className="mb-3 p-3 rounded-lg bg-[#2A2A2A] border border-[rgba(255,255,255,0.08)] space-y-2">
+          <input
+            value={newServer.name}
+            onChange={(e) => setNewServer({ ...newServer, name: e.target.value })}
+            placeholder="Nombre del servidor (ej: GitHub)"
+            className="w-full px-2 py-1.5 rounded-md bg-[#1C1B1B] border border-[rgba(255,255,255,0.08)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#00E5C9]"
+          />
+          <input
+            value={newServer.command}
+            onChange={(e) => setNewServer({ ...newServer, command: e.target.value })}
+            placeholder="Comando (ej: npx)"
+            className="w-full px-2 py-1.5 rounded-md bg-[#1C1B1B] border border-[rgba(255,255,255,0.08)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#00E5C9]"
+          />
+          <input
+            value={newServer.args}
+            onChange={(e) => setNewServer({ ...newServer, args: e.target.value })}
+            placeholder="Argumentos (ej: -y @modelcontextprotocol/server-github)"
+            className="w-full px-2 py-1.5 rounded-md bg-[#1C1B1B] border border-[rgba(255,255,255,0.08)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#00E5C9]"
+          />
+          <button
+            onClick={addServer}
+            disabled={!newServer.name.trim() || !newServer.command.trim()}
+            className="px-3 py-1.5 rounded-md bg-[#00E5C9] text-[0.65rem] text-black font-medium hover:bg-[#00d4b8] transition-colors disabled:opacity-50"
+          >
+            Conectar servidor
+          </button>
+        </div>
+      )}
+
+      {servers.length === 0 ? (
+        <div className="text-[0.65rem] text-[#666666] py-4 text-center">
+          No hay servidores MCP configurados. Añade uno para extender las capacidades del agente.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {servers.map((s, i) => (
+            <div key={i} className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#2A2A2A] border border-[rgba(255,255,255,0.08)]">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className={`w-1.5 h-1.5 rounded-full ${s.enabled ? 'bg-[#00E5C9]' : 'bg-[#666666]'}`} />
+                  <span className="text-[0.75rem] font-medium text-white truncate">{s.name}</span>
+                </div>
+                <div className="text-[0.55rem] text-[#666666] font-mono truncate mt-0.5">
+                  {s.command} {s.args.join(' ')}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => toggleServer(i)}
+                  className={`relative w-8 h-4 rounded-full transition-colors ${s.enabled ? 'bg-[#00E5C9]' : 'bg-[#666666]'}`}
+                >
+                  <div className={`absolute top-[2px] w-3 h-3 rounded-full bg-white transition-all ${s.enabled ? 'left-4' : 'left-[2px]'}`} />
+                </button>
+                <button
+                  onClick={() => removeServer(i)}
+                  className="text-[#666666] hover:text-[#ef4444] transition-colors"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="mt-4 p-3 rounded-lg bg-[rgba(220,178,99,0.05)] border border-[rgba(220,178,99,0.15)]">
+        <div className="text-[0.65rem] font-medium text-[#DCB263] mb-1">MCP Servers populares</div>
+        <div className="text-[0.6rem] text-[#999999] space-y-1">
+          <p><code className="text-[#DCB263]">npx -y @modelcontextprotocol/server-github</code> — API de GitHub</p>
+          <p><code className="text-[#DCB263]">npx -y @modelcontextprotocol/server-filesystem /ruta</code> — Sistema de archivos</p>
+          <p><code className="text-[#DCB263]">npx -y @modelcontextprotocol/server-brave-search</code> — Búsqueda web</p>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function ModelManager() {

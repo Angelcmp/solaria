@@ -119,6 +119,30 @@
 - [x] **Importar conversaciones** — Desde JSON exportado.
 - [x] **Template selector accesible** — Botón en toolbar del chat.
 
+### Nuevo — Git Integration
+
+| Feature | Estado | Notas |
+|---------|--------|-------|
+| git_status | ✅ | Rama actual, ahead/behind, staged/unstaged, untracked, conflictos |
+| git_log | ✅ | Historial con hash, autor, fecha, mensaje |
+| git_branches | ✅ | Lista ramas locales con indicador de rama actual |
+| git_add | ✅ | Staging de archivos |
+| git_commit | ✅ | Commit con mensaje |
+| git_push | ✅ | Push con upstream automático |
+| git_checkout | ✅ | Cambiar de rama o crear nueva |
+| git_diff | ✅ | Diff de working tree o staging |
+
+### Nuevo — MCP (Model Context Protocol)
+
+| Feature | Estado | Notas |
+|---------|--------|-------|
+| Cliente MCP sobre stdio | ✅ | JSON-RPC 2.0, initialize, tools/list, tools/call |
+| MCP server discovery | ✅ | Tools dinámicas registradas como `mcp__server__toolname` |
+| Config UI en Settings | ✅ | Añadir/activar/desactivar/eliminar servidores |
+| Persistencia de servidores | ✅ | Guardado en `~/.solaria/mcp_servers.json` |
+| GitHub MCP server | ✅ | `npx -y @modelcontextprotocol/server-github` |
+| Filesystem MCP server | ✅ | `npx -y @modelcontextprotocol/server-filesystem` |
+
 ### P3 ✅ Completado
 
 - [x] **Tests unitarios (frontend)** — Vitest + React Testing Library.

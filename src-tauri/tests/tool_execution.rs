@@ -149,7 +149,15 @@ async fn test_tool_list_includes_all_tools() {
     assert!(names.contains(&"grep"));
     assert!(names.contains(&"web_search"));
     assert!(names.contains(&"fetch_url"));
-    assert_eq!(tools_list.len(), 7);
+    assert!(names.contains(&"git_status"));
+    assert!(names.contains(&"git_log"));
+    assert!(names.contains(&"git_branches"));
+    assert!(names.contains(&"git_add"));
+    assert!(names.contains(&"git_commit"));
+    assert!(names.contains(&"git_push"));
+    assert!(names.contains(&"git_checkout"));
+    assert!(names.contains(&"git_diff"));
+    assert_eq!(tools_list.len(), 15);
 }
 
 #[tokio::test]

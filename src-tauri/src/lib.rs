@@ -1,10 +1,13 @@
 pub mod audit;
+mod git;
 mod keyring;
+mod mcp;
 mod ollama;
 mod plugins;
 pub mod providers;
 mod sandbox;
 mod search;
+mod skills;
 pub mod tools;
 
 use std::sync::OnceLock;
@@ -352,6 +355,105 @@ async fn provider_chat_stream(
     }
 }
 
+// ── Git commands ─────────────────────────────────────────────────────────────
+
+#[tauri::command]
+async fn git_status(working_dir: String) -> Result<git::GitStatus, String> {
+    git::git_status(&working_dir).await
+}
+
+#[tauri::command]
+async fn git_log_cmd(working_dir: String, max_count: Option<u32>) -> Result<Vec<git::GitLogEntry>, String> {
+    git::git_log(&working_dir, max_count.unwrap_or(10)).await
+}
+
+#[tauri::command]
+async fn git_branches(working_dir: String) -> Result<Vec<git::GitBranch>, String> {
+    git::git_branches(&working_dir).await
+}
+
+#[tauri::command]
+async fn git_add(working_dir: String, files: String) -> Result<String, String> {
+    git::git_add(&working_dir, &files).await
+}
+
+#[tauri::command]
+async fn git_commit(working_dir: String, message: String) -> Result<String, String> {
+    git::git_commit(&working_dir, &message).await
+}
+
+#[tauri::command]
+async fn git_push(working_dir: String, branch: String) -> Result<String, String> {
+    git::git_push(&working_dir, &branch).await
+}
+
+#[tauri::command]
+async fn git_checkout(working_dir: String, branch: String, create: bool) -> Result<String, String> {
+    git::git_checkout(&working_dir, &branch, create).await
+}
+
+#[tauri::command]
+async fn git_diff(working_dir: String, staged: bool, path: String) -> Result<String, String> {
+    git::git_diff(&working_dir, staged, &path).await
+}
+
+// ── MCP commands ─────────────────────────────────────────────────────────────
+
+#[tauri::command]
+async fn mcp_list_servers() -> Vec<mcp::McpServerConfig> {
+    let settings = crate::audit::load_mcp_settings().unwrap_or_default();
+    settings
+}
+
+#[tauri::command]
+async fn mcp_save_servers(servers: Vec<mcp::McpServerConfig>) -> Result<(), String> {
+    crate::audit::save_mcp_settings(&servers)
+}
+
+#[tauri::command]
+async fn mcp_start_server(server: mcp::McpServerConfig) -> Result<(), String> {
+    mcp::start_mcp_server(&server).await
+}
+
+#[tauri::command]
+async fn mcp_stop_server(name: String) {
+    mcp::stop_mcp_server(&name).await
+}
+
+#[tauri::command]
+async fn mcp_restart_all() -> Result<(), String> {
+    mcp::stop_all_mcp_servers().await;
+    let settings = crate::audit::load_mcp_settings().unwrap_or_default();
+    for server in settings {
+        if server.enabled {
+            mcp::start_mcp_server(&server).await?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn mcp_list_tools() -> Vec<mcp::McpToolDefinition> {
+    mcp::get_mcp_tools().await
+}
+
+// ── Skills commands ──────────────────────────────────────────────────────────
+
+#[tauri::command]
+fn list_skills() -> Vec<skills::SkillDefinition> {
+    skills::discover_skills()
+}
+
+#[tauri::command]
+fn toggle_skill(name: String, enabled: bool) {
+    skills::toggle_skill(&name, enabled);
+}
+
+#[tauri::command]
+fn get_skills_prompt() -> String {
+    skills::get_enabled_skills_prompt()
+}
+
 // ── App entry ────────────────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -364,6 +466,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             ollama_chat,
             ollama_chat_stream,
@@ -389,6 +492,23 @@ pub fn run() {
             stop_sandbox,
             stop_stream,
             stop_all_streams,
+            git_status,
+            git_log_cmd,
+            git_branches,
+            git_add,
+            git_commit,
+            git_push,
+            git_checkout,
+            git_diff,
+            mcp_list_servers,
+            mcp_save_servers,
+            mcp_start_server,
+            mcp_stop_server,
+            mcp_restart_all,
+            mcp_list_tools,
+            list_skills,
+            toggle_skill,
+            get_skills_prompt,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -49,6 +49,11 @@ body {
   30% { opacity: 1; transform: translateY(-8px); }
 }
 
+@keyframes pulseProgress {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
 @keyframes slideInLeft {
   from { transform: translateX(-20px); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }

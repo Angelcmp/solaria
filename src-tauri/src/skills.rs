@@ -9,9 +9,10 @@ pub struct SkillDefinition {
     pub enabled: bool,
     pub content: String,
     pub path: String,
+    pub source: String, // "global" or "project"
 }
 
-fn skills_dir() -> PathBuf {
+fn global_skills_dir() -> PathBuf {
     let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
     PathBuf::from(home).join(".agents").join("skills")
 }
@@ -42,7 +43,6 @@ fn save_enabled_skills(names: &[String]) {
     }
 }
 
-/// Extract YAML frontmatter name/description from SKILL.md
 fn parse_skill_metadata(content: &str) -> (String, String) {
     let content = content.trim();
     if !content.starts_with("---") {
@@ -69,8 +69,7 @@ fn parse_skill_metadata(content: &str) -> (String, String) {
     (if name.is_empty() { "unknown".into() } else { name }, desc)
 }
 
-pub fn discover_skills() -> Vec<SkillDefinition> {
-    let dir = skills_dir();
+fn discover_from_dir(dir: &PathBuf, source: &str, force_enabled: bool) -> Vec<SkillDefinition> {
     if !dir.exists() {
         return Vec::new();
     }
@@ -78,7 +77,7 @@ pub fn discover_skills() -> Vec<SkillDefinition> {
     let enabled = load_enabled_skills();
 
     let mut skills = Vec::new();
-    let entries = match fs::read_dir(&dir) {
+    let entries = match fs::read_dir(dir) {
         Ok(e) => e,
         Err(_) => return Vec::new(),
     };
@@ -112,7 +111,11 @@ pub fn discover_skills() -> Vec<SkillDefinition> {
             meta_name
         };
 
-        let is_enabled = enabled.contains(&skill_name) || enabled.contains(&display_name);
+        let is_enabled = if force_enabled {
+            true
+        } else {
+            enabled.contains(&skill_name) || enabled.contains(&display_name)
+        };
 
         skills.push(SkillDefinition {
             name: skill_name,
@@ -120,6 +123,7 @@ pub fn discover_skills() -> Vec<SkillDefinition> {
             enabled: is_enabled,
             content,
             path: skill_path.to_string_lossy().to_string(),
+            source: source.to_string(),
         });
     }
 
@@ -127,26 +131,100 @@ pub fn discover_skills() -> Vec<SkillDefinition> {
     skills
 }
 
-pub fn get_enabled_skills_prompt() -> String {
-    let skills = discover_skills();
-    let enabled: Vec<_> = skills.into_iter().filter(|s| s.enabled).collect();
+pub fn discover_skills() -> Vec<SkillDefinition> {
+    discover_from_dir(&global_skills_dir(), "global", false)
+}
+
+pub fn discover_project_skills(working_dir: &str) -> Vec<SkillDefinition> {
+    let dir = PathBuf::from(working_dir).join(".solaria").join("skills");
+    discover_from_dir(&dir, "project", true)
+}
+
+pub fn discover_all_skills(working_dir: Option<&str>) -> Vec<SkillDefinition> {
+    let global = discover_skills();
+    let project = if let Some(wd) = working_dir {
+        discover_project_skills(wd)
+    } else {
+        Vec::new()
+    };
+
+    if project.is_empty() {
+        return global;
+    }
+
+    let mut result = project;
+    for skill in global {
+        if !result.iter().any(|s| s.name == skill.name) {
+            result.push(skill);
+        }
+    }
+
+    result.sort_by(|a, b| a.name.cmp(&b.name));
+    result
+}
+
+pub fn get_enabled_skills_prompt(working_dir: Option<&str>) -> String {
+    let all = discover_all_skills(working_dir);
+    let enabled: Vec<_> = all.into_iter().filter(|s| s.enabled).collect();
 
     if enabled.is_empty() {
         return String::new();
     }
 
-    let mut prompt = String::from("\n\n## SKILLS ACTIVAS\n\nLas siguientes skills contienen guías y mejores prácticas que DEBES seguir:\n\n");
+    let global_count = enabled.iter().filter(|s| s.source == "global").count();
+    let project_count = enabled.iter().filter(|s| s.source == "project").count();
 
-    for skill in &enabled {
-        prompt.push_str(&format!("### SKILL: {}\n", skill.name));
-        if !skill.description.is_empty() {
-            prompt.push_str(&format!("_{}_\n\n", skill.description));
+    let mut prompt = String::from("\n\n## SKILLS ACTIVAS\n\n");
+
+    if project_count > 0 {
+        prompt.push_str(&format!("Skills del proyecto ({}):\n\n", project_count));
+        for skill in &enabled {
+            if skill.source != "project" { continue; }
+            prompt.push_str(&format!("### SKILL: {}\n", skill.name));
+            if !skill.description.is_empty() {
+                prompt.push_str(&format!("_{}_\n\n", skill.description));
+            }
+            prompt.push_str(&skill.content);
+            prompt.push('\n');
         }
-        prompt.push_str(&skill.content);
-        prompt.push('\n');
+    }
+
+    if global_count > 0 {
+        if project_count > 0 {
+            prompt.push_str("---\n\n");
+        }
+        prompt.push_str(&format!("Skills globales ({}):\n\n", global_count));
+        for skill in &enabled {
+            if skill.source != "global" { continue; }
+            prompt.push_str(&format!("### SKILL: {}\n", skill.name));
+            if !skill.description.is_empty() {
+                prompt.push_str(&format!("_{}_\n\n", skill.description));
+            }
+            prompt.push_str(&skill.content);
+            prompt.push('\n');
+        }
     }
 
     prompt
+}
+
+pub fn create_project_skill(working_dir: &str, name: &str, description: &str, body: &str) -> Result<String, String> {
+    let slug = name.to_lowercase().replace(' ', "-");
+    let dir = PathBuf::from(working_dir).join(".solaria").join("skills").join(&slug);
+
+    fs::create_dir_all(&dir).map_err(|e| format!("Error creando directorio: {}", e))?;
+
+    let skill_path = dir.join("SKILL.md");
+
+    let frontmatter = format!(
+        "---\nname: {}\ndescription: {}\n---\n\n{}",
+        name, description, body
+    );
+
+    fs::write(&skill_path, &frontmatter)
+        .map_err(|e| format!("Error escribiendo SKILL.md: {}", e))?;
+
+    Ok(skill_path.to_string_lossy().to_string())
 }
 
 pub fn toggle_skill(name: &str, enabled: bool) {

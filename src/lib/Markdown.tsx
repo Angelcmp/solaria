@@ -62,13 +62,23 @@ function applyPythonHighlight(code: string): string {
     .replace(/\b(\d+\.?\d*)\b/g, '<span class="hl-number">$1</span>')
 }
 
+function autolink(text: string): string {
+  return text.replace(
+    /(?<!\]\()(https?:\/\/[^\s<]+[^\s<.,;:!?)}\]'"])/g,
+    '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-[#00E5C9] hover:underline break-all">$1</a>'
+  )
+}
+
 function renderInline(text: string): string {
-  return text
-    .replace(/\*\*(.+?)\*\*/g, '<strong class="text-white font-medium">$1</strong>')
+  let result = autolink(text)
+  result = result
+    .replace(/\*\*(.+?)\*\*/g, '<strong class="text-white" style="font-weight:500">$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em class="text-[#999999] not-italic" style="font-weight:350">$1</em>')
     .replace(/`([^`]+)`/g, '<code class="hl-inline">$1</code>')
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m: string, text: string, url: string) =>
       `<a href="${sanitizeUrl(url)}" target="_blank" rel="noopener noreferrer" class="text-[#00E5C9] hover:underline">${text}</a>`
     )
+  return result
 }
 
 function renderTable(block: string): string {
@@ -139,6 +149,26 @@ function renderTable(block: string): string {
   return html
 }
 
+function renderBlockquote(text: string): string {
+  const lines = text.split('\n')
+  const result: string[] = []
+  let inBq = false
+
+  for (const line of lines) {
+    const bqMatch = line.match(/^>\s?(.+)/)
+    if (bqMatch) {
+      if (!inBq) { result.push('<blockquote class="pl-0 my-2 text-[0.75rem] text-[#b0b0b0]" style="font-weight:350">'); inBq = true }
+      result.push(renderInline(escapeHtml(bqMatch[1])))
+      result.push('<br/>')
+    } else {
+      if (inBq) { result.push('</blockquote>'); inBq = false }
+      result.push(line)
+    }
+  }
+  if (inBq) result.push('</blockquote>')
+  return result.join('\n')
+}
+
 function renderList(text: string): string {
   const lines = text.split('\n')
   const result: string[] = []
@@ -147,8 +177,8 @@ function renderList(text: string): string {
   for (const line of lines) {
     const listMatch = line.match(/^(\s*)[-*+]\s+(.+)/)
     if (listMatch) {
-      if (!inUl) { result.push('<ul class="list-disc pl-5 my-1.5 space-y-1">'); inUl = true }
-      result.push(`<li style="font-weight:400">${renderInline(escapeHtml(listMatch[2]))}</li>`)
+      if (!inUl) { result.push('<ul class="list-disc pl-5 my-2 space-y-1">'); inUl = true }
+      result.push(`<li class="leading-[1.7]" style="font-weight:300">${renderInline(escapeHtml(listMatch[2]))}</li>`)
     } else {
       if (inUl) { result.push('</ul>'); inUl = false }
       result.push(line)
@@ -226,23 +256,30 @@ export default function Markdown({ content, compact }: MarkdownProps) {
           htmlParts.push(renderTable(para))
         } else if (para.startsWith('#')) {
           const match = para.match(/^(#{1,3})\s+(.+)/)
-          if (match) {
-            const level = match[1].length
-            const size = level === 1 ? 'text-base' : level === 2 ? 'text-sm' : 'text-xs'
-            htmlParts.push(
-              `<h${level} class="${size} font-medium text-white mt-3 mb-1.5" style="letter-spacing:0.01em">${renderInline(escapeHtml(match[2]))}</h${level}>`
-            )
-          }
+            if (match) {
+              const level = match[1].length
+              const sizes = ['text-base', 'text-[0.8125rem]', 'text-[0.75rem]']
+              const size = sizes[level - 1] || 'text-[0.6875rem]'
+              const weights = ['font-medium', 'font-medium', 'font-normal']
+              const weight = weights[level - 1] || 'font-medium'
+              htmlParts.push(
+                `<h${level} class="${size} ${weight} text-white mt-4 mb-2" style="letter-spacing:0.01em">${renderInline(escapeHtml(match[2]))}</h${level}>`
+              )
+            }
         } else {
-          const withLists = renderList(para)
+          const withBlockquotes = renderBlockquote(para)
+          const withLists = renderList(withBlockquotes)
           const withInline = withLists
             .split('\n')
             .map(l => l.trim())
             .filter(l => l)
             .map(l => {
               if (l.startsWith('<')) return l
-              if (l.startsWith('---')) return `<hr class="border-[rgba(255,255,255,0.08)] my-3" />`
-              return `<p class="my-1.5 leading-[1.7]" style="font-weight:400;letter-spacing:0.01em">${renderInline(escapeHtml(l))}</p>`
+              if (l.startsWith('---')) return `<hr class="border-[rgba(255,255,255,0.08)] my-4" />`
+              if (/^\*→ .+ paso \d+\/\d+\*$/.test(l.trim())) {
+                return `<p class="my-1 leading-[1.6] text-[0.7rem]" style="font-weight:300">${renderInline(escapeHtml(l))}</p>`
+              }
+              return `<p class="my-2 leading-[1.8]" style="font-weight:300;letter-spacing:0.015em">${renderInline(escapeHtml(l))}</p>`
             })
             .join('\n')
           htmlParts.push(withInline)
@@ -253,8 +290,8 @@ export default function Markdown({ content, compact }: MarkdownProps) {
 
   return (
     <div
-      className={`markdown-body ${compact ? 'text-[0.75rem]' : 'text-[0.875rem]'} leading-[1.7] text-[#E5E5E5]`}
-      style={{ fontFamily: "'IBM Plex Sans', 'Inter', system-ui, sans-serif", fontWeight: 400, letterSpacing: '0.01em' }}
+      className={`markdown-body ${compact ? 'text-[0.75rem]' : 'text-[0.875rem]'} text-[#E5E5E5]`}
+      style={{ fontFamily: "'IBM Plex Sans', 'Inter', system-ui, sans-serif", fontWeight: 300, letterSpacing: '0.015em', lineHeight: '1.75' }}
       dangerouslySetInnerHTML={{ __html: htmlParts.join('\n') }}
     />
   )

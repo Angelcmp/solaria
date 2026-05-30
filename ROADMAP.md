@@ -1,6 +1,7 @@
-# Roadmap
+# Roadmap — Solaria Agent v0.4.0
 
-> Basado en el análisis completo del código fuente (v0.1.0).
+> Deep Research Agentic System con Skills
+> Enfoque: investigación, análisis y automatización para profesionales no-code.
 
 ---
 
@@ -11,11 +12,12 @@
 | ✅ | Implementado |
 | 🟡 | Parcial / Mejorable |
 | ❌ | No implementado |
-| 📋 | Planeado (desde SECURITY.md) |
+| 🔄 | En progreso |
+| 🗑️ | Eliminado (v0.4.0) |
 
 ---
 
-## 1. Funcionalidades existentes (estado actual)
+## 1. Funcionalidades actuales
 
 ### Chat
 
@@ -24,32 +26,25 @@
 | Conversaciones con IA | ✅ | Ollama local + 8 providers cloud |
 | Streaming de respuestas | ✅ | Tauri events + SSE, todos los providers |
 | Historial persistente (localStorage) | ✅ | |
-| Template selector (40+ templates) | ✅ | Botón en toolbar del chat |
-| Acciones rápidas (8 botones) | ✅ | |
+| Template selector (34+ templates) | ✅ | Sin templates de código |
+| Acciones rápidas (8 botones) | ✅ | Sin acción "Código" |
 | Renderizado Markdown | ✅ | Con syntax highlighting básico |
 | Búsqueda web (Tavily) | ✅ | Modo chat y modo agente |
 | Adjuntar archivos / imágenes | ✅ | Drag & drop + file button, texto plano hasta 1MB |
 | Regenerar respuesta | ✅ | |
 | Multi-modelo por conversación | ✅ | Selector en header, modelo por conversación |
 
-### Modo Agente
+### Modo Agente (Research Focus)
 
 | Feature | Estado | Notas |
 |---------|--------|-------|
-| Herramientas: shell, read, write, glob, grep, web_search, fetch_url | ✅ | |
-| Panel lateral de pasos (AgentAside) | ✅ | |
-| Confirmación Allow/Deny | ✅ | |
-| Lista blanca de comandos (allowlist) | ✅ | |
-| Rate limiting | ✅ | |
-| Session timeout / bloqueo | ✅ | |
-| Restricción a directorio de trabajo | ✅ | |
-| Auditoría local (`~/.solaria/audit.log`) | ✅ | |
-| Streaming de pasos del agente | ✅ | Live reasoning via `liveThinking` + event stream |
-| Web search dentro del agente | ✅ | Tavily como herramienta del agente |
-| Sandboxing en contenedores | ✅ | Docker con --read-only, tmpfs |
-| Red configurable (air-gapped on/off) | ✅ | Según perfil de seguridad |
-| Perfiles de seguridad (Explorar / Ejecutar) | ✅ | Auto-confirm + red vs manual + air-gapped |
-| Herramienta `fetch_url` / navegación web | ✅ | Con límite de 15KB, validación de tipo |
+| Herramientas: read_file, write_file, glob, grep, web_search, fetch_url | ✅ | 6 herramientas de investigación |
+| Búsqueda web dentro del agente | ✅ | Tavily como herramienta del agente |
+| Fetch URL | ✅ | Lectura de contenido web |
+| Panel lateral de pasos (AgentAside) | ✅ | Renombrado "Solaria Research" |
+| Confirmación en escrituras | ✅ | Solo write_file requiere confirmación |
+| Skills activas en system prompt | ✅ | Skills instaladas vía skills.sh se inyectan como guías |
+| Streaming de pasos del agente | ✅ | Live reasoning en tiempo real |
 
 ### Providers
 
@@ -58,7 +53,7 @@
 | Ollama (local) | ✅ | |
 | OpenAI, Anthropic, DeepSeek, Groq, Google, Cohere, Kimi, GLM | ✅ | BYOK |
 | Almacenamiento de API keys en keyring del SO | ✅ | Fallback a localStorage |
-| Configuración de temperatura/top_p/etc | ✅ | Temperatura, top_p, max_tokens configurables por provider |
+| Configuración de temperatura/top_p/etc | ✅ | Temperatura, top_p, max_tokens configurables |
 | Cost tracking / uso de tokens | ✅ | Precios por modelo, tooltip en contador de tokens |
 
 ### UI/UX
@@ -69,116 +64,97 @@
 | Anclar / renombrar / eliminar conversaciones | ✅ | |
 | Tema oscuro | ✅ | Solo existe tema oscuro |
 | Tema claro | ❌ | |
-| Internacionalización (i18n) | ✅ | Sistema de traducciones es/en con `t(key, lang)` cubriendo toda la UI |
-| Atajos de teclado | ✅ | `Ctrl+N`, `Ctrl+,`, `Ctrl+L`, `Ctrl+E` |
+| Internacionalización (i18n) | ✅ | Sistema de traducciones es/en |
+| Atajos de teclado | ✅ | `Ctrl+N`, `Ctrl+,`, `Ctrl+L` |
 | Búsqueda de conversaciones | ✅ | Filtro en el sidebar |
 | Exportar conversaciones | 🟡 | Solo exportación manual |
 | Importar conversaciones | ✅ | Desde JSON exportado |
-
-### Backend (Rust)
-
-| Feature | Estado | Notas |
-|---------|--------|-------|
-| Comandos IPC Tauri | ✅ | 12 comandos registrados |
-| Rate limiter | ✅ | Global (no por conversación) |
-| CSP configurada | ✅ | |
-| Consultas síncronas en agent tools | ✅ | Migrados a `tokio::process::Command` |
 
 ### Testing y CI
 
 | Feature | Estado | Notas |
 |---------|--------|-------|
 | Tests unitarios (frontend) | ✅ | Vitest + React Testing Library, 11 tests |
-| Tests unitarios (backend) | ✅ | 5 tests con `cargo test` |
-| Tests de integración | ✅ | 40 tests: tool execution (20), provider config (10), audit log (5), unitarios (5) |
-| CI/CD (GitHub Actions) | ✅ | tsc + vitest + vite build + cargo check + test + clippy |
-| Lint / typecheck en CI | ✅ | Incluido en CI |
+| Tests unitarios (backend) | ✅ | 3 tests con `cargo test` |
+| Tests de integración | ✅ | 11 tests: tool execution, audit log, provider config |
+| CI/CD (GitHub Actions) | ✅ | tsc + vitest + cargo check + test + clippy |
 
 ---
 
-## 2. Próximas features (priorizadas)
+## 2. Features eliminadas (v0.4.0)
 
-### P0 ✅ Completado
-
-- [x] **Streaming de respuestas** — Tauri events + SSE para todos los providers.
-- [x] **Parámetros de modelo** — Temperatura, top_p, max_tokens configurables.
-- [x] **Regenerar respuesta** — Botón en el último mensaje assistant.
-
-### P1 ✅ Completado
-
-- [x] **Sandboxing del agente** — Ejecución en contenedores Docker.
-- [x] **Búsqueda web dentro del agente** — Tavily como herramienta.
-- [x] **Herramienta `fetch_url`** — Lectura de URLs desde el agente.
-- [x] **Streaming de pasos del agente** — Live reasoning tokens en tiempo real.
-
-### P2 ✅ Completado
-
-- [x] **Internacionalización (i18n)** — Sistema de traducciones es/en con `t(key, lang)`. Cubre: quick actions, welcome, placeholders, tooltips, settings, sidebar, agent, folder drag & drop, cost tracking.
-- [x] **Atajos de teclado** — `Ctrl+N`, `Ctrl+,`, `Ctrl+L`, `Ctrl+E`.
-- [x] **Búsqueda de conversaciones** — Filtro en el sidebar.
-- [x] **Importar conversaciones** — Desde JSON exportado.
-- [x] **Template selector accesible** — Botón en toolbar del chat.
-
-### Nuevo — Git Integration
-
-| Feature | Estado | Notas |
-|---------|--------|-------|
-| git_status | ✅ | Rama actual, ahead/behind, staged/unstaged, untracked, conflictos |
-| git_log | ✅ | Historial con hash, autor, fecha, mensaje |
-| git_branches | ✅ | Lista ramas locales con indicador de rama actual |
-| git_add | ✅ | Staging de archivos |
-| git_commit | ✅ | Commit con mensaje |
-| git_push | ✅ | Push con upstream automático |
-| git_checkout | ✅ | Cambiar de rama o crear nueva |
-| git_diff | ✅ | Diff de working tree o staging |
-
-### Nuevo — MCP (Model Context Protocol)
-
-| Feature | Estado | Notas |
-|---------|--------|-------|
-| Cliente MCP sobre stdio | ✅ | JSON-RPC 2.0, initialize, tools/list, tools/call |
-| MCP server discovery | ✅ | Tools dinámicas registradas como `mcp__server__toolname` |
-| Config UI en Settings | ✅ | Añadir/activar/desactivar/eliminar servidores |
-| Persistencia de servidores | ✅ | Guardado en `~/.solaria/mcp_servers.json` |
-| GitHub MCP server | ✅ | `npx -y @modelcontextprotocol/server-github` |
-| Filesystem MCP server | ✅ | `npx -y @modelcontextprotocol/server-filesystem` |
-
-### P3 ✅ Completado
-
-- [x] **Tests unitarios (frontend)** — Vitest + React Testing Library.
-- [x] **Tests unitarios (backend)** — Tests Rust con `cargo test`.
-- [x] **Tests de integración** — 40 tests: tool execution pipeline (20), provider config (10), audit log (5), unitarios (5).
-- [x] **CI/CD (GitHub Actions)** — Lint, typecheck, test, build en cada PR.
-- [x] **Model download UI para Ollama** — Interfaz para descargar modelos desde la app.
-- [x] **Multi-modelo por conversación** — Cada conversación almacena su propio provider/model. Selector visual en el header del Chat con dropdown agrupado (Local/Cloud).
-
-### P4 — Extras
-
-- [x] **Adjuntar archivos al chat** — Drag & drop + file button, texto plano hasta 1MB.
-- [x] **Auto-naming de conversaciones** — IA genera títulos automáticos tras el primer mensaje.
-- [x] **Conversaciones archivadas** — Vista toggle en sidebar, botón Archive/Restore/Delete.
-- [x] **Cost tracking** — Precios por modelo (OpenAI, Anthropic, etc), tooltip en contador de tokens.
-- [x] **Plugins / herramientas extensibles** — Scripts en `~/.solaria/plugins/*.sh` registrados automáticamente.
-
-### P5 — Arquitectura de Agente Seguro (inspirado en Self-Hosted Build Agents)
-
-- [ ] **Modo efímero por tool call** — Spawnear y destruir un contenedor Docker **por cada invocación de herramienta** en vez de mantenerlo vivo toda la sesión. Máximo aislamiento entre calls.
-- [x] **Perfiles de seguridad** — Dos modos seleccionables: "Explorar" (permisivo, contenedor persistente, red habilitada, auto-confirm) vs "Ejecutar" (air-gapped, sin red, todas las confirmaciones manuales).
-- [x] **Sandbox sin red (air-gapped mode)** — Flag para bloquear todo tráfico de red dentro del contenedor del agente. Solo permite comunicación vía stdin/stdout con el host.
+| Feature | Motivo |
+|---------|--------|
+| Git tools (8) | Solo relevantes para desarrollo de código |
+| Shell tool | Innecesaria y riesgosa para research no-code |
+| Docker sandbox | Orientado a ejecución segura de código |
+| Plugin system (bash scripts) | No-code no es bash scripting |
+| Perfiles de seguridad (Explorar/Ejecutar) | Diseñados para code execution |
+| Rate limiting / allowlist / session timeout | Mecanismos de protección para shell |
+| Pestaña MCP en Settings | Se mantiene infraestructura, se oculta UI |
+| Pestaña Plugins en Settings | Eliminada con el sistema de plugins |
+| Templates de código (7) | Code Review, Debug, System Design, etc. |
+| Quick action "Código" | Reemplazado por enfoque research |
 
 ---
 
-## 3. Bugs / Deuda técnica
+## 3. Nueva hoja de ruta
 
-- [x] **Template selector** — Botón agregado en toolbar del chat.
-- [x] **`glob_execute` y `grep_execute` síncronos** — Migrados a `tokio::process::Command`.
-- [x] **Crate name** — `homeangelsolaria` → `solaria-desktop`.
-- [x] **`language` setting** — Sistema i18n funcional con `t(key, lang)`.
-- [x] **`clearChat` duplicado** — Eliminado.
+### P0 — Skills locales de proyecto ✅
+
+- [x] Detectar `.solaria/skills/` en cualquier proyecto
+- [x] Comando `create_skill` para crear skills desde el backend
+- [x] Skills locales + globales (overlay: proyecto > global)
+
+### P1 — Deep Research Skill ✅
+
+- [x] Skill `deep-research` con pipeline: pregunta → búsqueda → extraer → analizar → reporte `.md`
+- [x] Multi-paso autónomo con verificación de fuentes
+- [x] Salida estructurada en markdown con citas y evaluación de confianza
+
+## Pendientes para próxima sesión
+
+### P2 — Skills profesionales
+
+- [ ] `market-analysis` — análisis de competencia, drafts de campañas
+- [ ] `report-generator` — datos → análisis → markdown estructurado
+- [ ] `meeting-notes` — notas → estructura → action items
+- [ ] `data-analysis` — CSV → limpieza → transformación → presentación
+- [ ] `transcription-processing` — procesar texto → resumen ejecutivo
+
+### P3 — Skill Factory (creación de skills desde el chat)
+
+- [ ] El usuario dice "crea una skill que haga X"
+- [ ] El agente genera el SKILL.md con frontmatter y workflow
+- [ ] La skill se guarda en `.solaria/skills/` del proyecto actual
+
+### P4 — Ecosistema y mejoras
+
+- [ ] Integración con skills.sh para descubrimiento desde el chat
+- [ ] Auto-activación de skills según contexto
+- [ ] Tema claro
+- [ ] Exportar conversaciones (formatos: markdown, PDF)
+- [ ] Mejoras en UI del panel de investigación (ResearchAside tabs)
+
+### Bugs conocidos
+
+- [ ] Algunos fetch_url fallan con `{"": "url"}` (key vacía) cuando el modelo genera args mal formados
+- [ ] La skill deep-research necesita testing en escenarios con múltiples fuentes PDF
+- [ ] El contador de pasos en AgentTab muestra números inconsistentes cuando hay tool calls sin texto LLM
 
 ---
 
-## 4. Recursos
+## 4. Bugs / Deuda técnica
+
+- [x] Template selector accesible
+- [x] Migración a `tokio::process::Command`
+- [x] Sistema i18n funcional
+- [x] Crate name corregido
+- [x] Features de código eliminadas (v0.4.0)
+
+---
+
+## 5. Recursos
 
 - [Issues](https://github.com/Angelcmp/solaria/issues)
 - [PRs](https://github.com/Angelcmp/solaria/pulls)

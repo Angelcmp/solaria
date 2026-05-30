@@ -6,7 +6,7 @@ import type { AgentStep } from './hooks/useAgent'
 import Chat from './components/Chat'
 import WorkspaceAside from './components/WorkspaceAside'
 import SettingsPanel from './components/SettingsPanel'
-import AgentAside from './components/AgentAside'
+import ResearchAside from './components/ResearchAside'
 
 const PROVIDERS: { id: string; label: string; models: string[]; local: boolean }[] = [
   { id: 'ollama', label: 'Ollama (Local)', models: ['qwen3.5', 'llama3.2', 'llama3.1', 'mistral', 'phi3', 'deepseek-r1', 'gemma3', 'gemma4'], local: true },
@@ -57,7 +57,6 @@ function App() {
 
   const {
     isRunning: agentIsRunning,
-    sessionLocked,
     agentConfig,
     liveThinking,
     updateAgentConfig,
@@ -65,7 +64,6 @@ function App() {
     stopAgent,
     resetAgent,
     confirmTool,
-    resumeSession,
   } = useAgent()
 
   const [agentSteps, setAgentSteps] = useState<AgentStep[]>([])
@@ -215,21 +213,18 @@ function App() {
         onShowSettings={() => setShowSettings(true)}
         agentConfig={agentConfig}
         agentIsRunning={agentIsRunning}
-        agentLocked={sessionLocked}
         onToggleAgent={handleToggleAgent}
-        onResumeSession={resumeSession}
         conversationTitle={activeConv?.title}
         activeConversation={activeConv || null}
         onUpdateConvModel={updateConvModel}
         providers={PROVIDERS}
       />
-      <AgentAside
+      <ResearchAside
         steps={agentSteps}
         isRunning={agentIsRunning}
         liveThinking={liveThinking}
-        workingDirectory={agentConfig.workingDirectory}
         onClose={() => setAgentSteps([])}
-        onStop={stopAgent}
+        onStop={agentIsRunning ? stopAgent : undefined}
         onConfirmTool={confirmTool}
       />
 

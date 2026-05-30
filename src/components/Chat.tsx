@@ -20,10 +20,8 @@ interface ChatProps {
   onShowSettings: () => void
   agentConfig?: AgentConfig
   agentIsRunning?: boolean
-  agentLocked?: boolean
   templateTrigger?: number
   onToggleAgent?: () => void
-  onResumeSession?: () => void
   lang?: Lang
   conversationTitle?: string
   activeConversation?: Conversation | null
@@ -42,7 +40,6 @@ const QUICK_ACTION_DEFS = [
   { labelKey: 'action.summarize', promptKey: 'action.summarize.prompt', icon: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>' },
   { labelKey: 'action.translate', promptKey: 'action.translate.prompt', icon: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>' },
   { labelKey: 'action.analyze', promptKey: 'action.analyze.prompt', icon: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' },
-  { labelKey: 'action.code', promptKey: 'action.code.prompt', icon: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>' },
   { labelKey: 'action.write', promptKey: 'action.write.prompt', icon: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.828 2.828 0 114 4L7 21l-4-1a2 2 0 01-1-3l2-6a2 2 0 012-1l6 3 6-3z"/><path d="M9 13l2 2 4-4"/></svg>' },
   { labelKey: 'action.ideas', promptKey: 'action.ideas.prompt', icon: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a4 4 0 105.656 0L12 19"/></svg>' },
   { labelKey: 'action.improve', promptKey: 'action.improve.prompt', icon: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/></svg>' },
@@ -116,9 +113,7 @@ export default function Chat({
   onShowSettings,
   agentConfig,
   agentIsRunning,
-  agentLocked,
   onToggleAgent,
-  onResumeSession,
   lang = 'es',
   conversationTitle,
   activeConversation,
@@ -484,7 +479,7 @@ export default function Chat({
 
       <div className="sticky bottom-0 z-40 bg-[linear-gradient(to_top,#131313_70%,transparent)] backdrop-blur-[8px]" style={{ WebkitBackdropFilter: 'blur(8px)' }}>
         <div className="w-full max-w-[800px] mx-auto px-4 pb-2 pt-1">
-          <div className={'flex flex-col bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] rounded-[14px] pt-1.5 px-2 pb-2 gap-1 relative transition-all duration-300 focus-within:border-[rgba(220,178,99,0.4)] focus-within:shadow-[0_0_0_3px_rgba(220,178,99,0.08)] focus-within:bg-[rgba(255,255,255,0.06)] ' + ((agentIsRunning || agentLocked) ? 'opacity-40 pointer-events-none' : '')}>
+          <div className={'flex flex-col bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] rounded-[14px] pt-1.5 px-2 pb-2 gap-1 relative transition-all duration-300 focus-within:border-[rgba(220,178,99,0.4)] focus-within:shadow-[0_0_0_3px_rgba(220,178,99,0.08)] focus-within:bg-[rgba(255,255,255,0.06)] ' + (agentIsRunning ? 'opacity-40 pointer-events-none' : '')}>
             {isAgentEnabled && agentConfig?.workingDirectory && (
               <div className="flex items-center gap-1 px-2 text-[0.5rem] text-[#555555] font-mono">
                 <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
@@ -544,14 +539,6 @@ export default function Chat({
             )}
 
             <div className="flex items-center gap-1 min-h-[24px]">
-              {agentLocked && (
-                <div className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-[rgba(220,178,99,0.08)] border border-[rgba(220,178,99,0.15)]">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#DCB263" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                  <span className="flex-1 text-[0.625rem] text-[#DCB263]">{t('chat.session_locked', lang)}</span>
-                  <button onClick={onResumeSession} className="px-2 py-0.5 rounded text-[0.6rem] font-semibold bg-[rgba(220,178,99,0.12)] border border-[rgba(220,178,99,0.3)] text-[#DCB263] hover:bg-[rgba(220,178,99,0.2)] transition-colors">{t('chat.resume', lang)}</button>
-                </div>
-              )}
-
               <button
                 onClick={() => setWebSearchActive(!webSearchActive)}
                 className={'shrink-0 w-6 h-6 rounded flex items-center justify-center border transition-all duration-200 ' + (webSearchActive ? 'bg-[rgba(0,229,201,0.1)] border-[rgba(0,229,201,0.3)] text-[#00E5C9]' : 'bg-transparent border-[rgba(255,255,255,0.06)] text-[#666666] hover:border-[rgba(255,255,255,0.15)] hover:text-[#999999]')}

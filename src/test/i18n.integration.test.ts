@@ -7,8 +7,7 @@ describe('i18n integration', () => {
       'chat.welcome.title', 'chat.welcome.agent', 'chat.welcome.morning',
       'chat.welcome.afternoon', 'chat.welcome.evening', 'chat.welcome.ask',
       'chat.welcome.desc', 'chat.welcome.agent_desc',
-      'chat.suggest.analyze', 'chat.suggest.summarize', 'chat.suggest.script',
-      'chat.suggest.brainstorm', 'chat.suggest.debug',
+      'chat.suggest.summarize',
       'chat.placeholder', 'chat.placeholder.agent', 'chat.templates',
       'chat.search_web', 'chat.search_web.off', 'chat.copy', 'chat.regenerate',
       'chat.tokens', 'chat.error', 'chat.session_locked', 'chat.resume',
@@ -22,12 +21,11 @@ describe('i18n integration', () => {
       'settings.agent', 'settings.audit', 'settings.default_provider', 'settings.default_model',
       'settings.language', 'settings.llm_params', 'settings.temperature', 'settings.top_p',
       'settings.max_tokens', 'settings.storage', 'settings.clear_history', 'settings.export',
-      'settings.import', 'settings.tavily_key', 'settings.agent_desc', 'settings.docker_sandbox',
-      'settings.docker_desc', 'settings.docker_check',
+      'settings.import', 'settings.tavily_key', 'settings.agent_desc',
       'agent.running', 'agent.completed', 'agent.steps', 'agent.reasoning',
       'agent.reasoning_ellipsis', 'agent.final', 'agent.stop', 'agent.close', 'agent.init',
       'action.learn', 'action.summarize', 'action.translate', 'action.analyze',
-      'action.code', 'action.write', 'action.ideas', 'action.improve', 'action.data',
+      'action.write', 'action.ideas', 'action.improve', 'action.data',
     ]
 
     for (const key of keys) {

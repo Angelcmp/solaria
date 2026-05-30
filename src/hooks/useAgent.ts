@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import type { ProviderConfig } from './useChat'
@@ -8,36 +8,16 @@ export interface AgentConfig {
   enabled: boolean
   maxIterations: number
   allowedTools: string[]
-  autoConfirm: boolean
   confirmWrite: boolean
-  restrictToWorkDir: boolean
-  rateLimit: number
-  useAllowlist: boolean
-  commandAllowlist: string
-  sessionTimeout: number
   workingDirectory: string
-  sandboxEnabled: boolean
-  sandboxImage: string
-  sandboxAirGapped: boolean
-  securityProfile: string
 }
 
 const DEFAULT_AGENT_CONFIG: AgentConfig = {
   enabled: false,
   maxIterations: 10,
-  allowedTools: ['shell', 'read_file', 'write_file', 'glob', 'grep', 'web_search', 'fetch_url', 'git_status', 'git_log', 'git_branches', 'git_add', 'git_commit', 'git_push', 'git_checkout', 'git_diff'],
-  autoConfirm: false,
+  allowedTools: ['read_file', 'write_file', 'glob', 'grep', 'web_search', 'fetch_url'],
   confirmWrite: false,
-  restrictToWorkDir: false,
-  rateLimit: 30,
-  useAllowlist: false,
-  commandAllowlist: 'ls,cat,echo,pwd,find,grep,head,tail,wc,date,whoami,uname,git,npm,cargo,node,python3',
-  sessionTimeout: 0,
   workingDirectory: '',
-  sandboxEnabled: false,
-  sandboxImage: 'ubuntu:latest',
-  sandboxAirGapped: true,
-  securityProfile: 'explore',
 }
 
 export interface AgentStep {
@@ -56,53 +36,33 @@ export interface AgentMessage {
   content: string
 }
 
-const AGENT_SYSTEM_PROMPT = `Eres Solaria Agent. Ejecutas herramientas en el sistema del usuario.
+const AGENT_SYSTEM_PROMPT = `Eres Solaria Agent, un asistente de investigación y análisis. Tu función es ayudar al usuario a investigar, analizar y procesar información.
+
+Tus herramientas disponibles son:
+- read_file: Lee archivos (documentos, reportes, datos)
+- write_file: Escribe reportes, resúmenes y documentos
+- glob: Busca archivos por patrón
+- grep: Busca texto dentro de archivos
+- web_search: Busca información en internet
+- fetch_url: Obtiene contenido de páginas web
 
 Para usar una herramienta, pon SOLO esto al final de tu respuesta:
 
 <tool_call>
-{"name": "shell", "arguments": {"command": "el comando"}}
+{"name": "web_search", "arguments": {"query": "tu búsqueda"}}
 </tool_call>
 
-Para herramientas sin parámetros:
-<tool_call>
-{"name": "git_status", "arguments": {}}
-</tool_call>
+SIEMPRE incluye "arguments": {}, incluso si la herramienta no necesita parámetros.
 
-<tool_call>
-{"name": "git_branches", "arguments": {}}
-</tool_call>
-
-SIEMPRE incluye "arguments": {}, incluso si la herramienta no necesita parámetros. No omitas el campo arguments.
-
-Reglas:
-- Una herramienta a la vez. Espera el resultado antes de continuar.
-- Al terminar, da la respuesta final sin tool_calls.
-- Si un comando falla, intenta otra ruta. Si falla 2 veces, cambia de enfoque.
-- Usa write_file para ESCRIBIR código a archivos. No uses echo > ni redirecciones en shell.
-- Si hablas de código en el chat, envuélvelo SIEMPRE en bloques markdown (tres backticks + lenguaje, como html, css, tsx).
-- Todo el código que generes debe ser 100% funcional, sin errores de sintaxis, probado mentalmente.
-- NO generes CSS/HTML como texto plano en el chat. O lo escribes a un archivo con write_file, o lo pones en un bloque markdown.
-- Empieza siempre con pwd para confirmar el directorio.
-- Si no encuentras un archivo, navega hacia la raíz con cd ..`
-
-async function discoverPlugins(): Promise<ToolDefinition[]> {
-  try {
-    const plugins = await invoke<{ name: string; description: string; parameters: { name: string; param_type: string; description: string; required: boolean }[] }[]>('list_plugins')
-    return plugins.map(p => ({
-      name: p.name,
-      description: p.description,
-      parameters: p.parameters.map((pp: any) => ({
-        name: pp.name,
-        param_type: pp.param_type,
-        description: pp.description,
-        required: pp.required,
-      })),
-    }))
-  } catch {
-    return []
-  }
-}
+REGLAS ESTRICTAS:
+1. NO hagas preguntas al usuario. Si el prompt es razonable, INVESTIGA directamente.
+2. NO pidas confirmación ni "si quieres que profundice". Solo entrega los resultados.
+3. **Después de web_search, DEBES hacer fetch_url en al menos 1 fuente.** Saltar el deep dive no está permitido.
+4. Si fetch_url falla, usa el snippet de búsqueda para esa fuente y pasa a la siguiente.
+5. Límite: máximo 3 fetch_url por sesión. Luego sintetiza con lo que tengas.
+6. Si no encuentras datos, sé honesto. NO fabriques información.
+7. Al terminar, da la respuesta final SIN tool_calls. Incluye fuentes numeradas al final.
+8. Las skills activas contienen guías que DEBES seguir para cada tipo de tarea.`
 
 function buildToolSystemPrompt(config: AgentConfig): string {
   return `${AGENT_SYSTEM_PROMPT}
@@ -116,13 +76,6 @@ ${getToolDescriptions(config.allowedTools)}
 
 function getToolDescriptions(allowedTools: string[]): string {
   const tools: ToolDefinition[] = [
-    {
-      name: 'shell',
-      description: 'Ejecuta comandos shell (bash, sh, zsh). Útil para: sistema de archivos, git, npm, cargo, docker, etc.',
-      parameters: [
-        { name: 'command', param_type: 'string', description: 'Comando a ejecutar', required: true },
-      ],
-    },
     {
       name: 'read_file',
       description: 'Lee y muestra el contenido de un archivo.',
@@ -140,14 +93,14 @@ function getToolDescriptions(allowedTools: string[]): string {
     },
     {
       name: 'glob',
-      description: 'Busca archivos por patrón glob. Ej: "**/*.ts", "src/**/*.rs"',
+      description: 'Busca archivos por patrón glob. Ej: "**/*.md", "docs/**/*.txt"',
       parameters: [
         { name: 'pattern', param_type: 'string', description: 'Patrón glob', required: true },
       ],
     },
     {
       name: 'grep',
-      description: 'Busca texto en archivos usando regex. Solo acepta pattern y path. Para filtrar por extensión usa shell: grep -rl "pattern" --include="*.ext"',
+      description: 'Busca texto en archivos usando regex.',
       parameters: [
         { name: 'pattern', param_type: 'string', description: 'Regex a buscar (requerido)', required: true },
         { name: 'path', param_type: 'string', description: 'Directorio donde buscar (opcional, por defecto .)', required: false },
@@ -165,61 +118,6 @@ function getToolDescriptions(allowedTools: string[]): string {
       description: 'Obtiene el contenido de una URL y lo devuelve como texto.',
       parameters: [
         { name: 'url', param_type: 'string', description: 'URL completa', required: true },
-      ],
-    },
-    // Git tools
-    {
-      name: 'git_status',
-      description: 'Muestra el estado del repo git: rama actual, cambios staged/unstaged, untracked.',
-      parameters: [],
-    },
-    {
-      name: 'git_log',
-      description: 'Muestra los últimos commits del repositorio.',
-      parameters: [
-        { name: 'max_count', param_type: 'number', description: 'Número de commits (default 10)', required: false },
-      ],
-    },
-    {
-      name: 'git_branches',
-      description: 'Lista las ramas locales del repositorio.',
-      parameters: [],
-    },
-    {
-      name: 'git_add',
-      description: 'Añade archivos al staging area para commitear.',
-      parameters: [
-        { name: 'files', param_type: 'string', description: 'Archivos a añadir (ej: src/main.ts o . para todo)', required: true },
-      ],
-    },
-    {
-      name: 'git_commit',
-      description: 'Crea un commit con mensaje descriptivo.',
-      parameters: [
-        { name: 'message', param_type: 'string', description: 'Mensaje del commit', required: true },
-      ],
-    },
-    {
-      name: 'git_push',
-      description: 'Sube commits al repositorio remoto.',
-      parameters: [
-        { name: 'branch', param_type: 'string', description: 'Rama (opcional si ya tiene upstream)', required: false },
-      ],
-    },
-    {
-      name: 'git_checkout',
-      description: 'Cambia a otra rama o crea una nueva.',
-      parameters: [
-        { name: 'branch', param_type: 'string', description: 'Nombre de la rama', required: true },
-        { name: 'create', param_type: 'boolean', description: 'Crear rama si no existe (default: false)', required: false },
-      ],
-    },
-    {
-      name: 'git_diff',
-      description: 'Muestra diferencias del working tree o staging.',
-      parameters: [
-        { name: 'staged', param_type: 'boolean', description: 'Diff del staging (default: false)', required: false },
-        { name: 'path', param_type: 'string', description: 'Archivo específico (opcional)', required: false },
       ],
     },
   ]
@@ -245,10 +143,8 @@ function tryFixJson(raw: string): string {
 
   let fixed = raw
 
-  // Fix: "shell "arguments" → "shell", "arguments" (space instead of comma+space)
-  fixed = fixed.replace(/"(shell|read_file|write_file|glob|grep|web_search|fetch_url|git_status|git_log|git_branches|git_add|git_commit|git_push|git_checkout|git_diff|mcp__[\w_]+__[\w_]+)"\s*"(arguments|parametros)"/g, '"$1", "$2"')
+  fixed = fixed.replace(/"(read_file|write_file|glob|grep|web_search|fetch_url|mcp__[\w_]+__[\w_]+)"\s*"(arguments|parametros)"/g, '"$1", "$2"')
 
-  // Fix: "name": "tool" "arguments" → "name": "tool", "arguments"
   fixed = fixed.replace(/"name"\s*:\s*"[^"]+"\s+"(arguments|parametros)"/g, (m) => {
     const before = m.substring(0, m.lastIndexOf('" '))
     return before + '", "arguments"'
@@ -256,15 +152,12 @@ function tryFixJson(raw: string): string {
 
   try { JSON.parse(fixed); return fixed } catch {}
 
-  // Try adding missing comma between name and arguments
   fixed = raw.replace(/"\s*"\s*"arguments"/g, '", "arguments"')
   try { JSON.parse(fixed); return fixed } catch {}
 
-  // Try removing extra quotes
   fixed = raw.replace(/""/g, '"')
   try { JSON.parse(fixed); return fixed } catch {}
 
-  // Try removing trailing garbage
   const lastBrace = raw.lastIndexOf('}')
   if (lastBrace > 0) {
     const trimmed = raw.substring(0, lastBrace + 1)
@@ -275,20 +168,16 @@ function tryFixJson(raw: string): string {
 }
 
 function tryFindToolJson(text: string): string | null {
-  // Try strict JSON first (with name + arguments)
   let jsonMatch = text.match(/\{[\s\S]*?"name"[\s\S]*?"arguments"[\s\S]*?\}/)
   let candidate = jsonMatch?.[0]
 
-  // Fallback: match JSON with just "name" (tools without parameters)
   if (!candidate) {
-    // Match { "name": "tool_name" } optionally followed by "arguments": {}
-    const nameOnly = text.match(/\{\s*"(?:name|nombre)"\s*:\s*"(shell|read_file|write_file|glob|grep|web_search|fetch_url|git_status|git_log|git_branches|git_add|git_commit|git_push|git_checkout|git_diff|mcp__[\w_]+__[\w_]+)"(\s*,\s*"(?:arguments|parametros)"\s*:\s*\{\}\s*)?\s*\}/)
+    const nameOnly = text.match(/\{\s*"(?:name|nombre)"\s*:\s*"(read_file|write_file|glob|grep|web_search|fetch_url|mcp__[\w_]+__[\w_]+)"(\s*,\s*"(?:arguments|parametros)"\s*:\s*\{\}\s*)?\s*\}/)
     if (nameOnly) {
       candidate = nameOnly[0]
     }
   }
 
-  // If no match, try to fix common LLM truncation: missing opening brace
   if (!candidate) {
     const brokenMatch = text.match(/("name"\s*:\s*"[^"]+"[\s\S]*?"arguments"\s*:\s*\{[\s\S]*?\}\s*\})/)
     if (brokenMatch) {
@@ -302,7 +191,6 @@ function tryFindToolJson(text: string): string | null {
     const parsed = JSON.parse(candidate)
     if (parsed.name) return candidate
   } catch {
-    // Try to fix malformed JSON and parse again
     const fixed = tryFixJson(candidate)
     if (fixed !== candidate) {
       try {
@@ -315,18 +203,13 @@ function tryFindToolJson(text: string): string | null {
 }
 
 function normalizeToolTags(text: string): string {
-  // Normalize various TOOL: formats and legacy <tool_call> formats
   let result = text
-    // New format: TOOL: {...} at end of message
     .replace(/TOOL\s*:\s*/gi, 'TOOL:')
 
-  // Legacy: normalize XML-like tag variants
   result = result
     .replace(/[{\[\(]*<\/?[Tt]ool[_-]?[Cc]all>/g, (m) => m.includes('/') ? '</tool_call>' : '<tool_call>')
     .replace(/"?\s*[{\[\(]+tool_call[>\]\)]/gi, '<tool_call>')
-    // Fix {tool_call> (missing < at start)
     .replace(/\{(tool_call|TOOL)\s*>/g, '<$1>')
-    // Fix {tool_call without >
     .replace(/\{(tool_call|TOOL)\s*$/gim, '<$1>')
 
   return result
@@ -335,29 +218,40 @@ function normalizeToolTags(text: string): string {
 function cleanToolCalls(text: string): string {
   const normalized = normalizeToolTags(text)
 
-  // Remove new format: TOOL: {...}
   let cleaned = normalized.replace(/TOOL:\s*\{[\s\S]*?\}\s*/g, '').trim()
 
-  // Remove legacy format: <tool_call>...</tool_call>
   cleaned = cleaned.replace(/<tool_call>[\s\S]*?<\/tool_call>\s*/g, '').trim()
 
-  // Remove broken tool JSON (with or without arguments)
-  cleaned = cleaned.replace(/"?\s*"name"\s*:\s*"[^"]+".*?\}\s*\}?\s*/g, '').trim()
+  cleaned = cleaned.replace(/\{\s*"name"\s*:\s*"[^"]+"[\s\S]*?"arguments"[\s\S]*?\}\s*\}/g, '').trim()
 
   return cleaned
 }
 
+function extractArgsFromTopLevel(parsed: Record<string, any>): Record<string, string> {
+  const knownKeys = new Set(['name', 'nombre', 'arguments', 'parametros'])
+  const args: Record<string, string> = {}
+  for (const [key, val] of Object.entries(parsed)) {
+    if (!knownKeys.has(key) && typeof val === 'string') {
+      args[key] = val
+    }
+  }
+  return args
+}
+
 function extractToolCallFromNormalized(text: string): { name: string; arguments: Record<string, string> } | null {
-  // Try new format: TOOL: {...}
   const toolMatch = text.match(/TOOL:\s*(\{[\s\S]*?\})/)
   if (toolMatch) {
     try {
       const parsed = JSON.parse(toolMatch[1])
-      if (parsed.name) return { name: parsed.name, arguments: parsed.arguments || {} }
+      if (parsed.name) {
+        return {
+          name: parsed.name,
+          arguments: parsed.arguments || parsed.parametros || extractArgsFromTopLevel(parsed),
+        }
+      }
     } catch {}
   }
 
-  // Try legacy format with tags
   const match = text.match(/<tool_call>\s*({[\s\S]*?})\s*<\/tool_call>/)
   const jsonStr = match ? match[1] : tryFindToolJson(text)
   if (!jsonStr) return null
@@ -365,14 +259,19 @@ function extractToolCallFromNormalized(text: string): { name: string; arguments:
   try {
     const parsed = JSON.parse(jsonStr)
     if (!parsed.name) return null
-    return { name: parsed.name, arguments: parsed.arguments || {} }
+    return {
+      name: parsed.name,
+      arguments: parsed.arguments || parsed.parametros || extractArgsFromTopLevel(parsed),
+    }
   } catch {
-    // Try to fix malformed JSON
     const fixed = tryFixJson(jsonStr)
     if (fixed !== jsonStr) {
       try {
         const parsed = JSON.parse(fixed)
-        if (parsed.name) return { name: parsed.name, arguments: parsed.arguments || {} }
+        if (parsed.name) return {
+          name: parsed.name,
+          arguments: parsed.arguments || parsed.parametros || extractArgsFromTopLevel(parsed),
+        }
       } catch {}
     }
     return null
@@ -381,41 +280,13 @@ function extractToolCallFromNormalized(text: string): { name: string; arguments:
 
 export function useAgent() {
   const [isRunning, setIsRunning] = useState(false)
-  const [sessionLocked, setSessionLocked] = useState(false)
   const [agentConfig, setAgentConfig] = useState<AgentConfig>(DEFAULT_AGENT_CONFIG)
   const [liveThinking, setLiveThinking] = useState('')
   const abortRef = useRef(false)
   const messageHistoryRef = useRef<AgentMessage[]>([])
   const pendingConfirmRef = useRef<{ resolve: (value: boolean) => void } | null>(null)
-  const lastActivityRef = useRef(Date.now())
   const unlistenRef = useRef<UnlistenFn[]>([])
   const streamIdRef = useRef<string | null>(null)
-
-  const touchActivity = useCallback(() => {
-    lastActivityRef.current = Date.now()
-  }, [])
-
-  useEffect(() => {
-    if (agentConfig.sessionTimeout <= 0 || !agentConfig.enabled) {
-      setSessionLocked(false)
-      return
-    }
-
-    setSessionLocked(false)
-    const ms = agentConfig.sessionTimeout * 60 * 1000
-    const interval = setInterval(() => {
-      if (Date.now() - lastActivityRef.current > ms) {
-        setSessionLocked(true)
-      }
-    }, 10000)
-
-    return () => clearInterval(interval)
-  }, [agentConfig.sessionTimeout, agentConfig.enabled])
-
-  const resumeSession = useCallback(() => {
-    lastActivityRef.current = Date.now()
-    setSessionLocked(false)
-  }, [])
 
   const waitForConfirmation = useCallback((): Promise<boolean> => {
     return new Promise(resolve => {
@@ -426,8 +297,7 @@ export function useAgent() {
   const confirmTool = useCallback((allow: boolean) => {
     pendingConfirmRef.current?.resolve(allow)
     pendingConfirmRef.current = null
-    touchActivity()
-  }, [touchActivity])
+  }, [])
 
   const cleanupStreamListeners = useCallback(() => {
     for (const unlisten of unlistenRef.current) {
@@ -465,9 +335,7 @@ export function useAgent() {
           clearTimeoutFn()
           cleanupStreamListeners()
           streamIdRef.current = null
-          // Allow last token event to be processed
           await new Promise(r => setTimeout(r, 100))
-          // Use the longer accumulated content
           const finalContent = fullContent.length > event.payload.full_content.length
             ? fullContent : event.payload.full_content
           resolve(finalContent)
@@ -485,7 +353,6 @@ export function useAgent() {
         })
         unlistenRef.current.push(unlistenError)
 
-        // Timeout: if no done/error event within 30s, treat as completed with partial content
         const timeoutId = setTimeout(() => {
           if (settled) return
           settled = true
@@ -548,13 +415,6 @@ export function useAgent() {
     workingDir: string,
     confirmed: boolean,
     restrictToWorkDir: boolean,
-    rateLimit: number,
-    useAllowlist: boolean,
-    commandAllowlist: string,
-    sandboxEnabled?: boolean,
-    sandboxImage?: string,
-    securityProfile?: string,
-    sandboxAirGapped?: boolean,
   ): Promise<import('../lib/tools').ToolResult> => {
     return invoke<import('../lib/tools').ToolResult>('execute_tool', {
       name,
@@ -562,14 +422,6 @@ export function useAgent() {
       workingDir: workingDir || null,
       confirmed,
       restrictToWorkdir: restrictToWorkDir,
-      rateLimit,
-      useAllowlist,
-      commandAllowlist,
-      sandboxEnabled: sandboxEnabled ?? false,
-      sandboxImage: sandboxImage || null,
-      securityProfile: securityProfile || 'explore',
-      autoConfirm: securityProfile === 'explore',
-      sandboxAirGapped: sandboxAirGapped ?? true,
     })
   }, [])
 
@@ -598,24 +450,15 @@ export function useAgent() {
   ) => {
     abortRef.current = false
     setIsRunning(true)
-    touchActivity()
 
     onStep(makeStep('reasoning', 'Iniciando agente...'))
 
-    const plugins = await discoverPlugins()
-    const pluginLines = plugins.length > 0
-      ? `\n\nPLUGINS PERSONALIZADOS DISPONIBLES:\n${plugins.map(p => {
-          const params = p.parameters.map(pp => `  - ${pp.name} (${pp.param_type}): ${pp.description}`).join('\n')
-          return `### ${p.name}\n${p.description}\nParámetros:\n${params}`
-        }).join('\n\n')}`
-      : ''
-
     let skillsPrompt = ''
     try {
-      skillsPrompt = await invoke<string>('get_skills_prompt')
+      skillsPrompt = await invoke<string>('get_skills_prompt', { workingDir: agentConfig.workingDirectory || null })
     } catch {}
 
-    const systemPrompt = buildToolSystemPrompt(agentConfig) + pluginLines + skillsPrompt
+    const systemPrompt = buildToolSystemPrompt(agentConfig) + skillsPrompt
     const messages: AgentMessage[] = [
       ...messageHistoryRef.current,
       { role: 'user', content: userInput },
@@ -623,8 +466,8 @@ export function useAgent() {
 
     let iteration = 0
     let fullAssistantContent = ''
+    let lastAssistantText = ''
     const updateChatMsg = (content: string) => {
-      // Called via onStep with special type to update chat message content
       onStep(makeStep('chat_update', content))
     }
 
@@ -644,19 +487,34 @@ export function useAgent() {
 
         const toolCall = extractToolCall(response)
         const cleanedResponse = cleanToolCalls(response)
+        const pureText = cleanedResponse || response.replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '').trim()
+        if (pureText) lastAssistantText = pureText
 
-        if (cleanedResponse && toolCall) {
-          fullAssistantContent = fullAssistantContent
-            ? fullAssistantContent + '\n\n' + cleanedResponse
-            : cleanedResponse
-          onStep(makeStep('reasoning', cleanedResponse))
+        if (toolCall) {
+          if (cleanedResponse) {
+            fullAssistantContent = fullAssistantContent
+              ? fullAssistantContent + '\n\n' + cleanedResponse
+              : cleanedResponse
+            onStep(makeStep('reasoning', cleanedResponse))
+          } else {
+            const progressLine = `*→ ${toolCall.name} · paso ${iteration}/${agentConfig.maxIterations}*`
+            fullAssistantContent = fullAssistantContent
+              ? fullAssistantContent + '\n' + progressLine
+              : progressLine
+            onStep(makeStep('reasoning', progressLine))
+          }
           updateChatMsg(fullAssistantContent)
         }
 
         if (!toolCall) {
-          const finalContent = cleanedResponse || response
-          messages.push({ role: 'assistant', content: finalContent })
-          callComplete(onComplete, fullAssistantContent || finalContent, onStep)
+          const finalText = cleanedResponse || response
+          fullAssistantContent = fullAssistantContent
+            ? fullAssistantContent + '\n\n' + finalText
+            : finalText
+          messages.push({ role: 'assistant', content: fullAssistantContent })
+          onStep(makeStep('reasoning', finalText))
+          updateChatMsg(fullAssistantContent)
+          callComplete(onComplete, fullAssistantContent, onStep)
           break
         }
 
@@ -675,9 +533,7 @@ export function useAgent() {
           toolArgs: argsJson,
         }))
 
-        let toolResult = await executeToolCall(toolCall.name, toolCall.arguments, agentConfig.workingDirectory, false, agentConfig.restrictToWorkDir, agentConfig.rateLimit, agentConfig.useAllowlist, agentConfig.commandAllowlist, agentConfig.sandboxEnabled, agentConfig.sandboxImage, agentConfig.securityProfile, agentConfig.sandboxAirGapped)
-        touchActivity()
-
+        let toolResult = await executeToolCall(toolCall.name, toolCall.arguments, agentConfig.workingDirectory, false, false)
         const needsConfirm = toolResult.requires_confirmation ||
           (toolCall.name === 'write_file' && agentConfig.confirmWrite)
 
@@ -692,7 +548,7 @@ export function useAgent() {
             toolResult: '[PENDIENTE - esperando confirmación del usuario]',
           }))
 
-          const allowed = agentConfig.autoConfirm || await waitForConfirmation()
+          const allowed = await waitForConfirmation()
 
           if (!allowed) {
             const deniedMsg = `El usuario denegó la ejecución de ${toolCall.name} por seguridad`
@@ -705,28 +561,49 @@ export function useAgent() {
             continue
           }
 
-          toolResult = await executeToolCall(toolCall.name, toolCall.arguments, agentConfig.workingDirectory, true, agentConfig.restrictToWorkDir, agentConfig.rateLimit, agentConfig.useAllowlist, agentConfig.commandAllowlist, agentConfig.sandboxEnabled, agentConfig.sandboxImage, agentConfig.securityProfile, agentConfig.sandboxAirGapped)
-          touchActivity()
+          toolResult = await executeToolCall(toolCall.name, toolCall.arguments, agentConfig.workingDirectory, true, false)
+        }
+
+        const isWriteFile = toolCall.name === 'write_file' && toolResult.success
+        let reportPreview = ''
+
+        if (isWriteFile) {
+          const filePath = toolCall.arguments.path || ''
+          const fileContent = toolCall.arguments.content || ''
+          const preview = fileContent.length > 800 ? fileContent.slice(0, 800) + '\n\n_...(contenido completo en el archivo)_' : fileContent
+          reportPreview = `📄 Reporte guardado en: \`${filePath}\`\n\n${preview}`
         }
 
         onStep(makeStep('tool_result', toolCall.name, {
           toolName: toolCall.name,
           toolWarning: toolResult.preview || undefined,
-          toolResult: toolResult.success
-            ? toolResult.output.slice(0, 2000) + (toolResult.output.length > 2000 ? '\n...(truncado)' : '')
-            : `ERROR: ${toolResult.error || 'Error desconocido'}`,
+          toolResult: isWriteFile
+            ? reportPreview
+            : (toolResult.success
+              ? toolResult.output.slice(0, 2000) + (toolResult.output.length > 2000 ? '\n...(truncado)' : '')
+              : `ERROR: ${toolResult.error || 'Error desconocido'}`),
         }))
 
-        const resultContent = toolResult.success
-          ? `Resultado de ${toolCall.name}:\n\`\`\`\n${toolResult.output.slice(0, 5000)}\n\`\`\`${toolResult.output.length > 5000 ? '\n...(resultado truncado)' : ''}`
-          : `Error ejecutando ${toolCall.name}: ${toolResult.error || 'Error desconocido'}`
+        const resultContent = isWriteFile
+          ? reportPreview
+          : (toolResult.success
+            ? `Resultado de ${toolCall.name}:\n\`\`\`\n${toolResult.output.slice(0, 5000)}\n\`\`\`${toolResult.output.length > 5000 ? '\n...(resultado truncado)' : ''}`
+            : `Error ejecutando ${toolCall.name}: ${toolResult.error || 'Error desconocido'}`)
 
         messages.push({ role: 'assistant', content: cleanedResponse || response })
         messages.push({ role: 'tool', content: resultContent })
+
+        if (isWriteFile) {
+          fullAssistantContent = fullAssistantContent
+            ? fullAssistantContent + '\n\n---\n\n' + reportPreview
+            : reportPreview
+          updateChatMsg(fullAssistantContent)
+        }
       }
 
       if (iteration >= agentConfig.maxIterations) {
-        callComplete(onComplete, fullAssistantContent || `Máximo de iteraciones alcanzado (${agentConfig.maxIterations}). La tarea puede estar incompleta.`, onStep)
+        const fallback = fullAssistantContent || lastAssistantText || `Máximo de iteraciones alcanzado (${agentConfig.maxIterations}). La tarea puede estar incompleta.`
+        callComplete(onComplete, fallback, onStep)
       }
     } catch (error: any) {
       setLiveThinking('')
@@ -763,7 +640,6 @@ export function useAgent() {
 
   return {
     isRunning,
-    sessionLocked,
     agentConfig,
     liveThinking,
     updateAgentConfig,
@@ -771,6 +647,5 @@ export function useAgent() {
     stopAgent,
     resetAgent,
     confirmTool,
-    resumeSession,
   }
 }

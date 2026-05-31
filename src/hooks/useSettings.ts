@@ -65,7 +65,7 @@ function loadSettings(): AppSettings {
 
 export function useSettings() {
   const [settings, setSettings] = useState<AppSettings>(loadSettings)
-  const [showSettings, setShowSettings] = useState(false)
+  const [showSettings, setShowSettings] = useState<string | false>(false)
 
   // Load API keys from OS keyring on mount (fallback to localStorage)
   useEffect(() => {

@@ -59,6 +59,16 @@ body {
   to { transform: translateX(0); opacity: 1; }
 }
 
+@keyframes stepGlow {
+  0%, 100% { box-shadow: 0 0 4px rgba(220,178,99,0.1), inset 0 0 4px rgba(220,178,99,0.05); }
+  50% { box-shadow: 0 0 8px rgba(220,178,99,0.2), inset 0 0 6px rgba(220,178,99,0.08); }
+}
+
+@keyframes stepGlowTeal {
+  0%, 100% { box-shadow: 0 0 4px rgba(0,229,201,0.1), inset 0 0 4px rgba(0,229,201,0.05); }
+  50% { box-shadow: 0 0 8px rgba(0,229,201,0.2), inset 0 0 6px rgba(0,229,201,0.08); }
+}
+
 * {
   box-sizing: border-box;
 }

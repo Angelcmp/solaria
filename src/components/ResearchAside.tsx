@@ -11,7 +11,7 @@ interface ResearchAsideProps {
   onConfirmTool?: (allow: boolean) => void
 }
 
-type Tab = 'agent' | 'report' | 'sources'
+type Tab = 'process' | 'document' | 'references'
 
 interface SourceItem {
   url: string
@@ -74,7 +74,8 @@ function findUrlInArgs(steps: AgentStep[], _result: string): string | null {
   return null
 }
 
-function extractReport(steps: AgentStep[]): ReportFile | null {
+function extractReports(steps: AgentStep[]): ReportFile[] {
+  const reports: ReportFile[] = []
   for (let i = 0; i < steps.length; i++) {
     const step = steps[i]
     if (step.type === 'tool_call' && step.toolName === 'write_file' && step.toolArgs) {
@@ -86,92 +87,113 @@ function extractReport(steps: AgentStep[]): ReportFile | null {
         const written = nextStep?.type === 'tool_result' && nextStep.toolName === 'write_file'
           ? !nextStep.toolResult?.startsWith('ERROR')
           : false
-        return { path, content, written }
+        reports.push({ path, content, written })
       } catch {}
     }
   }
-  return null
+  return reports
 }
 
 export default function ResearchAside(props: ResearchAsideProps) {
   const { steps, isRunning, liveThinking, onClose, onStop, onConfirmTool } = props
-  const [tab, setTab] = useState<Tab>('agent')
+  const [tab, setTab] = useState<Tab>('process')
+  const [collapsed, setCollapsed] = useState(false)
 
   const sources = useMemo(() => extractSources(steps), [steps])
-  const report = useMemo(() => extractReport(steps), [steps])
+  const reports = useMemo(() => extractReports(steps), [steps])
 
   const hasContent = steps.length > 0 || isRunning
 
   if (!hasContent) return null
 
+  if (collapsed) {
+    return (
+      <div className="flex flex-col items-center bg-[#1C1B1B] border-l border-[rgba(255,255,255,0.04)] w-[36px] shrink-0 overflow-hidden">
+        <button
+          onClick={() => setCollapsed(false)}
+          className="flex items-center justify-center w-6 h-6 mt-2 rounded hover:bg-[rgba(255,255,255,0.08)] text-[#666666] hover:text-white transition-colors"
+          title="Expandir panel"
+        >
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        </button>
+        <div className={`w-1.5 h-1.5 rounded-full mt-2 ${isRunning ? 'bg-[#00E5C9] animate-pulse' : 'bg-[#666666]'}`} />
+        <div className="flex flex-col items-center gap-2 mt-3">
+          <button onClick={() => setTab('process')} className={`w-5 h-5 rounded flex items-center justify-center text-[0.55rem] ${tab === 'process' ? 'text-[#DCB263]' : 'text-[#666666]'}`} title="Proceso">P</button>
+          <button onClick={() => setTab('document')} className={`w-5 h-5 rounded flex items-center justify-center text-[0.55rem] ${tab === 'document' ? 'text-[#DCB263]' : 'text-[#666666]'}`} title="Documento">D</button>
+          <button onClick={() => setTab('references')} className={`w-5 h-5 rounded flex items-center justify-center text-[0.55rem] ${tab === 'references' ? 'text-[#DCB263]' : 'text-[#666666]'}`} title="Referencias">R</button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col bg-[#1C1B1B] border-l border-[rgba(255,255,255,0.04)] w-[480px] shrink-0 overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-2 min-h-[40px] border-b border-[rgba(255,255,255,0.04)]">
-        <div className={`w-2 h-2 rounded-full ${isRunning ? 'bg-[#00E5C9] animate-pulse' : 'bg-[#DCB263]'}`} />
-        <span className="text-[0.75rem] font-semibold text-[#E5E5E5]">Solaria Research</span>
-        <span className="text-[0.6rem] text-[#666666] font-mono">
-          {isRunning ? 'investigando...' : steps.some(s => s.type === 'final') ? 'completado' : `${steps.length} paso${steps.length !== 1 ? 's' : ''}`}
-        </span>
-        {isRunning && onStop && (
-          <button onClick={onStop} className="flex items-center justify-center w-5 h-5 rounded hover:bg-[rgba(239,68,68,0.15)] text-[#999999] hover:text-[#ef4444] transition-colors" title="Detener">
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-          </button>
-        )}
-        <button
-          onClick={onClose}
-          className="flex items-center justify-center w-5 h-5 rounded hover:bg-[rgba(255,255,255,0.08)] text-[#999999] hover:text-white transition-colors"
-        >
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex border-b border-[rgba(255,255,255,0.04)]">
+      {/* Tabs + controls */}
+      <div className="flex items-center border-b border-[rgba(255,255,255,0.04)]">
         {([
-          { id: 'agent' as Tab, label: 'Agente', icon: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>' },
-          { id: 'report' as Tab, label: 'Reporte', icon: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>', badge: report ? 'dot' : undefined },
-          { id: 'sources' as Tab, label: 'Fuentes', icon: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>', badge: sources.length > 0 ? String(sources.length) : undefined },
+          { id: 'process' as Tab, label: 'Proceso', icon: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>' },
+          { id: 'document' as Tab, label: 'Documento', icon: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>', badge: reports.length > 0 ? 'dot' : undefined },
+          { id: 'references' as Tab, label: 'Referencias', icon: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>', badge: sources.length > 0 ? String(sources.length) : undefined },
         ] as { id: Tab; label: string; icon: string; badge?: string }[]).map(t => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`flex items-center gap-1.5 px-3 py-2 text-[0.65rem] font-medium border-b-2 transition-colors ${
+            className={`flex items-center gap-1 px-3 py-2 text-[0.6rem] font-medium transition-colors ${
               tab === t.id
-                ? 'border-[#00E5C9] text-[#00E5C9]'
-                : 'border-transparent text-[#666666] hover:text-[#999999]'
+                ? 'text-[#E5E5E5] border-b border-[#00E5C9]'
+                : 'text-[#666666] border-b border-transparent hover:text-[#999999]'
             }`}
           >
             <span dangerouslySetInnerHTML={{ __html: t.icon }} />
             <span>{t.label}</span>
             {t.badge === 'dot' ? (
-              <span className="w-1.5 h-1.5 rounded-full bg-[#00E5C9]" />
+              <span className="w-1 h-1 rounded-full bg-[#00E5C9] ml-1" />
             ) : t.badge ? (
-              <span className="text-[0.5rem] px-1 rounded bg-[rgba(0,229,201,0.1)] text-[#00E5C9]">{t.badge}</span>
+              <span className="text-[0.45rem] ml-1 px-1 rounded bg-[rgba(0,229,201,0.08)] text-[#00E5C9]">{t.badge}</span>
             ) : null}
           </button>
         ))}
+          <div className="flex-1" />
+          <div className={`w-1.5 h-1.5 rounded-full mr-1 ${isRunning ? 'bg-[#00E5C9] animate-pulse' : 'bg-[#666666]'}`} />
+          {isRunning && onStop && (
+            <button onClick={onStop} className="flex items-center justify-center w-6 h-6 rounded hover:bg-[rgba(239,68,68,0.15)] text-[#999999] hover:text-[#ef4444] transition-colors mr-1" title="Detener">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+            </button>
+          )}
+          <button
+            onClick={() => setCollapsed(true)}
+            className="flex items-center justify-center w-6 h-6 rounded hover:bg-[rgba(255,255,255,0.08)] text-[#666666] hover:text-white transition-colors mr-1"
+            title="Colapsar panel"
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </button>
+          <button
+            onClick={onClose}
+            className="flex items-center justify-center w-6 h-6 rounded hover:bg-[rgba(255,255,255,0.08)] text-[#666666] hover:text-white transition-colors mr-1"
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
       </div>
 
       {/* Tab content */}
       <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'thin', scrollbarColor: '#4b5563 transparent' }}>
-        {tab === 'agent' && (
-          <AgentTabContent steps={steps} isRunning={isRunning} liveThinking={liveThinking} onConfirmTool={onConfirmTool} />
+        {tab === 'process' && (
+          <ProcessTabContent steps={steps} isRunning={isRunning} liveThinking={liveThinking} onConfirmTool={onConfirmTool} />
         )}
-        {tab === 'report' && (
-          <ReportTabContent report={report} />
+        {tab === 'document' && (
+          <DocumentTabContent reports={reports} />
         )}
-        {tab === 'sources' && (
-          <SourcesTabContent sources={sources} />
+        {tab === 'references' && (
+          <ReferencesTabContent sources={sources} />
         )}
       </div>
     </div>
   )
 }
 
-// ── Agent Tab ────────────────────────────────────────────────────────────────
+// ── Process Tab ──────────────────────────────────────────────────────────────
 
-function AgentTabContent({ steps, isRunning, liveThinking, onConfirmTool }: {
+function ProcessTabContent({ steps, isRunning, liveThinking, onConfirmTool }: {
   steps: AgentStep[]
   isRunning: boolean
   liveThinking?: string
@@ -193,6 +215,9 @@ function AgentTabContent({ steps, isRunning, liveThinking, onConfirmTool }: {
   }
 
   const reasoningCount = steps.filter(s => s.type === 'reasoning').length
+  const toolCalls = steps.filter(s => s.type === 'tool_call').length
+  const results = steps.filter(s => s.type === 'tool_result').length
+  const hasFinal = steps.some(s => s.type === 'final')
 
   return (
     <div ref={scrollRef} onScroll={handleScroll} className="h-full overflow-y-auto py-2 px-2 space-y-0.5" style={{ scrollbarWidth: 'thin', scrollbarColor: '#4b5563 transparent' }}>
@@ -215,6 +240,15 @@ function AgentTabContent({ steps, isRunning, liveThinking, onConfirmTool }: {
         </button>
       )}
 
+      {steps.length > 3 && (
+        <div className="flex items-center gap-1.5 px-2 py-0.5 text-[0.5rem] opacity-50">
+          <span className="text-[#DCB263]">{toolCalls}</span>
+          <span className="text-[#4a4a4a]">·</span>
+          <span className="text-[#00E5C9]">{results}</span>
+          {hasFinal && <><span className="text-[#4a4a4a]">·</span><span className="text-[#999999]">✓</span></>}
+          <span className="ml-auto text-[#4a4a4a]">{steps.length}</span>
+        </div>
+      )}
       {steps.map((step, i) => (
         <StepCard
           key={step.id}
@@ -224,7 +258,13 @@ function AgentTabContent({ steps, isRunning, liveThinking, onConfirmTool }: {
           isLast={i === steps.length - 1}
           isRunning={isRunning}
           onConfirmTool={onConfirmTool}
-          autoCollapse={step.type === 'reasoning' && reasoningCount > 3 && i < steps.length - 3}
+          autoCollapse={
+            i < steps.length - 3 && (
+              (step.type === 'reasoning' && reasoningCount > 3) ||
+              step.type === 'tool_call' ||
+              (step.type === 'tool_result' && results > 2)
+            )
+          }
         />
       ))}
       {liveThinking && isRunning && (
@@ -266,19 +306,19 @@ function StepCard({ step, stepIndex, totalSteps, isLast, isRunning, onConfirmToo
     if (autoCollapse) setCollapsed(true)
   }, [autoCollapse])
 
-  const borderColor = step.type === 'reasoning' ? 'border-l-[rgba(220,178,99,0.4)]'
-    : step.type === 'tool_call' ? 'border-l-[#DCB263]'
-    : step.type === 'tool_result' ? 'border-l-[#00E5C9]'
-    : 'border-l-[#DCB263]'
+  const borderColor = step.type === 'reasoning' ? 'border-l-[rgba(220,178,99,0.3)]'
+    : step.type === 'tool_call' ? 'border-l-[rgba(220,178,99,0.5)]'
+    : step.type === 'tool_result' ? 'border-l-[rgba(0,229,201,0.4)]'
+    : 'border-l-[rgba(220,178,99,0.3)]'
 
   const icon = step.type === 'reasoning' ? (
-    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#DCB263" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#DCB263" strokeWidth="2" opacity="0.7"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
   ) : step.type === 'tool_call' ? (
-    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#DCB263" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#DCB263" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
   ) : step.type === 'tool_result' ? (
-    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#00E5C9" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>
+    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#00E5C9" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>
   ) : (
-    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#DCB263" strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#DCB263" strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
   )
 
   const handleCopy = async (text: string) => {
@@ -286,11 +326,11 @@ function StepCard({ step, stepIndex, totalSteps, isLast, isRunning, onConfirmToo
   }
 
   return (
-    <div className={`border-l-2 ${borderColor} pl-2 py-1 ${isLast && isRunning ? 'animate-[msgFadeIn_0.3s_ease-out]' : ''}`}>
+    <div className={`border-l ${borderColor} pl-2 py-0.5 opacity-60 hover:opacity-95 transition-opacity ${isLast && isRunning ? 'animate-[msgFadeIn_0.3s_ease-out]' : ''}`}>
       <div className="flex items-start gap-1.5">
-        <button onClick={() => setCollapsed(!collapsed)} className="flex items-center gap-1.5 flex-1 min-w-0 text-left pt-0.5">
+        <button onClick={() => setCollapsed(!collapsed)} className="flex items-center gap-1.5 flex-1 min-w-0 text-left">
           {icon}
-          <span className="text-[0.65rem] font-medium text-[#999999] truncate">
+          <span className="text-[0.6rem] text-[#999999] truncate">
             {step.type === 'reasoning' && 'Razonando'}
             {step.type === 'tool_call' && step.toolName && (
               <span className="flex items-center gap-1">
@@ -391,10 +431,12 @@ function formatArgs(args: string): string {
   }
 }
 
-// ── Report Tab ───────────────────────────────────────────────────────────────
+// ── Document Tab ─────────────────────────────────────────────────────────────
 
-function ReportTabContent({ report }: { report: ReportFile | null }) {
-  if (!report) {
+function DocumentTabContent({ reports }: { reports: ReportFile[] }) {
+  const [copied, setCopied] = useState(false)
+
+  if (reports.length === 0) {
     return (
       <div className="flex items-center justify-center h-full px-4">
         <div className="text-center">
@@ -408,25 +450,64 @@ function ReportTabContent({ report }: { report: ReportFile | null }) {
     )
   }
 
+  const handleCopy = async (content: string) => {
+    try { await navigator.clipboard.writeText(content); setCopied(true); setTimeout(() => setCopied(false), 1500) } catch {}
+  }
+
   return (
-    <div className="p-3">
-      <div className="flex items-center gap-2 mb-3 pb-2 border-b border-[rgba(255,255,255,0.06)]">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#00E5C9" strokeWidth="1.5">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-        </svg>
-        <span className="text-[0.65rem] text-[#00E5C9] font-mono truncate flex-1" title={report.path}>{report.path.split('/').pop()}</span>
-        {report.written && <span className="text-[0.5rem] text-[#00E5C9] bg-[rgba(0,229,201,0.1)] px-1 rounded">✓ escrito</span>}
-      </div>
-      <div className="bg-[rgba(0,0,0,0.2)] rounded-lg p-3 border border-[rgba(255,255,255,0.04)]">
-        <Markdown content={report.content} />
-      </div>
+    <div className="p-3 space-y-3">
+      {reports.map((r, i) => (
+        <div key={i}>
+          <div className="flex items-center gap-2 mb-2 pb-2 border-b border-[rgba(255,255,255,0.06)]">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#00E5C9" strokeWidth="1.5">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+            </svg>
+            <span className="text-[0.65rem] text-[#00E5C9] font-mono truncate flex-1" title={r.path}>{r.path.split('/').pop()}</span>
+            {r.written && <span className="text-[0.5rem] text-[#00E5C9] bg-[rgba(0,229,201,0.1)] px-1 rounded">✓ escrito</span>}
+            <button
+              onClick={() => handleCopy(r.content)}
+              className="shrink-0 px-1.5 py-0.5 rounded text-[0.5rem] text-[#999999] hover:text-white hover:bg-[rgba(255,255,255,0.08)] transition-colors"
+              title="Copiar contenido"
+            >
+              {copied ? '✓' :
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              }
+            </button>
+          </div>
+          <div className="bg-[rgba(0,0,0,0.2)] rounded-lg p-3 border border-[rgba(255,255,255,0.04)]">
+            <Markdown content={r.content} />
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
 
-// ── Sources Tab ──────────────────────────────────────────────────────────────
+// ── References Tab ───────────────────────────────────────────────────────────
 
-function SourcesTabContent({ sources }: { sources: SourceItem[] }) {
+function extractDomain(url: string): string {
+  try { return new URL(url).hostname.replace('www.', '') } catch { return url }
+}
+
+function Favicon({ url, domain }: { url?: string; domain: string }) {
+  const src = url
+    ? `https://www.google.com/s2/favicons?domain=${extractDomain(url)}&sz=16`
+    : `https://www.google.com/s2/favicons?domain=${domain}&sz=16`
+  return (
+    <img
+      src={src}
+      alt=""
+      className="w-3.5 h-3.5 rounded shrink-0"
+      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+    />
+  )
+}
+
+function ReferencesTabContent({ sources }: { sources: SourceItem[] }) {
+  const fetched = sources.filter(s => s.status === 'fetched').length
+  const errors = sources.filter(s => s.status === 'error').length
+  const pending = sources.filter(s => s.status === 'pending').length
+
   if (sources.length === 0) {
     return (
       <div className="flex items-center justify-center h-full px-4">
@@ -441,17 +522,24 @@ function SourcesTabContent({ sources }: { sources: SourceItem[] }) {
   }
 
   return (
-    <div className="p-3 space-y-1.5">
+    <div className="p-3 space-y-2">
+      <div className="flex items-center gap-2 px-2 py-1.5 rounded bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.04)] text-[0.55rem] text-[#666666]">
+        <span>{fetched > 0 && <span className="text-[#00E5C9]">{fetched} obtenida{fetched !== 1 ? 's' : ''}</span>}</span>
+        {errors > 0 && <span className="text-[#ef4444]"> · {errors} error{errors !== 1 ? 'es' : ''}</span>}
+        {pending > 0 && <span className="text-[#DCB263]"> · {pending} pendiente{pending !== 1 ? 's' : ''}</span>}
+        <span className="ml-auto text-[#4a4a4a]">{sources.length} total</span>
+      </div>
       {sources.map((s, i) => (
-        <div key={i} className="px-3 py-2 rounded-lg bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)]">
+        <div key={i} className="px-2.5 py-2 rounded-lg bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)]">
           <div className="flex items-center gap-2">
             {s.status === 'pending' && <span className="w-1.5 h-1.5 rounded-full bg-[#DCB263] animate-pulse shrink-0" />}
             {s.status === 'fetched' && <span className="w-1.5 h-1.5 rounded-full bg-[#00E5C9] shrink-0" />}
             {s.status === 'error' && <span className="w-1.5 h-1.5 rounded-full bg-[#ef4444] shrink-0" />}
+            {s.url && <Favicon url={s.url} domain={s.url} />}
             <span className="text-[0.65rem] text-[#E5E5E5] truncate flex-1">{s.title}</span>
           </div>
           {s.url && (
-            <a href={s.url} target="_blank" rel="noopener noreferrer" className="block text-[0.55rem] text-[#00E5C9] truncate mt-0.5 hover:underline">
+            <a href={s.url} target="_blank" rel="noopener noreferrer" className="block text-[0.55rem] text-[#00E5C9] truncate mt-0.5 hover:underline ml-[18px]">
               {s.url}
             </a>
           )}

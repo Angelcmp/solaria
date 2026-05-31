@@ -137,7 +137,7 @@ pub fn discover_skills() -> Vec<SkillDefinition> {
 
 pub fn discover_project_skills(working_dir: &str) -> Vec<SkillDefinition> {
     let dir = PathBuf::from(working_dir).join(".solaria").join("skills");
-    discover_from_dir(&dir, "project", true)
+    discover_from_dir(&dir, "project", false)
 }
 
 pub fn discover_all_skills(working_dir: Option<&str>) -> Vec<SkillDefinition> {
@@ -163,9 +163,30 @@ pub fn discover_all_skills(working_dir: Option<&str>) -> Vec<SkillDefinition> {
     result
 }
 
-pub fn get_enabled_skills_prompt(working_dir: Option<&str>) -> String {
+fn skill_relevant(skill: &SkillDefinition, query: &str) -> bool {
+    let query_lower = query.to_lowercase();
+    let query_words: Vec<&str> = query_lower.split_whitespace().collect();
+    let haystack = format!("{} {} {} {}", skill.name, skill.description, skill.name.replace('-', " "), skill.description.to_lowercase());
+    let haystack_lower = haystack.to_lowercase();
+
+    query_words.iter().any(|word| {
+        word.len() > 2 && (haystack_lower.contains(word) || skill.name.contains(word))
+    })
+}
+
+pub fn get_enabled_skills_prompt(working_dir: Option<&str>, query: Option<&str>) -> String {
     let all = discover_all_skills(working_dir);
-    let enabled: Vec<_> = all.into_iter().filter(|s| s.enabled).collect();
+    let enabled: Vec<_> = all.into_iter()
+        .filter(|s| s.enabled)
+        .filter(|s| {
+            if let Some(q) = query {
+                if q.trim().is_empty() { return true; }
+                skill_relevant(s, q)
+            } else {
+                true
+            }
+        })
+        .collect();
 
     if enabled.is_empty() {
         return String::new();

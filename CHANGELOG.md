@@ -1,5 +1,76 @@
 # Changelog
 
+## [0.7.0] — 2026-05-30
+
+### Added
+- **Sidebar reestructurada**: Skills section, Proyectos con CRUD (localStorage + diálogo nativo), conversaciones colapsables
+- **Proyectos**: crear proyecto con nombre y carpeta → workingDirectory del agente se actualiza. Muestra contenido de la carpeta en sidebar
+- **Conversaciones por proyecto**: `Conversation.projectId` asocia chats al proyecto. Aparecen bajo el proyecto en vez de "Conversaciones" general
+- **Sidebar colapsable**: Conversaciones y Proyectos con toggle ▾ expandir/colapsar
+- **Lista plana de conversaciones**: eliminados grupos por fecha, ahora tiempo relativo (1h, 2d, 1s, 1m). Anclados separados con ⭐
+- **Botón ⋮ en top bar**: Exportar MD + Exportar PDF + Limpiar chat en menú compacto
+- **Skill knowledge-builder**: construye wiki personal de markdown desde carpeta proyecto con cross-links automáticos [[wikilinks]]
+- **Auto-naming de conversaciones**: título se actualiza automáticamente al primer mensaje
+- **ResearchAside colapsable**: botón ← colapsa a tira de 36px con P/D/R tabs. Sin perder datos
+- **Codex-style agent steps**: chips inline con glow animation para → web_search / → fetch_url
+- **Markdown headings corregidos**: h1/h2/h3 ahora más grandes que párrafos (jerarquía visual correcta)
+- **Tool steps auto-collapsed en ResearchAside**: tool_call y tool_result antiguos colapsados por defecto
+
+### Fixed
+- **glob no respetaba working_directory**: `glob_execute` ahora busca desde la carpeta del proyecto, no desde el CWD del proceso
+- **grep no respetaba working_directory**: `grep_execute` usa working_dir como path por defecto
+- **autoName no se ejecutaba en modo agente**: añadido `autoName` en `handleAgentComplete`
+- **startAgentPrompt no guardaba título**: si la conversación existía con título "Nueva conversación", se actualiza con el primer mensaje
+- **Tool pasos desaparecidos en top bar**: Quick actions ahora visible con agente activo
+
+### Changed
+- **ResearchAside**: eliminado header "Solaria completado". Tabs + dot status + stop + colapsar + cerrar en barra única
+- **ResearchAside**: pasos con opacidad 60% (hover 95%), ancho 480px mantenido
+- **Top bar**: logos y badges unificados (mismo tamaño `text-[0.65rem]`, `py-[3px]`, `rounded`)
+- **Top bar**: logo Solaria sin texto, solo icono
+- **Project files**: tamaño aumentado a `text-[0.75rem]` (12px)
+- **glob**: excluye node_modules, .git, target automáticamente
+- **fetch_url**: extrae texto de HTML en backend (elimina scripts, styles, tags)
+
+## [0.6.1] — 2026-05-30
+
+### Fixed
+- **Chat truncaba contenido de write_file**: eliminado límite de 800 caracteres. Ahora el chat muestra el reporte completo (antes ResearchAside tenía más información que el chat)
+- **Auto-reset del agente por prompt**: cada nuevo mensaje limpia el historial del agente. Ya no se arrastra contexto entre prompts
+- **"No preguntar" reforzado**: reglas 1 y 2 del system prompt ahora usan **PROHIBIDO** con ejemplos concretos de frases a evitar. Agregada regla 9 sobre idioma
+- **URL mal formada en tool args**: `tryFixJson` ahora detecta y corrige `"url":https://ejemplo.com`, `"url": "https://...}` (sin comilla de cierre), `"name":web_search"`, y `;"}` (punto y coma en lugar de comillas)
+- **Tool call malformed ya no rompe el loop**: si `extractToolCall` falla pero la respuesta contiene `<tool_call>`, se envía un mensaje de error al modelo y continúa (en vez de finalizar prematuramente)
+- **fetch_url ahora extrae texto de HTML**: el backend elimina tags HTML, scripts y styles antes de devolver el contenido. El LLM recibe texto limpio en vez de HTML crudo de 15000 chars
+- **Contexto entre prompts en agente**: `messageHistoryRef` ahora guarda el último par pregunta/respuesta (sin tool calls), permitiendo al agente referenciar información de la conversación anterior
+- **ResearchAside persistente**: ya no se limpian los pasos al enviar un nuevo mensaje. Los steps se acumulan entre prompts de la misma conversación
+- **write_file ya no muestra el contenido completo en el chat**: ahora solo muestra "Archivo guardado: nombre.md". El ResearchAside tool_result también es compacto. El contenido completo se envía al LLM truncado a 500 caracteres como contexto
+
+### Changed
+- **ResearchAside tabs renombrados**: "Agente" → "Proceso", "Reporte" → "Documento", "Fuentes" → "Referencias"
+- **ResearchAside rediseño minimalista**: menos bordes, tipografía más limpia, header simplificado, colores más sutiles
+- **System prompt del agente**: reglas reescritas más estrictas para evitar preguntas al usuario. Eliminado el ofrecimiento de más ayuda al finalizar
+
+## [0.6.0] — 2026-05-30
+
+### Added
+- **5 skills profesionales**: `market-analysis`, `report-generator`, `meeting-notes`, `data-analysis`, `transcription-processing`
+- **Skill Factory** (P3): meta-skill `skill-factory` para crear skills desde el chat
+- **Skills Discover** (P4): skill `skills-discover` para buscar e instalar skills desde skills.sh
+- **Auto-activación de skills**: toggle en Settings + filtro por relevancia en backend (solo inyecta skills que coinciden con el mensaje del usuario)
+- **Exportar conversaciones**: botón Markdown (guarda .md via diálogo nativo) y PDF (abre impresión con diseño Solaria)
+- **ResearchAside mejorado**: barra de resumen de pasos, favicon en fuentes, botón copiar reporte, soporte múltiples reportes
+- **Bilingüe**: todas las skills ahora funcionan en inglés y español, detectando el idioma del usuario
+- **Persistencia de agent config**: `workingDirectory` y `autoActivateSkills` se guardan en localStorage
+
+### Fixed
+- **Project skills no visibles**: `list_skills` ahora resuelve automáticamente la raíz del proyecto (busca `.solaria/` subiendo directorios)
+- **Contador de pasos inconsistente**: progress line ya no muestra `iteration/maxIterations`, usa solo el tool name
+
+### Changed
+- **Skills globales**: eliminadas 12 skills orientadas a código (deploy-to-vercel, diagnose, front-end-developer, shadcn, supabase, tdd, etc.) — solo queda `deep-research` global
+- **Project skills**: ahora tienen toggle activar/desactivar (ya no son `force_enabled`)
+- **`get_cwd`**: ahora busca `.solaria/` hacia arriba desde el directorio actual, en vez de devolver `src-tauri/`
+
 ## [0.5.2] — 2026-05-29
 
 ### Fixed

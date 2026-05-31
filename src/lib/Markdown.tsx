@@ -258,8 +258,8 @@ export default function Markdown({ content, compact }: MarkdownProps) {
           const match = para.match(/^(#{1,3})\s+(.+)/)
             if (match) {
               const level = match[1].length
-              const sizes = ['text-base', 'text-[0.8125rem]', 'text-[0.75rem]']
-              const size = sizes[level - 1] || 'text-[0.6875rem]'
+              const sizes = ['text-[1.0625rem]', 'text-[0.875rem]', 'text-[0.8125rem]']
+              const size = sizes[level - 1] || 'text-[0.75rem]'
               const weights = ['font-medium', 'font-medium', 'font-normal']
               const weight = weights[level - 1] || 'font-medium'
               htmlParts.push(
@@ -276,8 +276,14 @@ export default function Markdown({ content, compact }: MarkdownProps) {
             .map(l => {
               if (l.startsWith('<')) return l
               if (l.startsWith('---')) return `<hr class="border-[rgba(255,255,255,0.08)] my-4" />`
-              if (/^\*→ .+ paso \d+\/\d+\*$/.test(l.trim())) {
-                return `<p class="my-1 leading-[1.6] text-[0.7rem]" style="font-weight:300">${renderInline(escapeHtml(l))}</p>`
+              if (/^\*→ .+\*$/.test(l.trim())) {
+                const clean = l.trim().replace(/^\*→ /, '').replace(/\*$/, '')
+                const isFetch = clean.startsWith('fetch_url')
+                const glowAnim = isFetch ? 'stepGlowTeal' : 'stepGlow'
+                const borderColor = isFetch ? 'rgba(0,229,201,0.15)' : 'rgba(220,178,99,0.2)'
+                const bgColor = isFetch ? 'rgba(0,229,201,0.03)' : 'rgba(220,178,99,0.03)'
+                const textColor = isFetch ? '#00E5C9' : '#DCB263'
+                return `<span class="inline-block my-0.5 px-2 py-0.5 rounded border text-[0.65rem] align-middle" style="border-color:${borderColor};background-color:${bgColor};color:${textColor};font-family:'IBM Plex Mono',monospace;letter-spacing:0.02em;animation:${glowAnim} 1.5s ease-in-out forwards">→ ${escapeHtml(clean)}</span>`
               }
               return `<p class="my-2 leading-[1.8]" style="font-weight:300;letter-spacing:0.015em">${renderInline(escapeHtml(l))}</p>`
             })
@@ -290,8 +296,8 @@ export default function Markdown({ content, compact }: MarkdownProps) {
 
   return (
     <div
-      className={`markdown-body ${compact ? 'text-[0.75rem]' : 'text-[0.875rem]'} text-[#E5E5E5]`}
-      style={{ fontFamily: "'IBM Plex Sans', 'Inter', system-ui, sans-serif", fontWeight: 300, letterSpacing: '0.015em', lineHeight: '1.75' }}
+      className={`markdown-body ${compact ? 'text-[0.75rem]' : 'text-[0.8125rem]'} text-[#E5E5E5]`}
+      style={{ fontFamily: "'IBM Plex Sans', 'Inter', system-ui, sans-serif", fontWeight: 300, letterSpacing: '0.015em', lineHeight: '1.7' }}
       dangerouslySetInnerHTML={{ __html: htmlParts.join('\n') }}
     />
   )

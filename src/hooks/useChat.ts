@@ -21,6 +21,7 @@ export interface Conversation {
   toolSummary?: Record<string, number>
   provider?: string
   model?: string
+  projectId?: string
 }
 
 export interface ProviderConfig {
@@ -75,7 +76,7 @@ export function useChat() {
     ))
   }, [])
 
-  const newConversation = useCallback((initialProvider?: string, initialModel?: string) => {
+  const newConversation = useCallback((initialProvider?: string, initialModel?: string, projectId?: string) => {
     streamIdRef.current = null
     cleanupStreamListeners()
     setIsStreaming(false)
@@ -89,6 +90,7 @@ export function useChat() {
       type: 'chat',
       provider: initialProvider,
       model: initialModel,
+      projectId,
     }
     setConversations(prev => [conv, ...prev])
     setActiveConvId(conv.id)
@@ -397,8 +399,9 @@ export function useChat() {
     await startStream(conv.id, assistantId, historyMessages, provider)
   }, [activeConvId, conversations, startStream])
 
-  const startAgentPrompt = useCallback((userContent: string) => {
+  const startAgentPrompt = useCallback((userContent: string, projectId?: string) => {
     const existingConv = conversations.find(c => c.id === activeConvId)
+    const pid = projectId || existingConv?.projectId
 
     // Si ya hay una conversación activa (incluso vacía tipo chat), la reusamos
     if (existingConv) {
@@ -411,11 +414,15 @@ export function useChat() {
 
       if (existingConv.type === 'agent' || existingConv.messages.length === 0) {
         const assistantId = crypto.randomUUID()
+        const newTitle = existingConv.title === 'Nueva conversación'
+          ? userContent.slice(0, 55).trim() + (userContent.length > 55 ? '...' : '')
+          : existingConv.title
         setConversations(prev => prev.map(c => {
           if (c.id !== existingConv.id) return c
           return {
             ...c,
             type: 'agent',
+            title: newTitle,
             messages: [
               ...c.messages,
               { id: crypto.randomUUID(), role: 'user', content: userContent, timestamp: Date.now() },
@@ -445,6 +452,7 @@ export function useChat() {
       type: 'agent',
       provider: prev.find(c => c.id === activeConvId)?.provider,
       model: prev.find(c => c.id === activeConvId)?.model,
+      projectId: pid,
     }, ...prev])
     setActiveConvId(convId)
 

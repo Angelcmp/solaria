@@ -1,7 +1,7 @@
-# Roadmap — Solaria Agent v0.4.0
+# Roadmap — Solaria Agent v0.7.0
 
-> Deep Research Agentic System con Skills
-> Enfoque: investigación, análisis y automatización para profesionales no-code.
+> Deep Research Agentic System con Skills + Knowledge Base
+> Enfoque: investigación, análisis, proyectos, y sistema de conocimiento personal.
 
 ---
 
@@ -114,43 +114,63 @@
 
 ## Pendientes para próxima sesión
 
-### P2 — Skills profesionales
+### P2 — Skills profesionales ✅
 
-- [ ] `market-analysis` — análisis de competencia, drafts de campañas
-- [ ] `report-generator` — datos → análisis → markdown estructurado
-- [ ] `meeting-notes` — notas → estructura → action items
-- [ ] `data-analysis` — CSV → limpieza → transformación → presentación
-- [ ] `transcription-processing` — procesar texto → resumen ejecutivo
+- [x] `market-analysis` — análisis de competencia, drafts de campañas
+- [x] `report-generator` — datos → análisis → markdown estructurado
+- [x] `meeting-notes` — notas → estructura → action items
+- [x] `data-analysis` — CSV → limpieza → transformación → presentación
+- [x] `transcription-processing` — procesar texto → resumen ejecutivo
 
-### P3 — Skill Factory (creación de skills desde el chat)
+### P3 — Skill Factory ✅
 
-- [ ] El usuario dice "crea una skill que haga X"
-- [ ] El agente genera el SKILL.md con frontmatter y workflow
-- [ ] La skill se guarda en `.solaria/skills/` del proyecto actual
+- [x] El usuario dice "crea una skill que haga X"
+- [x] El agente genera el SKILL.md con frontmatter y workflow
+- [x] La skill se guarda en `.solaria/skills/` del proyecto actual
+- [x] Meta-skill `skill-factory` que enseña al agente a crear skills desde el chat
 
-### P4 — Ecosistema y mejoras
+### P4 — Ecosistema y mejoras ✅
 
-- [ ] Integración con skills.sh para descubrimiento desde el chat
-- [ ] Auto-activación de skills según contexto
-- [ ] Tema claro
-- [ ] Exportar conversaciones (formatos: markdown, PDF)
-- [ ] Mejoras en UI del panel de investigación (ResearchAside tabs)
+- [x] Integración con skills.sh para descubrimiento desde el chat (skill `skills-discover`)
+- [x] Auto-activación de skills según contexto (toggle en Settings + filtro por relevancia en backend)
+- [x] ~~Tema claro~~ (descartado — solo modo oscuro)
+- [x] Exportar conversaciones (markdown via save dialog, PDF via print)
+- [x] Mejoras en UI del panel de investigación (ResearchAside tabs: resumen de pasos, favicon en fuentes, copiar reporte, reports múltiples)
+- [x] ResearchAside colapsable + opacidad 60% pasos antiguos
+- [x] Tool steps auto-collapsed (tool_call/tool_result viejos colapsados)
+- [x] Botón ⋮ con export MD/PDF + limpiar chat
+- [x] Markdown headings corregidos (h1 > h2 > h3 >= p)
+- [x] Codex-style chips para pasos del agente con glow animation
+- [x] Skills globales eliminadas (solo deep-research)
 
-### Bugs conocidos
+### P5 — Proyectos y navegación ✅
 
-- [ ] Algunos fetch_url fallan con `{"": "url"}` (key vacía) cuando el modelo genera args mal formados
-- [ ] La skill deep-research necesita testing en escenarios con múltiples fuentes PDF
-- [ ] El contador de pasos en AgentTab muestra números inconsistentes cuando hay tool calls sin texto LLM
+- [x] Sidebar: nueva sección Proyectos con CRUD (nombre + carpeta via diálogo Tauri)
+- [x] Al seleccionar proyecto → workingDirectory del agente se actualiza
+- [x] Contenido de carpeta visible en sidebar (archivos + subcarpetas)
+- [x] Conversaciones asociadas a proyecto (projectId)
+- [x] Conversaciones generales vs proyecto separadas en sidebar
+- [x] Secciones colapsables (Conversaciones + Proyectos)
+- [x] Lista plana con tiempo relativo (1h, 2d, 1s, 1m)
+- [x] Anclados separados con ⭐
+- [x] Auto-naming de título en primer mensaje
 
----
+### P6 — Sistema de Conocimiento
 
-## 4. Bugs / Deuda técnica
+- [x] Skill `knowledge-builder`: construye wiki .md con resúmenes, conceptos, cross-links [[wiki]]
+- [x] glob/grep respetan working_directory del proyecto
+- [x] fetch_url extrae texto de HTML automáticamente
 
-- [x] Template selector accesible
-- [x] Migración a `tokio::process::Command`
-- [x] Sistema i18n funcional
-- [x] Crate name corregido
-- [x] Features de código eliminadas (v0.4.0)
+### Bugs conocidos (todos resueltos ✅)
+
+- [x] ~~fetch_url falla con `{"": "url"}`~~ (v0.6.1)
+- [x] ~~deep-research con PDFs~~ (v0.5.2)
+- [x] ~~Contador de pasos inconsistente~~ (v0.6.1)
+- [x] ~~Chat truncaba write_file~~ (v0.6.1)
+- [x] ~~Agente arrastraba historial~~ (v0.6.1)
+- [x] ~~"No preguntar" no respetado~~ (v0.6.1)
+- [x] ~~glob no respetaba working_directory~~ (v0.7.0)
+- [x] ~~Conversaciones sin título en modo agente~~ (v0.7.0)
 
 ---
 

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import type { ProviderConfig } from './useChat'
@@ -10,7 +10,10 @@ export interface AgentConfig {
   allowedTools: string[]
   confirmWrite: boolean
   workingDirectory: string
+  autoActivateSkills: boolean
 }
+
+const STORAGE_KEY = 'solaria-agent-config'
 
 const DEFAULT_AGENT_CONFIG: AgentConfig = {
   enabled: false,
@@ -18,6 +21,17 @@ const DEFAULT_AGENT_CONFIG: AgentConfig = {
   allowedTools: ['read_file', 'write_file', 'glob', 'grep', 'web_search', 'fetch_url'],
   confirmWrite: false,
   workingDirectory: '',
+  autoActivateSkills: true,
+}
+
+function loadAgentConfig(): AgentConfig {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (raw) {
+      return { ...DEFAULT_AGENT_CONFIG, ...JSON.parse(raw) }
+    }
+  } catch {}
+  return DEFAULT_AGENT_CONFIG
 }
 
 export interface AgentStep {
@@ -55,14 +69,15 @@ Para usar una herramienta, pon SOLO esto al final de tu respuesta:
 SIEMPRE incluye "arguments": {}, incluso si la herramienta no necesita parámetros.
 
 REGLAS ESTRICTAS:
-1. NO hagas preguntas al usuario. Si el prompt es razonable, INVESTIGA directamente.
-2. NO pidas confirmación ni "si quieres que profundice". Solo entrega los resultados.
-3. **Después de web_search, DEBES hacer fetch_url en al menos 1 fuente.** Saltar el deep dive no está permitido.
+1. **PROHIBIDO preguntar al usuario.** Nunca digas "¿quieres que profundice?", "¿necesitas algo más?", "si deseas...", "¿te gustaría...?". Simplemente entrega los resultados completos y termina.
+2. **PROHIBIDO pedir confirmación.** No digas "¿es correcto?", "¿procedo?", "¿quieres que guarde...?". Si el prompt es razonable, actúa directamente.
+3. Después de web_search, DEBES hacer fetch_url en al menos 1 fuente. Saltar el deep dive no está permitido.
 4. Si fetch_url falla, usa el snippet de búsqueda para esa fuente y pasa a la siguiente.
 5. Límite: máximo 3 fetch_url por sesión. Luego sintetiza con lo que tengas.
 6. Si no encuentras datos, sé honesto. NO fabriques información.
-7. Al terminar, da la respuesta final SIN tool_calls. Incluye fuentes numeradas al final.
-8. Las skills activas contienen guías que DEBES seguir para cada tipo de tarea.`
+7. Al terminar, da la respuesta final SIN tool_calls. Incluye fuentes numeradas al final. NO ofrezcas más ayuda ni preguntes si el usuario quiere algo adicional.
+8. Las skills activas contienen guías que DEBES seguir para cada tipo de tarea.
+9. Responde en el mismo idioma que el usuario (español → español, inglés → inglés).`
 
 function buildToolSystemPrompt(config: AgentConfig): string {
   return `${AGENT_SYSTEM_PROMPT}
@@ -156,6 +171,21 @@ function tryFixJson(raw: string): string {
   try { JSON.parse(fixed); return fixed } catch {}
 
   fixed = raw.replace(/""/g, '"')
+  try { JSON.parse(fixed); return fixed } catch {}
+
+  fixed = raw.replace(/"url"\s*:\s*(https?:\/\/[^\s,}";]+)/g, '"url": "$1"')
+  fixed = fixed.replace(/"url"\s*:\s*"(https?:\/\/[^"]+?)"?"?\s*([,}])/g, (_, url, closer) => {
+    const cleanUrl = url.replace(/["';\s]+$/, '')
+    return `"url": "${cleanUrl}"${closer}`
+  })
+  fixed = fixed.replace(/;"?\s*\}\s*$/g, '"}')
+  fixed = fixed.replace(/"name"\s*:\s*([a-z_]+)/g, '"name": "$1"')
+  fixed = fixed.replace(/"query"\s*:\s*([a-zA-Z0-9\s?]+)(?=[",\s}])/g, (m) => {
+    const idx = m.indexOf(':') + 1
+    const val = m.substring(idx).trim()
+    if (!val.startsWith('"')) return `"query": "${val}"`
+    return m
+  })
   try { JSON.parse(fixed); return fixed } catch {}
 
   const lastBrace = raw.lastIndexOf('}')
@@ -280,8 +310,18 @@ function extractToolCallFromNormalized(text: string): { name: string; arguments:
 
 export function useAgent() {
   const [isRunning, setIsRunning] = useState(false)
-  const [agentConfig, setAgentConfig] = useState<AgentConfig>(DEFAULT_AGENT_CONFIG)
+  const [agentConfig, setAgentConfig] = useState<AgentConfig>(loadAgentConfig)
   const [liveThinking, setLiveThinking] = useState('')
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(agentConfig))
+  }, [agentConfig])
+  useEffect(() => {
+    if (!agentConfig.workingDirectory) {
+      invoke<string>('get_cwd').then(cwd => {
+        setAgentConfig(prev => ({ ...prev, workingDirectory: cwd }))
+      }).catch(() => {})
+    }
+  }, [])
   const abortRef = useRef(false)
   const messageHistoryRef = useRef<AgentMessage[]>([])
   const pendingConfirmRef = useRef<{ resolve: (value: boolean) => void } | null>(null)
@@ -437,9 +477,16 @@ export function useAgent() {
     onComplete: ((content: string) => void) | undefined,
     finalContent: string,
     onStep: (step: AgentStep) => void,
+    userInput?: string,
   ) => {
     onStep(makeStep('final', finalContent))
     onComplete?.(finalContent)
+    if (userInput && finalContent) {
+      messageHistoryRef.current = [
+        { role: 'user' as const, content: userInput },
+        { role: 'assistant' as const, content: finalContent },
+      ]
+    }
   }, [makeStep])
 
   const runAgent = useCallback(async (
@@ -455,7 +502,11 @@ export function useAgent() {
 
     let skillsPrompt = ''
     try {
-      skillsPrompt = await invoke<string>('get_skills_prompt', { workingDir: agentConfig.workingDirectory || null })
+      const params: Record<string, unknown> = { workingDir: agentConfig.workingDirectory || null }
+      if (agentConfig.autoActivateSkills) {
+        params.query = userInput
+      }
+      skillsPrompt = await invoke<string>('get_skills_prompt', params)
     } catch {}
 
     const systemPrompt = buildToolSystemPrompt(agentConfig) + skillsPrompt
@@ -497,7 +548,7 @@ export function useAgent() {
               : cleanedResponse
             onStep(makeStep('reasoning', cleanedResponse))
           } else {
-            const progressLine = `*→ ${toolCall.name} · paso ${iteration}/${agentConfig.maxIterations}*`
+            const progressLine = `*→ ${toolCall.name}*`
             fullAssistantContent = fullAssistantContent
               ? fullAssistantContent + '\n' + progressLine
               : progressLine
@@ -507,6 +558,13 @@ export function useAgent() {
         }
 
         if (!toolCall) {
+          const responseHasToolTags = response.includes('<tool_call>')
+          if (responseHasToolTags) {
+            const noToolMsg = 'No se pudo parsear el tool_call. Asegúrate de usar JSON válido: {"name": "tool_name", "arguments": {...}}. Termina con la etiqueta </tool_call>.'
+            messages.push({ role: 'assistant', content: cleanedResponse || response })
+            messages.push({ role: 'tool', content: noToolMsg })
+            continue
+          }
           const finalText = cleanedResponse || response
           fullAssistantContent = fullAssistantContent
             ? fullAssistantContent + '\n\n' + finalText
@@ -514,7 +572,7 @@ export function useAgent() {
           messages.push({ role: 'assistant', content: fullAssistantContent })
           onStep(makeStep('reasoning', finalText))
           updateChatMsg(fullAssistantContent)
-          callComplete(onComplete, fullAssistantContent, onStep)
+          callComplete(onComplete, fullAssistantContent, onStep, userInput)
           break
         }
 
@@ -566,12 +624,15 @@ export function useAgent() {
 
         const isWriteFile = toolCall.name === 'write_file' && toolResult.success
         let reportPreview = ''
+        let reportForLLM = ''
 
+        let _writeFileName = ''
         if (isWriteFile) {
           const filePath = toolCall.arguments.path || ''
           const fileContent = toolCall.arguments.content || ''
-          const preview = fileContent.length > 800 ? fileContent.slice(0, 800) + '\n\n_...(contenido completo en el archivo)_' : fileContent
-          reportPreview = `📄 Reporte guardado en: \`${filePath}\`\n\n${preview}`
+          _writeFileName = filePath.split('/').pop() || filePath
+          reportPreview = `📄 \`${_writeFileName}\` guardado correctamente`
+          reportForLLM = `Resultado de write_file (${filePath}): ${fileContent.length} caracteres.\nPrimeros 500:\n\`\`\`\n${fileContent.slice(0, 500)}\n\`\`\`\nEl archivo completo fue escrito en disco.`
         }
 
         onStep(makeStep('tool_result', toolCall.name, {
@@ -585,7 +646,7 @@ export function useAgent() {
         }))
 
         const resultContent = isWriteFile
-          ? reportPreview
+          ? reportForLLM
           : (toolResult.success
             ? `Resultado de ${toolCall.name}:\n\`\`\`\n${toolResult.output.slice(0, 5000)}\n\`\`\`${toolResult.output.length > 5000 ? '\n...(resultado truncado)' : ''}`
             : `Error ejecutando ${toolCall.name}: ${toolResult.error || 'Error desconocido'}`)
@@ -594,24 +655,23 @@ export function useAgent() {
         messages.push({ role: 'tool', content: resultContent })
 
         if (isWriteFile) {
+          const confirmMsg = `✅ Archivo guardado: \`${_writeFileName}\``
           fullAssistantContent = fullAssistantContent
-            ? fullAssistantContent + '\n\n---\n\n' + reportPreview
-            : reportPreview
+            ? fullAssistantContent + '\n\n' + confirmMsg
+            : confirmMsg
           updateChatMsg(fullAssistantContent)
         }
       }
 
       if (iteration >= agentConfig.maxIterations) {
         const fallback = fullAssistantContent || lastAssistantText || `Máximo de iteraciones alcanzado (${agentConfig.maxIterations}). La tarea puede estar incompleta.`
-        callComplete(onComplete, fallback, onStep)
+        callComplete(onComplete, fallback, onStep, userInput)
+      } else if (abortRef.current) {
+        callComplete(onComplete, 'Agente detenido por el usuario.', onStep, userInput)
       }
-    } catch (error: any) {
-      setLiveThinking('')
-      if (abortRef.current) {
-        callComplete(onComplete, 'Agente detenido por el usuario.', onStep)
-      } else {
-        callComplete(onComplete, `Error: ${error?.message || error?.toString() || 'Error desconocido'}`, onStep)
-      }
+    } catch (e) {
+      const errMsg = e instanceof Error ? e.message : 'Error desconocido'
+      callComplete(onComplete, `Error: ${errMsg}`, onStep, userInput)
     }
 
     messageHistoryRef.current = messages.filter(m => m.role !== 'tool')

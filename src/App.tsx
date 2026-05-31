@@ -4,7 +4,7 @@ import { useSettings } from './hooks/useSettings'
 import { useAgent } from './hooks/useAgent'
 import type { AgentStep } from './hooks/useAgent'
 import Chat from './components/Chat'
-import WorkspaceAside from './components/WorkspaceAside'
+import WorkspaceAside, { type Project } from './components/WorkspaceAside'
 import SettingsPanel from './components/SettingsPanel'
 import ResearchAside from './components/ResearchAside'
 
@@ -53,6 +53,7 @@ function App() {
     restoreConversation,
     renameConversation,
     selectConversation,
+    autoName,
   } = useChat()
 
   const {
@@ -67,12 +68,17 @@ function App() {
   } = useAgent()
 
   const [agentSteps, setAgentSteps] = useState<AgentStep[]>([])
+  const [projects, setProjects] = useState<Project[]>(() => {
+    try { return JSON.parse(localStorage.getItem('solaria-projects') || '[]') } catch { return [] }
+  })
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
   const completeMsgRef = useRef(completeAssistantMessage)
   const updateToolSummaryRef = useRef(updateToolSummary)
   const agentStepsRef = useRef(agentSteps)
   const conversationsRef = useRef(conversations)
 
   useEffect(() => { completeMsgRef.current = completeAssistantMessage }, [completeAssistantMessage])
+  useEffect(() => { localStorage.setItem('solaria-projects', JSON.stringify(projects)) }, [projects])
   useEffect(() => { updateToolSummaryRef.current = updateToolSummary }, [updateToolSummary])
   useEffect(() => { agentStepsRef.current = agentSteps }, [agentSteps])
   useEffect(() => { conversationsRef.current = conversations }, [conversations])
@@ -88,8 +94,8 @@ function App() {
   const handleNewConversation = useCallback(() => {
     resetAgent()
     setAgentSteps([])
-    newConversation(settings.defaultProvider, settings.defaultModel)
-  }, [resetAgent, newConversation, settings])
+    newConversation(settings.defaultProvider, settings.defaultModel, activeProjectId || undefined)
+  }, [resetAgent, newConversation, settings, activeProjectId])
 
   const handleAgentStep = useCallback((step: AgentStep) => {
     setAgentSteps(prev => [...prev, step])
@@ -104,6 +110,11 @@ function App() {
     if (ids) {
       completeMsgRef.current(ids.convId, ids.assistantId, finalContent)
       const currentConv = conversationsRef.current.find(c => c.id === ids.convId)
+      if (currentConv && currentConv.title === 'Nueva conversación') {
+        const provider = currentConv.provider || settings.defaultProvider
+        const model = currentConv.model || settings.defaultModel
+        autoName(ids.convId, { type: provider as ProviderConfig['type'], model, apiKey: settings.apiKeys[provider as keyof typeof settings.apiKeys] })
+      }
       const existing = currentConv?.toolSummary || {}
       const stepSummary: Record<string, number> = { ...existing }
       for (const step of agentStepsRef.current) {
@@ -136,7 +147,7 @@ function App() {
           break
         case ',':
           e.preventDefault()
-          setShowSettings(true)
+          setShowSettings('general')
           break
         case 'l':
           e.preventDefault()
@@ -165,8 +176,7 @@ function App() {
     }
 
     if (agentConfig.enabled) {
-      setAgentSteps([])
-      const ids = startAgentPrompt(content)
+      const ids = startAgentPrompt(content, activeProjectId || undefined)
       agentIdsRef.current = ids
       runAgent(content, providerConfig, handleAgentStep, handleAgentComplete)
     } else {
@@ -190,6 +200,22 @@ function App() {
         onArchive={archiveConversation}
         onRestore={restoreConversation}
         onRename={renameConversation}
+        onShowSettings={(tab?: string) => setShowSettings(tab || 'general')}
+        projects={projects}
+        onAddProject={(p) => setProjects(prev => [...prev, p])}
+        onDeleteProject={(id) => { setProjects(prev => prev.filter(p => p.id !== id)); if (activeProjectId === id) setActiveProjectId(null) }}
+        onSelectProject={(p: Project) => {
+          const isActive = activeProjectId === p.id
+          if (isActive) {
+            setActiveProjectId(null)
+          } else {
+            setActiveProjectId(p.id)
+            if (p.path) {
+              updateAgentConfig({ workingDirectory: p.path })
+            }
+          }
+        }}
+        activeProjectId={activeProjectId}
       />
       <Chat
         messages={messages}
@@ -210,7 +236,7 @@ function App() {
           })
         }}
         settings={settings}
-        onShowSettings={() => setShowSettings(true)}
+        onShowSettings={() => setShowSettings('general')}
         agentConfig={agentConfig}
         agentIsRunning={agentIsRunning}
         onToggleAgent={handleToggleAgent}
@@ -218,6 +244,7 @@ function App() {
         activeConversation={activeConv || null}
         onUpdateConvModel={updateConvModel}
         providers={PROVIDERS}
+        activeProject={activeProjectId ? projects.find(p => p.id === activeProjectId) || null : null}
       />
       <ResearchAside
         steps={agentSteps}
@@ -231,6 +258,7 @@ function App() {
       {showSettings && (
         <SettingsPanel
           settings={settings}
+          initialTab={typeof showSettings === 'string' ? showSettings as 'general' | 'providers' | 'search' | 'skills' | 'audit' : undefined}
           onClose={() => setShowSettings(false)}
           onUpdate={updateSettings}
           onUpdateApiKey={updateApiKey}

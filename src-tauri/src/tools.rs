@@ -161,8 +161,8 @@ pub async fn execute_tool(
     match name {
         "read_file" => read_file_execute(args, &working_dir, confirmed, restrict_to_workdir).await,
         "write_file" => write_file_execute(args, &working_dir, confirmed, restrict_to_workdir).await,
-        "glob" => glob_execute(args).await,
-        "grep" => grep_execute(args).await,
+        "glob" => glob_execute(args, &working_dir).await,
+        "grep" => grep_execute(args, &working_dir).await,
         "web_search" => web_search_execute(args).await,
         "fetch_url" => fetch_url_execute(args).await,
         // MCP tools
@@ -282,16 +282,19 @@ async fn write_file_execute(args: &str, working_dir: &Option<String>, confirmed:
     }
 }
 
-async fn glob_execute(args: &str) -> ToolResult {
+async fn glob_execute(args: &str, working_dir: &Option<String>) -> ToolResult {
     let parsed: Result<serde_json::Value, _> = serde_json::from_str(args);
     let pattern = match parsed {
         Ok(ref v) => v["pattern"].as_str().unwrap_or(args),
         Err(_) => args,
     };
 
+    let wd = working_dir.as_deref().unwrap_or(".");
+    let wd_clean = wd.trim_end_matches('/');
+
     let output = tokio::process::Command::new("sh")
         .arg("-c")
-        .arg(format!("find . -path '{}' 2>/dev/null | head -200", pattern.replace('\'', "'\\''")))
+        .arg(format!("find '{}' -name '{}' -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/target/*' 2>/dev/null | sed 's|^{}/||' | head -200", wd_clean, pattern.replace('\'', "'\\''"), wd_clean))
         .output()
         .await;
 
@@ -328,12 +331,13 @@ async fn glob_execute(args: &str) -> ToolResult {
     }
 }
 
-async fn grep_execute(args: &str) -> ToolResult {
+async fn grep_execute(args: &str, working_dir: &Option<String>) -> ToolResult {
     let parsed: Result<serde_json::Value, _> = serde_json::from_str(args);
+    let default_path = working_dir.as_deref().unwrap_or(".");
     let (pattern, path) = match parsed {
         Ok(ref v) => (
             v["pattern"].as_str().unwrap_or(""),
-            v["path"].as_str().unwrap_or("."),
+            v["path"].as_str().unwrap_or(default_path),
         ),
         Err(_) => return ToolResult {
             success: false,
@@ -555,11 +559,17 @@ async fn fetch_url_execute(args: &str) -> ToolResult {
 
             match resp.text().await {
                 Ok(text) => {
-                    let max_len = 15000;
-                    let truncated = if text.len() > max_len {
-                        format!("{}...\n[Contenido truncado a {} caracteres]", &text[..max_len], max_len)
+                    let is_html = text.contains("<!DOCTYPE html") || text.contains("<html") || text.contains("</html>");
+                    let cleaned = if is_html {
+                        strip_html(&text)
                     } else {
                         text
+                    };
+                    let max_len = 15000;
+                    let truncated = if cleaned.len() > max_len {
+                        format!("{}...\n[Contenido truncado a {} caracteres]", &cleaned[..max_len], max_len)
+                    } else {
+                        cleaned
                     };
                     ToolResult {
                         success: true,
@@ -607,6 +617,68 @@ pub async fn mcp_tool_execute(name: &str, args: &str) -> ToolResult {
             preview: None,
         },
     }
+}
+
+fn strip_html(html: &str) -> String {
+    let chars: Vec<char> = html.chars().collect();
+    let mut out = String::with_capacity(html.len());
+    let mut i = 0;
+    let mut in_tag = false;
+    let mut skip_until: Option<&str> = None;
+
+    while i < chars.len() {
+        if let Some(end_tag) = skip_until {
+            let mut found = false;
+            if i + end_tag.len() <= chars.len() {
+                let slice: String = chars[i..i + end_tag.len()].iter().collect();
+                if slice == end_tag {
+                    found = true;
+                }
+            }
+            if found {
+                skip_until = None;
+            }
+            i += 1;
+            continue;
+        }
+
+        if in_tag {
+            if chars[i] == '>' {
+                in_tag = false;
+            }
+            i += 1;
+            continue;
+        }
+
+        if chars[i] == '<' {
+            if i + 7 <= chars.len() {
+                let tag: String = chars[i..i + 7].iter().collect();
+                if tag == "<script" { skip_until = Some("</script>"); i += 1; continue; }
+            }
+            if i + 6 <= chars.len() {
+                let tag: String = chars[i..i + 6].iter().collect();
+                if tag == "<style" { skip_until = Some("</style>"); i += 1; continue; }
+            }
+            in_tag = true;
+            i += 1;
+            continue;
+        }
+
+        out.push(chars[i]);
+        i += 1;
+    }
+
+    let mut result = String::with_capacity(out.len());
+    let mut prev_space = false;
+    for ch in out.chars() {
+        if ch.is_whitespace() {
+            if !prev_space { result.push(' '); prev_space = true; }
+        } else {
+            result.push(ch); prev_space = false;
+        }
+    }
+
+    result.trim().to_string()
 }
 
 #[cfg(test)]

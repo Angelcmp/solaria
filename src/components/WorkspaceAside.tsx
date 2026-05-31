@@ -1,6 +1,13 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import type { Conversation } from '../hooks/useChat'
 
+export interface Project {
+  id: string
+  name: string
+  path: string
+  createdAt: number
+}
+
 interface WorkspaceAsideProps {
   conversations: Conversation[]
   activeConvId: string | null
@@ -13,42 +20,32 @@ interface WorkspaceAsideProps {
   onArchive: (id: string) => void
   onRestore: (id: string) => void
   onRename: (id: string, title: string) => void
+  onShowSettings?: (tab?: string) => void
+  projects?: Project[]
+  onAddProject?: (project: Project) => void
+  onDeleteProject?: (id: string) => void
+  onSelectProject?: (project: Project) => void
+  activeProjectId?: string | null
 }
 
-function formatDate(ts: number): string {
-  const now = Date.now()
-  const diff = now - ts
+function relativeTime(ts: number): string {
+  const diff = Date.now() - ts
+  const min = 60000
+  const hour = 3600000
   const day = 86400000
-  if (diff < day) return 'Hoy'
-  if (diff < 2 * day) return 'Ayer'
-  const d = new Date(ts)
-  const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
-  return `${d.getDate()} ${months[d.getMonth()]}`
-}
-
-function groupConversations(convs: Conversation[]) {
-  const pinned = convs.filter(c => c.pinned)
-  const unpinned = convs.filter(c => !c.pinned)
-  const groups: { label: string; convs: Conversation[] }[] = []
-
-  if (pinned.length > 0) groups.push({ label: 'Anclados', convs: pinned })
-
-  const today: Conversation[] = []
-  const yesterday: Conversation[] = []
-  const older: Conversation[] = []
-
-  for (const c of unpinned) {
-    const label = formatDate(c.updatedAt)
-    if (label === 'Hoy') today.push(c)
-    else if (label === 'Ayer') yesterday.push(c)
-    else older.push(c)
-  }
-
-  if (today.length) groups.push({ label: 'Hoy', convs: today })
-  if (yesterday.length) groups.push({ label: 'Ayer', convs: yesterday })
-  if (older.length) groups.push({ label: 'Anteriores', convs: older })
-
-  return groups
+  const week = 604800000
+  const month = 2592000000
+  if (diff < min) return 'ahora'
+  if (diff < 2 * min) return '1m'
+  if (diff < hour) return `${Math.round(diff / min)}m`
+  if (diff < 2 * hour) return '1h'
+  if (diff < day) return `${Math.round(diff / hour)}h`
+  if (diff < 2 * day) return '1d'
+  if (diff < week) return `${Math.round(diff / day)}d`
+  if (diff < 2 * week) return '1s'
+  if (diff < month) return `${Math.round(diff / week)}s`
+  if (diff < 2 * month) return '1m'
+  return `${Math.round(diff / month)}m`
 }
 
 function ConvDropdown({ conv, showArchived, onPin, onArchive, onRestore, onRename, onDelete }: {
@@ -131,6 +128,80 @@ function ConvDropdown({ conv, showArchived, onPin, onArchive, onRestore, onRenam
   )
 }
 
+function ConvRow({ conv, activeConvId, editingId, editTitle, setEditTitle, setEditingId, showArchived, onSelect, onRename, onPin, onArchive, onRestore, onDelete }: {
+  conv: Conversation
+  activeConvId: string | null
+  editingId: string | null
+  editTitle: string
+  setEditTitle: (v: string) => void
+  setEditingId: (v: string | null) => void
+  showArchived: boolean
+  onSelect: (id: string) => void
+  onRename: (id: string, title: string) => void
+  onPin: (id: string) => void
+  onArchive: (id: string) => void
+  onRestore: (id: string) => void
+  onDelete: (id: string) => void
+}) {
+  return (
+    <div
+      className={`group flex items-center gap-1 px-3 py-1.5 mx-1 rounded-md cursor-pointer transition-all text-[0.625rem] ${
+        activeConvId === conv.id
+          ? 'bg-[rgba(220,178,99,0.1)] text-white'
+          : 'text-[#999999] hover:bg-[rgba(255,255,255,0.06)] hover:text-white'
+      }`}
+      onClick={() => onSelect(conv.id)}
+    >
+      <div className="flex-1 min-w-0 flex items-center gap-1.5">
+        {editingId === conv.id ? (
+          <input
+            value={editTitle}
+            onChange={(e) => setEditTitle(e.target.value)}
+            onBlur={() => { if (editTitle.trim()) onRename(conv.id, editTitle.trim()); setEditingId(null) }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { if (editTitle.trim()) onRename(conv.id, editTitle.trim()); setEditingId(null) }
+              if (e.key === 'Escape') setEditingId(null)
+            }}
+            className="w-full bg-[#131313] border border-[#DCB263] rounded px-1 py-0.5 text-[0.6875rem] text-white outline-none"
+            autoFocus
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <>
+            {conv.pinned ? (
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="#DCB263" stroke="#DCB263" strokeWidth="1.5" className="shrink-0"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            ) : showArchived ? (
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#666666" strokeWidth="2" className="shrink-0"><path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/></svg>
+            ) : conv.type === 'agent' ? (
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#00E5C9" strokeWidth="2" className="shrink-0" style={{ filter: 'drop-shadow(0 0 4px rgba(0,229,201,0.3))' }}>
+                <rect x="3" y="8" width="18" height="10" rx="2"/><circle cx="8" cy="13" r="1.5" fill="#00E5C9"/><circle cx="16" cy="13" r="1.5" fill="#00E5C9"/><path d="M12 3v3M12 16v3"/>
+              </svg>
+            ) : (
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#DCB263" strokeWidth="2" className="shrink-0"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            )}
+            <span
+              className="flex-1 truncate"
+              onDoubleClick={(e) => { e.stopPropagation(); setEditingId(conv.id); setEditTitle(conv.title) }}
+            >
+              {conv.title}
+            </span>
+            <span className="text-[0.5rem] text-[#4a4a4a] font-mono shrink-0 ml-1">{relativeTime(conv.updatedAt)}</span>
+          </>
+        )}
+      </div>
+      <ConvDropdown
+        conv={conv}
+        showArchived={showArchived}
+        onPin={onPin}
+        onArchive={onArchive}
+        onRestore={onRestore}
+        onRename={onRename}
+        onDelete={onDelete}
+      />
+    </div>
+  )
+}
+
 export default function WorkspaceAside({
   conversations,
   activeConvId,
@@ -143,11 +214,32 @@ export default function WorkspaceAside({
   onArchive,
   onRestore,
   onRename,
+  onShowSettings,
+  projects = [],
+  onAddProject,
+  onDeleteProject,
+  onSelectProject,
+  activeProjectId,
 }: WorkspaceAsideProps) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [showArchived, setShowArchived] = useState(false)
+  const [convsExpanded, setConvsExpanded] = useState(true)
+  const [projectsExpanded, setProjectsExpanded] = useState(true)
+  const [projectFiles, setProjectFiles] = useState<Array<{name: string; is_dir: boolean; size: number}>>([])
+  const [projectFilesLoading, setProjectFilesLoading] = useState(false)
+
+  const activeProject = projects.find(p => p.id === activeProjectId)
+
+  useEffect(() => {
+    if (!activeProject) { setProjectFiles([]); return }
+    setProjectFilesLoading(true)
+    import('@tauri-apps/api/core').then(({ invoke }) => {
+      invoke<Array<{name: string; is_dir: boolean; size: number}>>('list_directory', { path: activeProject.path })
+        .then(setProjectFiles).catch(() => setProjectFiles([])).finally(() => setProjectFilesLoading(false))
+    })
+  }, [activeProjectId, activeProject?.path])
 
   const filtered = useMemo(() => {
     if (!searchQuery.trim()) return conversations.filter(c => showArchived ? c.archived : !c.archived)
@@ -160,8 +252,15 @@ export default function WorkspaceAside({
     )
   }, [conversations, searchQuery, showArchived])
 
-  const groups = groupConversations(filtered)
-
+  const { pinnedConvs, unpinnedConvs } = useMemo(() => {
+    const noProject = filtered.filter(c => !c.projectId)
+    const pinned = noProject.filter(c => c.pinned)
+    const unpinned = noProject.filter(c => !c.pinned).sort((a, b) => b.updatedAt - a.updatedAt)
+    return { pinnedConvs: pinned, unpinnedConvs: unpinned }
+  }, [filtered])
+  const projectConvs = useMemo(() => {
+    return conversations.filter(c => c.projectId && !c.archived).sort((a, b) => b.updatedAt - a.updatedAt)
+  }, [conversations])
   const archivedCount = conversations.filter(c => c.archived).length
 
   return (
@@ -198,88 +297,143 @@ export default function WorkspaceAside({
           </div>
 
           <div className="flex-1 overflow-y-auto py-1" style={{ scrollbarWidth: 'none' }}>
-            {filtered.length === 0 ? (
-              <div className="text-center py-8 px-4">
-                <p className="text-[0.75rem] text-[#666666]">
-                  {searchQuery ? 'Sin resultados' : showArchived ? 'Sin archivadas' : 'Sin conversaciones'}
-                </p>
-              </div>
-            ) : (
-              groups.map(group => (
-                <div key={group.label} className="mb-2">
-                  <span className="block text-[0.625rem] font-semibold uppercase tracking-[0.08em] text-[#666666] px-2 py-1">
-                    {group.label}
-                  </span>
-                  {group.convs.map(conv => (
-                    <div
-                      key={conv.id}
-                      className={`group flex items-start gap-1 px-2 py-2 mx-1 rounded-md cursor-pointer transition-all text-[0.625rem] ${
-                        activeConvId === conv.id
-                          ? 'bg-[rgba(220,178,99,0.1)] text-white'
-                          : 'text-[#999999] hover:bg-[rgba(255,255,255,0.06)] hover:text-white'
-                      }`}
-                      onClick={() => onSelect(conv.id)}
-                    >
-                      <div className="flex-1 min-w-0">
-                        {editingId === conv.id ? (
-                          <input
-                            value={editTitle}
-                            onChange={(e) => setEditTitle(e.target.value)}
-                            onBlur={() => { if (editTitle.trim()) onRename(conv.id, editTitle.trim()); setEditingId(null) }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') { if (editTitle.trim()) onRename(conv.id, editTitle.trim()); setEditingId(null) }
-                              if (e.key === 'Escape') setEditingId(null)
-                            }}
-                            className="w-full bg-[#131313] border border-[#DCB263] rounded px-1 py-0.5 text-[0.6875rem] text-white outline-none"
-                            autoFocus
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        ) : (
-                          <div className="flex items-center gap-1.5">
-                            {showArchived ? (
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#666666" strokeWidth="2" className="shrink-0"><path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/></svg>
-                            ) : conv.type === 'agent' ? (
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#00E5C9" strokeWidth="2" className="shrink-0" style={{ filter: 'drop-shadow(0 0 4px rgba(0,229,201,0.3))' }}>
-                                <rect x="3" y="8" width="18" height="10" rx="2"/><circle cx="8" cy="13" r="1.5" fill="#00E5C9"/><circle cx="16" cy="13" r="1.5" fill="#00E5C9"/><path d="M12 3v3M12 16v3"/>
-                              </svg>
-                            ) : (
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#DCB263" strokeWidth="2" className="shrink-0"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                            )}
-                            <span
-                              className="flex-1 truncate"
-                              onDoubleClick={(e) => { e.stopPropagation(); setEditingId(conv.id); setEditTitle(conv.title) }}
-                            >
-                              {conv.title}
-                            </span>
-                            {(conv.provider || conv.model) && (
-                              <span className="text-[0.5rem] text-[#4a4a4a] font-mono ml-0.5">
-                                {conv.provider}/{conv.model}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                        {conv.toolSummary && Object.keys(conv.toolSummary).length > 0 && (
-                          <div className="flex items-center gap-1 mt-0.5 pl-[19px]">
-                            {Object.entries(conv.toolSummary).map(([tool, count]) => (
-                              <span key={tool} className="text-[0.5rem] text-[#4a4a4a] font-mono">{tool}×{count}</span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+            <button
+              onClick={() => onShowSettings?.('skills')}
+              className="flex items-center gap-2 w-full px-3 py-1.5 text-[0.65rem] text-[#E5E5E5] hover:bg-[rgba(255,255,255,0.06)] hover:text-white transition-colors"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#DCB263" strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              <span>Skills</span>
+            </button>
 
-                      <ConvDropdown
-                        conv={conv}
-                        showArchived={showArchived}
-                        onPin={onPin}
-                        onArchive={onArchive}
-                        onRestore={onRestore}
-                        onRename={onRename}
-                        onDelete={onDelete}
-                      />
-                    </div>
-                  ))}
+            <button
+              onClick={() => setConvsExpanded(!convsExpanded)}
+              className="flex items-center gap-1 w-full px-3 py-1 mt-1 text-[0.55rem] font-semibold uppercase tracking-[0.08em] text-[#666666] hover:text-[#999999] transition-colors"
+            >
+              <span className="flex-1 text-left">{showArchived ? 'Archivados' : 'Conversaciones'}</span>
+              <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`transition-transform ${convsExpanded ? '' : '-rotate-90'}`}>
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </button>
+
+            {convsExpanded && (
+            <>
+              {(pinnedConvs.length === 0 && unpinnedConvs.length === 0) ? (
+                <div className="text-center py-6 px-4">
+                  <p className="text-[0.75rem] text-[#666666]">
+                    {searchQuery ? 'Sin resultados' : showArchived ? 'Sin archivadas' : 'Sin conversaciones'}
+                  </p>
                 </div>
-              ))
+              ) : (
+                <>
+                  {pinnedConvs.length > 0 && (
+                    <div className="mb-1">
+                      <span className="block text-[0.55rem] font-semibold uppercase tracking-[0.08em] text-[#999999] px-3 py-1">Anclados</span>
+                      {pinnedConvs.map(conv => (
+                        <ConvRow key={conv.id} conv={conv} activeConvId={activeConvId} editingId={editingId} editTitle={editTitle} setEditTitle={setEditTitle} setEditingId={setEditingId} showArchived={showArchived} onSelect={onSelect} onRename={onRename} onPin={onPin} onArchive={onArchive} onRestore={onRestore} onDelete={onDelete} />
+                      ))}
+                    </div>
+                  )}
+                  {unpinnedConvs.map(conv => (
+                    <ConvRow key={conv.id} conv={conv} activeConvId={activeConvId} editingId={editingId} editTitle={editTitle} setEditTitle={setEditTitle} setEditingId={setEditingId} showArchived={showArchived} onSelect={onSelect} onRename={onRename} onPin={onPin} onArchive={onArchive} onRestore={onRestore} onDelete={onDelete} />
+                  ))}
+                </>
+              )}
+            </>
+            )}
+
+            <div className="flex items-center gap-1 w-full px-3 py-1 mt-1">
+              <button
+                onClick={() => setProjectsExpanded(!projectsExpanded)}
+                className="flex items-center gap-1 flex-1 text-[0.55rem] font-semibold uppercase tracking-[0.08em] text-[#666666] hover:text-[#999999] transition-colors text-left"
+              >
+                <span>Proyectos</span>
+                <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`transition-transform ${projectsExpanded ? '' : '-rotate-90'}`}>
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    const name = prompt('Nombre del proyecto:')
+                    if (!name?.trim()) return
+                    const { open } = await import('@tauri-apps/plugin-dialog')
+                    const path = await open({ directory: true, multiple: false, title: 'Seleccionar carpeta del proyecto' })
+                    if (path) {
+                      onAddProject?.({ id: crypto.randomUUID(), name: name.trim(), path: path as string, createdAt: Date.now() })
+                    }
+                  } catch {}
+                }}
+                className="flex items-center justify-center w-4 h-4 rounded hover:bg-[rgba(255,255,255,0.08)] text-[#666666] hover:text-[#00E5C9] transition-colors"
+                title="Nuevo proyecto"
+              >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              </button>
+            </div>
+
+            {projectsExpanded && (
+            <div className="mt-1">
+              {projects.map((proj) => (
+                <div key={proj.id}>
+                  <div
+                    className={`group flex items-center gap-2 px-3 py-1.5 mx-1 rounded-md cursor-pointer transition-all text-[0.75rem] ${
+                      activeProjectId === proj.id
+                        ? 'bg-[rgba(0,229,201,0.08)] text-[#00E5C9]'
+                        : 'text-[#999999] hover:bg-[rgba(255,255,255,0.06)] hover:text-white'
+                    }`}
+                    onClick={() => onSelectProject?.(proj)}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#00E5C9" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                    <span className="flex-1 truncate">{proj.name}</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onDeleteProject?.(proj.id) }}
+                      className="opacity-0 group-hover:opacity-100 text-[#666666] hover:text-[#ef4444] transition-all"
+                    >
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  </div>
+                  {activeProjectId === proj.id && (
+                    <div className="ml-5 border-l border-[rgba(0,229,201,0.15)] pl-2">
+                      {projectFilesLoading ? (
+                        <div className="text-[0.75rem] text-[#666666] px-1 py-0.5">Cargando...</div>
+                      ) : projectFiles.length === 0 ? (
+                        <div className="text-[0.75rem] text-[#666666] px-1 py-0.5">vacío</div>
+                      ) : (
+                        projectFiles.slice(0, 20).map(f => (
+                          <div key={f.name} className="flex items-center gap-1.5 px-1 py-0.5 text-[0.75rem] text-[#999999] truncate">
+                            {f.is_dir ? (
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#DCB263" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                            ) : (
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#666666" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                            )}
+                            <span className="truncate">{f.name}</span>
+                          </div>
+                        ))
+                      )}
+                      {projectFiles.length > 20 && (
+                        <div className="text-[0.65rem] text-[#666666] px-1 py-0.5">+{projectFiles.length - 20} más</div>
+                      )}
+                      {projectConvs.filter(c => c.projectId === proj.id).slice(0, 10).map(conv => (
+                        <div
+                          key={conv.id}
+                          className={`flex items-center gap-1 px-1 py-0.5 text-[0.75rem] cursor-pointer rounded ${
+                            activeConvId === conv.id
+                              ? 'bg-[rgba(0,229,201,0.1)] text-[#00E5C9]'
+                              : 'text-[#999999] hover:text-[#E5E5E5]'
+                          }`}
+                          onClick={() => onSelect(conv.id)}
+                        >
+                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#00E5C9" strokeWidth="2">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                          </svg>
+                          <span className="flex-1 truncate">{conv.title}</span>
+                          <span className="text-[0.5rem] text-[#4a4a4a] font-mono shrink-0">{relativeTime(conv.updatedAt)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
             )}
           </div>
 

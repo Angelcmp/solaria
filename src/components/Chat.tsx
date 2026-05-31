@@ -27,6 +27,7 @@ interface ChatProps {
   activeConversation?: Conversation | null
   onUpdateConvModel?: (convId: string, provider: string, model: string) => void
   providers?: { id: string; label: string; models: string[]; local: boolean }[]
+  activeProject?: { name: string; path: string } | null
 }
 
 interface QuickAction {
@@ -96,6 +97,97 @@ function detectInjection(text: string): boolean {
   return INJECTION_PATTERNS.some(p => p.test(text))
 }
 
+function MoreMenu({ messages, conversationTitle, onClear }: {
+  messages: { role: string; content: string }[]
+  conversationTitle?: string
+  onClear: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center justify-center w-7 h-7 rounded-md hover:bg-[rgba(255,255,255,0.08)] text-[#999999] hover:text-white transition-colors"
+        title="Más opciones"
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+      </button>
+      {open && (
+        <div className="absolute right-0 top-7 w-40 bg-[#1C1B1B] border border-[rgba(255,255,255,0.1)] rounded-lg shadow-2xl overflow-hidden animate-[fadeIn_0.1s_ease] z-50">
+          <button
+            onClick={async () => {
+              try {
+                const { save } = await import('@tauri-apps/plugin-dialog')
+                const { invoke } = await import('@tauri-apps/api/core')
+                const path = await save({
+                  filters: [{ name: 'Markdown', extensions: ['md'] }],
+                  defaultPath: `${(conversationTitle || 'conversacion').replace(/[^a-zA-Z0-9\s-]/g, '').trim()}.md`,
+                })
+                if (!path) return
+                const md = messages.map(m =>
+                  `## ${m.role === 'user' ? 'Usuario' : 'Asistente'}\n\n${m.content}`
+                ).join('\n\n---\n\n')
+                await invoke('write_text_file', { path, content: `# ${conversationTitle || 'Conversación'}\n\n${md}` })
+              } catch {}
+              setOpen(false)
+            }}
+            className="flex items-center gap-2 w-full px-3 py-2 text-[0.6875rem] text-[#E5E5E5] hover:bg-[rgba(0,229,201,0.08)] hover:text-[#00E5C9] transition-colors text-left"
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Exportar MD
+          </button>
+          <button
+            onClick={async () => {
+              try {
+                const title = conversationTitle || 'Conversación'
+                const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title><style>
+                  body{background:#131313;color:#E5E5E5;font-family:'IBM Plex Sans',sans-serif;max-width:700px;margin:40px auto;padding:0 20px;line-height:1.6}
+                  h1{color:#DCB263;font-size:1.3rem;font-weight:500}
+                  h2{color:#DCB263;font-size:0.9rem;font-weight:500}
+                  .msg-user{background:#2A2A2A;padding:12px 16px;border-radius:8px;margin:12px 0;border:1px solid rgba(255,255,255,0.08)}
+                  .msg-assistant{background:transparent;padding:8px 16px;margin:12px 0}
+                  hr{border:none;border-top:1px solid rgba(255,255,255,0.06);margin:16px 0}
+                  code{background:#2A2A2A;padding:1px 4px;border-radius:3px;font-size:0.85em}
+                  pre{background:#2A2A2A;padding:12px;border-radius:8px;overflow-x:auto;border:1px solid rgba(255,255,255,0.08)}
+                  .meta{color:#666;font-size:0.75rem;margin-bottom:4px}
+                </style></head><body>
+                <h1>${title}</h1>
+                ${messages.map(m => `<div class="msg-${m.role}"><div class="meta">${m.role === 'user' ? 'Usuario' : 'Asistente'}</div><div>${m.content.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div></div><hr>`).join('')}
+                </body></html>`
+                const win = window.open('', '_blank')
+                if (win) { win.document.write(html); win.document.close(); win.focus(); setTimeout(() => win.print(), 500) }
+              } catch {}
+              setOpen(false)
+            }}
+            className="flex items-center gap-2 w-full px-3 py-2 text-[0.6875rem] text-[#E5E5E5] hover:bg-[rgba(220,178,99,0.08)] hover:text-[#DCB263] transition-colors text-left"
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            Exportar PDF
+          </button>
+          <div className="border-t border-[rgba(255,255,255,0.06)]" />
+          <button
+            onClick={() => { onClear(); setOpen(false) }}
+            className="flex items-center gap-2 w-full px-3 py-2 text-[0.6875rem] text-[#ef4444] hover:bg-[rgba(239,68,68,0.08)] transition-colors text-left"
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+            Limpiar chat
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 interface AttachedFile {
   name: string
   content: string
@@ -119,6 +211,7 @@ export default function Chat({
   activeConversation,
   onUpdateConvModel,
   providers,
+  activeProject,
 }: ChatProps) {
   const [input, setInput] = useState('')
   const [activePrompt, setActivePrompt] = useState<string | null>(null)
@@ -297,22 +390,27 @@ export default function Chat({
     <div className="flex flex-col flex-1 min-w-0 bg-[#131313] text-[#E5E5E5]" style={{ fontFamily: "'IBM Plex Sans', 'Inter', system-ui, sans-serif" }}>
       <header className="sticky top-0 z-40 shrink-0 border-b border-[rgba(255,255,255,0.04)] bg-[rgba(19,19,19,0.85)] backdrop-blur-[12px]" style={{ WebkitBackdropFilter: 'blur(12px)' }}>
         <div className="flex items-center gap-2 w-full max-w-[800px] mx-auto px-4 py-1.5">
-          <a className="flex items-center gap-[0.375rem] no-underline" href="#" onClick={(e) => { e.preventDefault(); onClear() }}>
+          <a className="flex items-center no-underline" href="#" onClick={(e) => { e.preventDefault(); onClear() }}>
             <img src="/solaria-logo.svg" alt="Solaria" className="w-4 h-4" />
-            <span className="text-[0.8125rem] font-semibold text-[#DCB263]">Solaria</span>
           </a>
           {conversationTitle && (
             <span className="text-[0.6875rem] text-[#999999] ml-2 truncate max-w-[200px]">{conversationTitle}</span>
           )}
           {isAgentEnabled && (
-            <div className={'flex items-center gap-1.5 px-2 py-0.5 rounded-md border text-[0.6875rem] font-medium ' + (agentIsRunning ? 'bg-[rgba(0,229,201,0.12)] border-[rgba(0,229,201,0.3)] text-[#00E5C9]' : 'bg-[rgba(220,178,99,0.08)] border-[rgba(220,178,99,0.2)] text-[#DCB263]')}>
+            <div className={'flex items-center gap-1.5 px-2 py-[3px] rounded border text-[0.65rem] leading-none ' + (agentIsRunning ? 'bg-[rgba(0,229,201,0.1)] border-[rgba(0,229,201,0.25)] text-[#00E5C9]' : 'bg-[rgba(220,178,99,0.07)] border-[rgba(220,178,99,0.2)] text-[#DCB263]')}>
               <span>Agent{agentIsRunning ? '...' : ''}</span>
+            </div>
+          )}
+          {activeProject && (
+            <div className="flex items-center gap-1 px-2 py-[3px] rounded border border-[rgba(0,229,201,0.2)] bg-[rgba(0,229,201,0.07)] text-[0.65rem] leading-none text-[#00E5C9]">
+              <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              <span className="max-w-[120px] truncate" title={activeProject.path}>{activeProject.name}</span>
             </div>
           )}
           <div className="relative" ref={modelPickerRef}>
             <button
               onClick={() => setShowModelPicker(!showModelPicker)}
-              className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[rgba(0,229,201,0.08)] border border-[rgba(0,229,201,0.2)] text-[#00E5C9] text-[0.6875rem] font-medium hover:bg-[rgba(0,229,201,0.12)] transition-colors cursor-pointer whitespace-nowrap"
+              className="flex items-center gap-1.5 px-2 py-[3px] rounded border border-[rgba(0,229,201,0.2)] bg-[rgba(0,229,201,0.07)] text-[#00E5C9] text-[0.65rem] leading-none hover:bg-[rgba(0,229,201,0.12)] transition-colors cursor-pointer whitespace-nowrap"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="21.17" y1="8" x2="12" y2="8"/><line x1="3.95" y1="6.06" x2="8.54" y2="14"/><line x1="10.88" y1="21.94" x2="15.46" y2="14"/></svg>
               <span className="max-w-[100px] truncate">
@@ -369,14 +467,16 @@ export default function Chat({
             </div>
           )}
           <div className="flex-1" />
+          {messages.length > 0 && (
+            <MoreMenu
+              messages={messages}
+              conversationTitle={conversationTitle}
+              onClear={onClear}
+            />
+          )}
           <button onClick={onShowSettings} className="flex items-center justify-center w-7 h-7 rounded-md hover:bg-[rgba(255,255,255,0.08)] text-[#999999] hover:text-white transition-colors" title={t('chat.settings', lang)}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           </button>
-          {displayMessages.length > 0 && (
-            <button onClick={onClear} className="flex items-center justify-center w-7 h-7 rounded-md hover:bg-[rgba(239,68,68,0.15)] hover:text-[#ef4444] text-[#999999] transition-colors" title={t('chat.clear', lang)}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
-            </button>
-          )}
         </div>
       </header>
 
@@ -566,29 +666,27 @@ export default function Chat({
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
               </button>
 
-              {!isAgentEnabled && (
-                <div ref={qaDropdownRef} className="relative">
-                  <button
-                    onClick={() => setShowQuickActions(!showQuickActions)}
-                    className={'shrink-0 w-6 h-6 rounded flex items-center justify-center border transition-all duration-200 ' + (showQuickActions ? 'bg-[rgba(220,178,99,0.1)] border-[rgba(220,178,99,0.3)] text-[#DCB263]' : 'bg-transparent border-[rgba(255,255,255,0.06)] text-[#999999] hover:bg-[rgba(255,255,255,0.06)] hover:border-[rgba(220,178,99,0.3)] hover:text-[#DCB263]')}
-                    title={t('chat.quick_actions', lang)}
-                  >
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-                  </button>
-                  {showQuickActions && (
-                    <div className="absolute bottom-full left-0 mb-1.5 w-48 bg-[#1C1B1B] border border-[rgba(255,255,255,0.1)] rounded-lg shadow-2xl overflow-hidden animate-[fadeIn_0.15s_ease]">
-                      {getQuickActions(lang).map(action => (
-                        <button
-                          key={action.label}
-                          onClick={() => handleQuickAction(action)}
-                          className={'flex items-center gap-2 w-full px-3 py-2 text-[0.6875rem] transition-colors ' + (activeAction === action.label ? 'bg-[rgba(220,178,99,0.08)] text-[#DCB263]' : 'text-[#E5E5E5] hover:bg-[rgba(255,255,255,0.06)] hover:text-white')}
-                          dangerouslySetInnerHTML={{ __html: action.icon.replace('width="13"', 'width="12"').replace('height="13"', 'height="12"') + '<span>' + action.label + '</span>' }}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+              <div ref={qaDropdownRef} className="relative">
+                <button
+                  onClick={() => setShowQuickActions(!showQuickActions)}
+                  className={'shrink-0 w-6 h-6 rounded flex items-center justify-center border transition-all duration-200 ' + (showQuickActions ? 'bg-[rgba(220,178,99,0.1)] border-[rgba(220,178,99,0.3)] text-[#DCB263]' : 'bg-transparent border-[rgba(255,255,255,0.06)] text-[#999999] hover:bg-[rgba(255,255,255,0.06)] hover:border-[rgba(220,178,99,0.3)] hover:text-[#DCB263]')}
+                  title={t('chat.quick_actions', lang)}
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                </button>
+                {showQuickActions && (
+                  <div className="absolute bottom-full left-0 mb-1.5 w-48 bg-[#1C1B1B] border border-[rgba(255,255,255,0.1)] rounded-lg shadow-2xl overflow-hidden animate-[fadeIn_0.15s_ease]">
+                    {getQuickActions(lang).map(action => (
+                      <button
+                        key={action.label}
+                        onClick={() => handleQuickAction(action)}
+                        className={'flex items-center gap-2 w-full px-3 py-2 text-[0.6875rem] transition-colors ' + (activeAction === action.label ? 'bg-[rgba(220,178,99,0.08)] text-[#DCB263]' : 'text-[#E5E5E5] hover:bg-[rgba(255,255,255,0.06)] hover:text-white')}
+                        dangerouslySetInnerHTML={{ __html: action.icon.replace('width="13"', 'width="12"').replace('height="13"', 'height="12"') + '<span>' + action.label + '</span>' }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
 
               <div className="flex-1" />
 

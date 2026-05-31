@@ -7,7 +7,15 @@ mod search;
 mod skills;
 pub mod tools;
 
+use serde::Serialize;
 use std::sync::Arc;
+
+#[derive(Serialize, Clone)]
+struct FileEntry {
+    name: String,
+    is_dir: bool,
+    size: u64,
+}
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::collections::HashMap;
@@ -153,9 +161,16 @@ async fn ollama_delete_model(model_name: String) -> Result<String, String> {
 
 #[tauri::command]
 fn get_cwd() -> Result<String, String> {
-    std::env::current_dir()
-        .map(|p| p.to_string_lossy().to_string())
-        .map_err(|e| e.to_string())
+    let start = std::env::current_dir().map_err(|e| e.to_string())?;
+    let mut dir = start.clone();
+    loop {
+        if dir.join(".solaria").exists() {
+            return Ok(dir.to_string_lossy().to_string());
+        }
+        if !dir.pop() {
+            return Ok(start.to_string_lossy().to_string());
+        }
+    }
 }
 
 #[tauri::command]
@@ -254,9 +269,25 @@ async fn mcp_list_tools() -> Vec<mcp::McpToolDefinition> {
 
 // ── Skills commands ──────────────────────────────────────────────────────────
 
+fn resolve_project_root() -> Option<String> {
+    let cwd = std::env::current_dir().ok()?;
+    let mut dir = cwd;
+    loop {
+        if dir.join(".solaria").exists() {
+            return Some(dir.to_string_lossy().to_string());
+        }
+        if !dir.pop() {
+            return None;
+        }
+    }
+}
+
 #[tauri::command]
 fn list_skills(working_dir: Option<String>) -> Vec<skills::SkillDefinition> {
-    skills::discover_all_skills(working_dir.as_deref())
+    let wd = working_dir
+        .filter(|d| !d.is_empty() && std::path::PathBuf::from(d).join(".solaria").join("skills").exists())
+        .or_else(resolve_project_root);
+    skills::discover_all_skills(wd.as_deref())
 }
 
 #[tauri::command]
@@ -265,13 +296,48 @@ fn toggle_skill(name: String, enabled: bool) {
 }
 
 #[tauri::command]
-fn get_skills_prompt(working_dir: Option<String>) -> String {
-    skills::get_enabled_skills_prompt(working_dir.as_deref())
+fn get_skills_prompt(working_dir: Option<String>, query: Option<String>) -> String {
+    let wd = working_dir
+        .filter(|d| !d.is_empty() && std::path::PathBuf::from(d).join(".solaria").join("skills").exists())
+        .or_else(resolve_project_root);
+    skills::get_enabled_skills_prompt(wd.as_deref(), query.as_deref())
 }
 
 #[tauri::command]
 fn create_skill(working_dir: String, name: String, description: String, body: String) -> Result<String, String> {
     skills::create_project_skill(&working_dir, &name, &description, &body)
+}
+
+#[tauri::command]
+fn list_directory(path: String) -> Result<Vec<FileEntry>, String> {
+    use std::fs;
+    let entries = fs::read_dir(&path).map_err(|e| format!("Error al leer directorio: {}", e))?;
+    let mut result = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Error: {}", e))?;
+        let file_type = entry.file_type().map_err(|e| format!("Error: {}", e))?;
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name.starts_with('.') || name == "target" || name == "node_modules" { continue; }
+        result.push(FileEntry {
+            name,
+            is_dir: file_type.is_dir(),
+            size: if file_type.is_file() { entry.metadata().ok().map(|m| m.len()).unwrap_or(0) } else { 0 },
+        });
+    }
+    result.sort_by(|a, b| {
+        if a.is_dir != b.is_dir { return if a.is_dir { std::cmp::Ordering::Less } else { std::cmp::Ordering::Greater } }
+        a.name.cmp(&b.name)
+    });
+    Ok(result)
+}
+
+#[tauri::command]
+fn write_text_file(path: String, content: String) -> Result<(), String> {
+    use std::fs;
+    if let Some(parent) = std::path::Path::new(&path).parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("Error creating directory: {}", e))?;
+    }
+    fs::write(&path, &content).map_err(|e| format!("Error writing file: {}", e))
 }
 
 // ── App entry ────────────────────────────────────────────────────────────────
@@ -311,6 +377,8 @@ pub fn run() {
             toggle_skill,
             get_skills_prompt,
             create_skill,
+            write_text_file,
+            list_directory,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

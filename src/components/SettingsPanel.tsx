@@ -6,6 +6,7 @@ import { t } from '../lib/i18n'
 
 interface SettingsPanelProps {
   settings: AppSettings
+  initialTab?: 'general' | 'providers' | 'search' | 'skills' | 'audit'
   onClose: () => void
   onUpdate: (updates: Partial<AppSettings>) => void
   onUpdateApiKey: (provider: keyof ApiKeys, key: string) => void
@@ -45,6 +46,7 @@ const TABS: { id: 'general' | 'providers' | 'search' | 'skills' | 'audit'; label
 
 export default function SettingsPanel({
   settings,
+  initialTab,
   onClose,
   onUpdate,
   onUpdateApiKey,
@@ -54,7 +56,7 @@ export default function SettingsPanel({
   onUpdateAgentConfig,
 }: SettingsPanelProps) {
   const lang = settings.language as Lang
-  const [tab, setTab] = useState<'general' | 'providers' | 'search' | 'skills' | 'audit'>('general')
+  const [tab, setTab] = useState<'general' | 'providers' | 'search' | 'skills' | 'audit'>(initialTab || 'general')
   const [selectedProvider, setSelectedProvider] = useState<AppSettings['defaultProvider']>('openai')
 
   return (
@@ -396,6 +398,19 @@ export default function SettingsPanel({
                           <div className={`absolute top-[2px] w-4 h-4 rounded-full bg-white transition-all ${agentConfig.confirmWrite ? 'left-5' : 'left-[2px]'}`} />
                         </button>
                       </div>
+
+                      <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#2A2A2A] border border-[rgba(255,255,255,0.08)]">
+                        <div>
+                          <div className="text-[0.75rem] font-medium text-white">Auto-activar skills</div>
+                          <div className="text-[0.625rem] text-[#999999]">Solo inyecta skills relevantes al mensaje del usuario (ahorra tokens)</div>
+                        </div>
+                        <button
+                          onClick={() => onUpdateAgentConfig({ autoActivateSkills: !agentConfig.autoActivateSkills })}
+                          className={`relative w-10 h-5 rounded-full transition-colors ${agentConfig.autoActivateSkills ? 'bg-[#00E5C9]' : 'bg-[#666666]'}`}
+                        >
+                          <div className={`absolute top-[2px] w-4 h-4 rounded-full bg-white transition-all ${agentConfig.autoActivateSkills ? 'left-5' : 'left-[2px]'}`} />
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -693,7 +708,7 @@ function SkillsTab({ workingDirectory }: { workingDirectory?: string }) {
           <h4 className="text-[0.65rem] font-semibold text-[#DCB263] mb-1.5 uppercase tracking-[0.05em]">Skills del Proyecto</h4>
           <div className="space-y-1.5">
             {projectSkills.map((s, i) => (
-              <SkillRow key={i} skill={s} alwaysEnabled />
+              <SkillRow key={i} skill={s} onToggle={toggleSkill} />
             ))}
           </div>
         </div>

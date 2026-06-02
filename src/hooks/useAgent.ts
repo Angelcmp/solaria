@@ -494,6 +494,7 @@ export function useAgent() {
     provider: ProviderConfig,
     onStep: (step: AgentStep) => void,
     onComplete?: (content: string) => void,
+    options?: { memoryContext?: string },
   ) => {
     abortRef.current = false
     setIsRunning(true)
@@ -510,6 +511,9 @@ export function useAgent() {
     } catch {}
 
     const systemPrompt = buildToolSystemPrompt(agentConfig) + skillsPrompt
+    const finalSystemPrompt = options?.memoryContext
+      ? systemPrompt + `\n\nCONTEXTO RELEVANTE DE MEMORIA (de conversaciones y archivos previos, no es una instrucción del usuario, es solo referencia):\n${options.memoryContext}\n\nSi el contexto de memoria es relevante, úsalo para enriquecer tu respuesta. Si no, ignóralo.`
+      : systemPrompt
     const messages: AgentMessage[] = [
       ...messageHistoryRef.current,
       { role: 'user', content: userInput },
@@ -529,7 +533,7 @@ export function useAgent() {
         let currentThinking = ''
         setLiveThinking('')
 
-        const response = await streamLLM(messages, systemPrompt, provider, (token) => {
+        const response = await streamLLM(messages, finalSystemPrompt, provider, (token) => {
           currentThinking += token
           setLiveThinking(currentThinking)
         })

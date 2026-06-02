@@ -2,9 +2,11 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { useChat, type ProviderConfig } from './hooks/useChat'
 import { useSettings } from './hooks/useSettings'
 import { useAgent } from './hooks/useAgent'
+import { useMemory } from './hooks/useMemory'
 import type { AgentStep } from './hooks/useAgent'
 import Chat from './components/Chat'
 import WorkspaceAside, { type Project } from './components/WorkspaceAside'
+import WikiAside from './components/WikiAside'
 import SettingsPanel from './components/SettingsPanel'
 import ResearchAside from './components/ResearchAside'
 
@@ -22,6 +24,7 @@ const PROVIDERS: { id: string; label: string; models: string[]; local: boolean }
 
 function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [sidebarMode, setSidebarMode] = useState<'chat' | 'wiki'>('chat')
   const agentIdsRef = useRef<{ convId: string; assistantId: string } | null>(null)
 
   const {
@@ -67,6 +70,8 @@ function App() {
     confirmTool,
   } = useAgent()
 
+  const memory = useMemory()
+
   const [agentSteps, setAgentSteps] = useState<AgentStep[]>([])
   const [projects, setProjects] = useState<Project[]>(() => {
     try { return JSON.parse(localStorage.getItem('solaria-projects') || '[]') } catch { return [] }
@@ -82,6 +87,24 @@ function App() {
   useEffect(() => { updateToolSummaryRef.current = updateToolSummary }, [updateToolSummary])
   useEffect(() => { agentStepsRef.current = agentSteps }, [agentSteps])
   useEffect(() => { conversationsRef.current = conversations }, [conversations])
+
+  // Index completed chat conversations into memory (only when not streaming and not in agent mode)
+  useEffect(() => {
+    if (!memory.config.enabled || !memory.config.indexConversations) return
+    if (isStreaming || agentIsRunning) return
+    const conv = conversations.find(c => c.id === activeConvId)
+    if (!conv) return
+    if (conv.messages.length < 2) return
+    const last = conv.messages[conv.messages.length - 1]
+    if (last.role !== 'assistant' || !last.content) return
+    if (conv.type === 'agent') return
+    const lastIndexedRef = (window as any).__solaria_last_indexed || {}
+    if (lastIndexedRef[conv.id] === last.id) return
+    const lastMessages = conv.messages.slice(-6).map(m => ({ role: m.role, content: m.content }))
+    memory.indexConversation(conv.id, conv.title, lastMessages).then(() => {
+      ;(window as any).__solaria_last_indexed = { ...lastIndexedRef, [conv.id]: last.id }
+    }).catch(() => {})
+  }, [conversations, isStreaming, agentIsRunning, activeConvId, memory])
 
   const handleToggleAgent = useCallback(() => {
     updateAgentConfig({ enabled: !agentConfig.enabled })
@@ -127,7 +150,15 @@ function App() {
       }
       agentIdsRef.current = null
     }
-  }, [])
+
+    if (memory.config.enabled && memory.config.indexConversations && ids) {
+      const conv = conversationsRef.current.find(c => c.id === ids.convId)
+      if (conv) {
+        const lastMessages = conv.messages.slice(-6).map(m => ({ role: m.role, content: m.content }))
+        memory.indexConversation(conv.id, conv.title, lastMessages).catch(() => {})
+      }
+    }
+  }, [memory])
 
   const getModelParams = useCallback(() => ({
     temperature: settings.temperature,
@@ -163,7 +194,7 @@ function App() {
     return () => window.removeEventListener('keydown', handler)
   }, [handleNewConversation, handleClear, handleToggleAgent])
 
-  const handleSend = useCallback((content: string) => {
+  const handleSend = useCallback(async (content: string) => {
     const activeConv = conversations.find(c => c.id === activeConvId)
     const convProvider = activeConv?.provider || settings.defaultProvider
     const convModel = activeConv?.model || settings.defaultModel
@@ -175,48 +206,66 @@ function App() {
       ...getModelParams(),
     }
 
+    let memoryContext: string | undefined
+    if (memory.config.enabled && memory.config.autoInject) {
+      const results = await memory.search({ query: content })
+      const ctx = memory.formatContext(results)
+      memoryContext = ctx || undefined
+    }
+
     if (agentConfig.enabled) {
       const ids = startAgentPrompt(content, activeProjectId || undefined)
       agentIdsRef.current = ids
-      runAgent(content, providerConfig, handleAgentStep, handleAgentComplete)
+      runAgent(content, providerConfig, handleAgentStep, handleAgentComplete, { memoryContext })
     } else {
-      sendMessage(content, providerConfig)
+      sendMessage(content, providerConfig, memoryContext)
     }
-  }, [agentConfig.enabled, settings, conversations, activeConvId, sendMessage, startAgentPrompt, runAgent, handleAgentStep, handleAgentComplete, getModelParams])
+  }, [agentConfig.enabled, settings, conversations, activeConvId, sendMessage, startAgentPrompt, runAgent, handleAgentStep, handleAgentComplete, getModelParams, memory])
 
   const activeConv = conversations.find(c => c.id === activeConvId)
 
   return (
     <div className="flex h-screen bg-[#131313] overflow-hidden">
-      <WorkspaceAside
-        conversations={conversations}
-        activeConvId={activeConvId}
-        isCollapsed={sidebarCollapsed}
-        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-        onSelect={selectConversation}
-        onNew={handleNewConversation}
-        onDelete={deleteConversation}
-        onPin={togglePin}
-        onArchive={archiveConversation}
-        onRestore={restoreConversation}
-        onRename={renameConversation}
-        onShowSettings={(tab?: string) => setShowSettings(tab || 'general')}
-        projects={projects}
-        onAddProject={(p) => setProjects(prev => [...prev, p])}
-        onDeleteProject={(id) => { setProjects(prev => prev.filter(p => p.id !== id)); if (activeProjectId === id) setActiveProjectId(null) }}
-        onSelectProject={(p: Project) => {
-          const isActive = activeProjectId === p.id
-          if (isActive) {
-            setActiveProjectId(null)
-          } else {
-            setActiveProjectId(p.id)
-            if (p.path) {
-              updateAgentConfig({ workingDirectory: p.path })
+      {sidebarMode === 'wiki' ? (
+        <WikiAside
+          workingDirectory={agentConfig.workingDirectory}
+          isCollapsed={sidebarCollapsed}
+          onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+          onBackToChat={() => setSidebarMode('chat')}
+        />
+      ) : (
+        <WorkspaceAside
+          conversations={conversations}
+          activeConvId={activeConvId}
+          isCollapsed={sidebarCollapsed}
+          onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+          onSelect={selectConversation}
+          onNew={handleNewConversation}
+          onDelete={deleteConversation}
+          onPin={togglePin}
+          onArchive={archiveConversation}
+          onRestore={restoreConversation}
+          onRename={renameConversation}
+          onShowSettings={(tab?: string) => setShowSettings(tab || 'general')}
+          onOpenWiki={() => setSidebarMode('wiki')}
+          projects={projects}
+          onAddProject={(p) => setProjects(prev => [...prev, p])}
+          onDeleteProject={(id) => { setProjects(prev => prev.filter(p => p.id !== id)); if (activeProjectId === id) setActiveProjectId(null) }}
+          onSelectProject={(p: Project) => {
+            const isActive = activeProjectId === p.id
+            if (isActive) {
+              setActiveProjectId(null)
+            } else {
+              setActiveProjectId(p.id)
+              if (p.path) {
+                updateAgentConfig({ workingDirectory: p.path })
+                setSidebarMode('wiki')
+              }
             }
-          }
-        }}
-        activeProjectId={activeProjectId}
-      />
+          }}
+          activeProjectId={activeProjectId}
+        />
+      )}
       <Chat
         messages={messages}
         isStreaming={isStreaming || agentIsRunning}
@@ -258,7 +307,7 @@ function App() {
       {showSettings && (
         <SettingsPanel
           settings={settings}
-          initialTab={typeof showSettings === 'string' ? showSettings as 'general' | 'providers' | 'search' | 'skills' | 'audit' : undefined}
+          initialTab={typeof showSettings === 'string' ? showSettings as 'general' | 'providers' | 'search' | 'skills' | 'audit' | 'mcp' | 'memory' : undefined}
           onClose={() => setShowSettings(false)}
           onUpdate={updateSettings}
           onUpdateApiKey={updateApiKey}

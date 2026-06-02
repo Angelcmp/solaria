@@ -35,6 +35,7 @@ Creemos en una IA que:
 | **📚 Templates** | 40+ plantillas de prompt para código, escritura, análisis, traducción |
 | **🎨 Markdown nativo** | Las respuestas se renderizan con syntax highlighting, tablas y código |
 | **🔄 Historial persistente** | Las conversaciones se guardan localmente en tu navegador |
+| **🧠 Memoria persistente (RAG)** | El agente recuerda conversaciones previas y archivos de proyecto. Ver [MEMORY.md](./MEMORY.md) |
 
 ## Privacidad
 

@@ -1,4 +1,4 @@
-# Roadmap — Solaria Agent v0.7.0
+# Roadmap — Solaria Agent v0.8.0
 
 > Deep Research Agentic System con Skills + Knowledge Base
 > Enfoque: investigación, análisis, proyectos, y sistema de conocimiento personal.
@@ -160,6 +160,16 @@
 - [x] Skill `knowledge-builder`: construye wiki .md con resúmenes, conceptos, cross-links [[wiki]]
 - [x] glob/grep respetan working_directory del proyecto
 - [x] fetch_url extrae texto de HTML automáticamente
+
+### P7 — Odyssey Features (Nuevas)
+
+> Inspirado en [pewdiepie-archdaemon/odysseus](https://github.com/pewdiepie-archdaemon/odysseus)
+
+- [ ] **Memoria persistente con vector store (RAG)** — ChromaDB/local embedding para que el agente recuerde entre sesiones. Complementa knowledge-builder.
+- [ ] **UI de MCP en Settings** — backend completo listo (`mcp.rs`, 6 comandos Tauri), solo falta frontend para gestionar servidores MCP.
+- [ ] **Cookbook: descubrimiento y descarga de modelos** — escanear hardware, recomendar modelos GGUF/FP8/AWQ, descargar y servir con vLLM/llama.cpp.
+- [ ] **Comparador de modelos (blind test)** — probar modelos side-by-side sin saber cuál es cuál, votar y sintetizar resultado.
+- [ ] **PWA / responsive mobile** — convertir en PWA instalable, interfaz adaptativa para móvil.
 
 ### Bugs conocidos (todos resueltos ✅)
 

@@ -3,10 +3,11 @@ import type { AppSettings, ApiKeys } from '../hooks/useSettings'
 import type { AgentConfig } from '../hooks/useAgent'
 import type { Lang } from '../lib/i18n'
 import { t } from '../lib/i18n'
+import { useMemory, type SearchResult } from '../hooks/useMemory'
 
 interface SettingsPanelProps {
   settings: AppSettings
-  initialTab?: 'general' | 'providers' | 'search' | 'skills' | 'audit'
+  initialTab?: 'general' | 'providers' | 'search' | 'skills' | 'memory' | 'audit' | 'mcp'
   onClose: () => void
   onUpdate: (updates: Partial<AppSettings>) => void
   onUpdateApiKey: (provider: keyof ApiKeys, key: string) => void
@@ -17,31 +18,25 @@ interface SettingsPanelProps {
 }
 
 const PROVIDERS: { id: AppSettings['defaultProvider']; label: string; models: string[]; isLocal: boolean }[] = [
-  { id: 'ollama', label: 'Ollama (Local)', models: ['qwen3.5', 'llama3.2', 'llama3.1', 'mistral', 'phi3', 'deepseek-r1', 'gemma3', 'gemma4'], isLocal: true },
+  { id: 'ollama', label: 'Ollama', models: ['qwen3.5', 'llama3.2', 'llama3.1', 'mistral', 'phi3', 'deepseek-r1', 'gemma3', 'gemma4'], isLocal: true },
   { id: 'openai', label: 'OpenAI', models: ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo', 'gpt-5.5', 'o1', 'o3-mini'], isLocal: false },
   { id: 'anthropic', label: 'Anthropic', models: ['claude-haiku-4-5', 'claude-sonnet-4-6', 'claude-opus-4-7'], isLocal: false },
   { id: 'deepseek', label: 'DeepSeek', models: ['deepseek-v4-flash', 'deepseek-v4-pro'], isLocal: false },
   { id: 'groq', label: 'Groq', models: ['llama-3.3-70b-versatile', 'llama-4-scout-17b-16e-instruct'], isLocal: false },
   { id: 'google', label: 'Google', models: ['gemini-2.0-flash', 'gemini-3.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.5-pro-preview-03-25'], isLocal: false },
   { id: 'cohere', label: 'Cohere', models: ['command-r7b-12-2024', 'command-r-plus-08-2024'], isLocal: false },
-  { id: 'kimi', label: 'Kimi (Moonshot)', models: ['kimi-k2.6', 'kimi-k2-0905-preview'], isLocal: false },
-  { id: 'glm', label: 'GLM (Z.AI)', models: ['glm-4.7', 'glm-4.7-flash', 'glm-5.1', 'glm-5', 'glm-5-turbo', 'glm-4.5', 'glm-4.5-flash'], isLocal: false },
+  { id: 'kimi', label: 'Kimi', models: ['kimi-k2.6', 'kimi-k2-0905-preview'], isLocal: false },
+  { id: 'glm', label: 'GLM', models: ['glm-4.7', 'glm-4.7-flash', 'glm-5.1', 'glm-5', 'glm-5-turbo', 'glm-4.5', 'glm-4.5-flash'], isLocal: false },
 ]
 
-const TAB_ICONS: Record<string, string> = {
-  general: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
-  providers: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>',
-  search: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><path d="M11 8v3m0 4h.01"/></svg>',
-  skills: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>',
-  audit: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>',
-}
-
-const TABS: { id: 'general' | 'providers' | 'search' | 'skills' | 'audit'; labelKey: string }[] = [
-  { id: 'general', labelKey: 'settings.general' },
-  { id: 'providers', labelKey: 'settings.providers' },
-  { id: 'search', labelKey: 'settings.search' },
-  { id: 'skills', labelKey: '' },
-  { id: 'audit', labelKey: 'settings.audit' },
+const TABS: { id: 'general' | 'providers' | 'search' | 'skills' | 'memory' | 'audit' | 'mcp'; labelKey: string; icon: string }[] = [
+  { id: 'general', labelKey: 'settings.general', icon: 'general' },
+  { id: 'providers', labelKey: 'settings.providers', icon: 'providers' },
+  { id: 'search', labelKey: 'settings.search', icon: 'search' },
+  { id: 'skills', labelKey: '', icon: 'skills' },
+  { id: 'memory', labelKey: 'settings.memory', icon: 'memory' },
+  { id: 'mcp', labelKey: '', icon: 'mcp' },
+  { id: 'audit', labelKey: 'settings.audit', icon: 'audit' },
 ]
 
 export default function SettingsPanel({
@@ -56,394 +51,80 @@ export default function SettingsPanel({
   onUpdateAgentConfig,
 }: SettingsPanelProps) {
   const lang = settings.language as Lang
-  const [tab, setTab] = useState<'general' | 'providers' | 'search' | 'skills' | 'audit'>(initialTab || 'general')
+  const [tab, setTab] = useState<'general' | 'providers' | 'search' | 'skills' | 'memory' | 'audit' | 'mcp'>(initialTab || 'general')
   const [selectedProvider, setSelectedProvider] = useState<AppSettings['defaultProvider']>('openai')
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <div className="relative w-[720px] h-[85vh] bg-[#1C1B1B] border border-[rgba(255,255,255,0.1)] rounded-xl overflow-hidden shadow-2xl flex flex-col">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-[760px] h-[88vh] bg-[#1A1A1A] border border-[rgba(255,255,255,0.08)] rounded-2xl overflow-hidden shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-[rgba(255,255,255,0.08)] shrink-0">
-          <h2 className="text-sm font-semibold text-white">{t('settings.title', lang)}</h2>
-          <button onClick={onClose} className="flex items-center justify-center w-6 h-6 rounded hover:bg-[rgba(255,255,255,0.08)] text-[#999999] hover:text-white transition-colors">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[rgba(255,255,255,0.06)] shrink-0 bg-[#1A1A1A]">
+          <div className="flex items-center gap-3">
+            <div className="w-7 h-7 rounded-lg bg-[#00E5C9]/10 border border-[#00E5C9]/15 flex items-center justify-center">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00E5C9" strokeWidth="2">
+                <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+              </svg>
+            </div>
+            <h2 className="text-sm font-semibold text-white">{t('settings.title', lang)}</h2>
+          </div>
+          <button onClick={onClose} className="flex items-center justify-center w-7 h-7 rounded-lg hover:bg-[rgba(255,255,255,0.06)] text-[#999999] hover:text-white transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
 
         {/* Body: sidebar + content */}
         <div className="flex flex-1 min-h-0">
           {/* Sidebar */}
-          <div className="w-[150px] shrink-0 border-r border-[rgba(255,255,255,0.06)] flex flex-col py-2">
-            <div className="text-[0.55rem] text-[#666666] uppercase tracking-[0.06em] px-4 pb-2 border-b border-[rgba(255,255,255,0.04)] mb-1">Navegación</div>
-            <div className="flex-1 overflow-y-auto px-2 space-y-0.5" style={{ scrollbarWidth: 'thin' }}>
+          <div className="w-[170px] shrink-0 border-r border-[rgba(255,255,255,0.04)] flex flex-col py-3 bg-[rgba(255,255,255,0.01)]">
+            <div className="flex-1 overflow-y-auto px-2.5 space-y-0.5" style={{ scrollbarWidth: 'thin' }}>
               {TABS.map(tabKey => (
                 <button
                   key={tabKey.id}
                   onClick={() => setTab(tabKey.id)}
-                  className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-md text-[0.6875rem] font-medium transition-all duration-150 ${
+                  className={`flex items-center gap-2.5 w-full px-3 py-2.5 rounded-lg text-[0.7rem] font-medium transition-all duration-150 ${
                     tab === tabKey.id
-                      ? 'bg-[rgba(0,229,201,0.08)] text-[#00E5C9] border border-[rgba(0,229,201,0.2)]'
-                      : 'text-[#999999] hover:bg-[rgba(255,255,255,0.04)] hover:text-[#E5E5E5] border border-transparent'
+                      ? 'bg-[rgba(0,229,201,0.07)] text-[#00E5C9] border border-[rgba(0,229,201,0.15)]'
+                      : 'text-[#999999] hover:bg-[rgba(255,255,255,0.03)] hover:text-[#E5E5E5] border border-transparent'
                   }`}
-                  dangerouslySetInnerHTML={{
-                    __html: (TAB_ICONS[tabKey.id] || '').replace('width="16"', 'width="14"').replace('height="16"', 'height="14"') +
-                      '<span>' + (tabKey.id === 'skills' ? 'Skills' : t(tabKey.labelKey, lang)) + '</span>'
-                  }}
-                />
+                >
+                  <TabIcon name={tabKey.icon} active={tab === tabKey.id} />
+                  <span>{tabKey.id === 'skills' ? 'Skills' : tabKey.id === 'mcp' ? 'MCP' : t(tabKey.labelKey, lang)}</span>
+                </button>
               ))}
             </div>
-            <div className="px-4 pt-2 mt-1 border-t border-[rgba(255,255,255,0.04)]">
-              <div className="text-[0.5rem] text-[#4a4a4a]">Solaria Agent v0.3.0</div>
+            <div className="px-4 pt-3 mt-2 border-t border-[rgba(255,255,255,0.04)]">
+              <div className="flex items-center gap-1.5 text-[0.5rem] text-[#555555]">
+                <div className="w-1.5 h-1.5 rounded-full bg-[#00E5C9]/40" />
+                Solaria v0.8.0
+              </div>
             </div>
           </div>
 
           {/* Content */}
-          <div className="flex-1 overflow-y-auto p-5 space-y-5" style={{ scrollbarWidth: 'thin', scrollbarColor: '#4b5563 transparent' }}>
+          <div className="flex-1 overflow-y-auto p-6 space-y-6" style={{ scrollbarWidth: 'thin', scrollbarColor: '#333 transparent' }}>
             {tab === 'general' && (
-              <>
-                <div>
-                  <label className="block text-[0.6875rem] font-medium text-[#999999] mb-1.5 uppercase tracking-[0.05em]">Proveedor por defecto</label>
-                  <p className="text-[0.625rem] text-[#666666] mb-2">Ollama usa modelos locales descargados en tu PC. Los demás proveedores requieren tu API key (BYOK).</p>
-
-                  <div className="text-[0.625rem] text-[#00E5C9] font-medium mb-1.5">Local</div>
-                  <div className="grid grid-cols-3 gap-1.5 mb-3">
-                    {PROVIDERS.filter(p => p.isLocal).map(p => (
-                      <button
-                        key={p.id}
-                        onClick={() => onUpdateProvider(p.id, settings.defaultProvider === p.id ? settings.defaultModel : p.models[0])}
-                        className={`px-2 py-1.5 rounded-md text-[0.6875rem] font-medium transition-colors ${
-                          settings.defaultProvider === p.id
-                            ? 'bg-[rgba(0,229,201,0.08)] border border-[rgba(0,229,201,0.25)] text-[#00E5C9]'
-                            : 'bg-[#2A2A2A] border border-transparent text-[#E5E5E5] hover:bg-[#353535]'
-                        }`}
-                      >
-                        {p.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="text-[0.625rem] text-[#DCB263] font-medium mb-1.5">Cloud (BYOK)</div>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {PROVIDERS.filter(p => !p.isLocal).map(p => (
-                      <button
-                        key={p.id}
-                        onClick={() => onUpdateProvider(p.id, settings.defaultProvider === p.id ? settings.defaultModel : p.models[0])}
-                        className={`px-2 py-1.5 rounded-md text-[0.6875rem] font-medium transition-colors ${
-                          settings.defaultProvider === p.id
-                            ? 'bg-[rgba(0,229,201,0.08)] border border-[rgba(0,229,201,0.25)] text-[#00E5C9]'
-                            : 'bg-[#2A2A2A] border border-transparent text-[#E5E5E5] hover:bg-[#353535]'
-                        }`}
-                      >
-                        {p.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[0.6875rem] font-medium text-[#999999] mb-1.5 uppercase tracking-[0.05em]">Modelo por defecto</label>
-                  <div className="flex flex-wrap gap-1">
-                    {PROVIDERS.find(p => p.id === settings.defaultProvider)?.models.map(m => (
-                      <button
-                        key={m}
-                        onClick={() => onUpdate({ defaultModel: m })}
-                        className={`px-2 py-1 rounded-md text-[0.6875rem] font-mono transition-colors ${
-                          settings.defaultModel === m
-                            ? 'bg-[rgba(0,229,201,0.08)] border border-[rgba(0,229,201,0.25)] text-[#00E5C9]'
-                            : 'bg-[#2A2A2A] border border-transparent text-[#E5E5E5] hover:bg-[#353535]'
-                        }`}
-                      >
-                        {m}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="pt-2 border-t border-[rgba(255,255,255,0.06)]">
-                  <label className="block text-[0.6875rem] font-medium text-[#00E5C9] mb-2 uppercase tracking-[0.05em]">Parámetros del modelo</label>
-
-                  <div className="mb-3">
-                    <label className="block text-[0.6875rem] font-medium text-[#999999] mb-1">
-                      Temperatura: {settings.temperature.toFixed(1)}
-                    </label>
-                    <input
-                      type="range"
-                      min={0}
-                      max={2}
-                      step={0.1}
-                      value={settings.temperature}
-                      onChange={(e) => onUpdate({ temperature: Number(e.target.value) })}
-                      className="w-full accent-[#DCB263]"
-                    />
-                    <div className="flex justify-between text-[0.55rem] text-[#666666]">
-                      <span>Preciso (0)</span>
-                      <span>Creativo (2)</span>
-                    </div>
-                  </div>
-
-                  <div className="mb-3">
-                    <label className="block text-[0.6875rem] font-medium text-[#999999] mb-1">
-                      Top P: {settings.topP.toFixed(2)}
-                    </label>
-                    <input
-                      type="range"
-                      min={0}
-                      max={1}
-                      step={0.05}
-                      value={settings.topP}
-                      onChange={(e) => onUpdate({ topP: Number(e.target.value) })}
-                      className="w-full accent-[#DCB263]"
-                    />
-                    <div className="flex justify-between text-[0.55rem] text-[#666666]">
-                      <span>Estricto (0)</span>
-                      <span>Flexible (1)</span>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[0.6875rem] font-medium text-[#999999] mb-1">
-                      Max tokens: {settings.maxTokens}
-                    </label>
-                    <input
-                      type="range"
-                      min={64}
-                      max={8192}
-                      step={64}
-                      value={settings.maxTokens}
-                      onChange={(e) => onUpdate({ maxTokens: Number(e.target.value) })}
-                      className="w-full accent-[#DCB263]"
-                    />
-                    <div className="flex justify-between text-[0.55rem] text-[#666666]">
-                      <span>64</span>
-                      <span>8192</span>
-                    </div>
-                  </div>
-                </div>
-
-                {settings.defaultProvider === 'ollama' && (
-                  <div className="pt-2 border-t border-[rgba(255,255,255,0.06)]">
-                    <label className="block text-[0.6875rem] font-medium text-[#00E5C9] mb-2 uppercase tracking-[0.05em]">Gestión de modelos Ollama</label>
-                    <ModelManager />
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-[0.6875rem] font-medium text-[#999999] mb-1.5 uppercase tracking-[0.05em]">Idioma</label>
-                  <div className="flex gap-2">
-                    {([['es', 'Español'], ['en', 'English']] as const).map(([value, label]) => (
-                      <button
-                        key={value}
-                        onClick={() => onUpdate({ language: value })}
-                        className={`px-3 py-1.5 rounded-md text-[0.75rem] font-medium transition-colors ${
-                          settings.language === value
-                            ? 'bg-[rgba(0,229,201,0.08)] border border-[rgba(0,229,201,0.25)] text-[#00E5C9]'
-                            : 'bg-[#2A2A2A] border border-transparent text-[#E5E5E5] hover:bg-[#353535]'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[0.6875rem] font-medium text-[#999999] mb-1 uppercase tracking-[0.05em]">Ollama Host</label>
-                  <input
-                    value={settings.ollamaHost}
-                    onChange={(e) => onUpdate({ ollamaHost: e.target.value })}
-                    className="w-full px-3 py-2 rounded-lg bg-[#2A2A2A] border border-[rgba(255,255,255,0.08)] text-[0.75rem] text-white outline-none focus:border-[#DCB263] transition-colors"
-                  />
-                </div>
-
-                <div className="pt-2">
-                  <label className="block text-[0.6875rem] font-medium text-[#999999] mb-1.5 uppercase tracking-[0.05em]">Almacenamiento</label>
-                  <div className="flex gap-2 flex-wrap">
-                    <button
-                      onClick={() => {
-                        localStorage.removeItem('solaria-conversations')
-                        window.location.reload()
-                      }}
-                      className="px-3 py-1.5 rounded-md bg-[rgba(239,68,68,0.1)] border border-[rgba(239,68,68,0.2)] text-[0.75rem] text-[#ef4444] font-medium hover:bg-[rgba(239,68,68,0.2)] transition-colors"
-                    >
-                      Limpiar historial
-                    </button>
-                    <button
-                      onClick={async () => {
-                        const data = localStorage.getItem('solaria-conversations')
-                        if (!data) return
-                        const blob = new Blob([data], { type: 'application/json' })
-                        const url = URL.createObjectURL(blob)
-                        const a = document.createElement('a')
-                        a.href = url
-                        a.download = `solaria-chats-${Date.now()}.json`
-                        a.click()
-                        URL.revokeObjectURL(url)
-                      }}
-                      className="px-3 py-1.5 rounded-md bg-[#2A2A2A] border border-[rgba(255,255,255,0.08)] text-[0.75rem] text-[#E5E5E5] font-medium hover:bg-[#353535] transition-colors"
-                    >
-                      Exportar conversaciones
-                    </button>
-                    <button
-                      onClick={() => {
-                        const input = document.createElement('input')
-                        input.type = 'file'
-                        input.accept = '.json'
-                        input.onchange = async (e) => {
-                          const file = (e.target as HTMLInputElement).files?.[0]
-                          if (!file) return
-                          try {
-                            const text = await file.text()
-                            const parsed = JSON.parse(text)
-                            if (!Array.isArray(parsed)) throw new Error('Formato inválido')
-                            const existing = localStorage.getItem('solaria-conversations')
-                            const existingArr = existing ? JSON.parse(existing) : []
-                            localStorage.setItem('solaria-conversations', JSON.stringify([...parsed, ...existingArr]))
-                            window.location.reload()
-                          } catch {
-                            alert('Error: archivo JSON inválido')
-                          }
-                        }
-                        input.click()
-                      }}
-                      className="px-3 py-1.5 rounded-md bg-[#2A2A2A] border border-[rgba(255,255,255,0.08)] text-[0.75rem] text-[#E5E5E5] font-medium hover:bg-[#353535] transition-colors"
-                    >
-                      Importar conversaciones
-                    </button>
-                  </div>
-                </div>
-
-                <div className="pt-2 border-t border-[rgba(255,255,255,0.06)]">
-                  <label className="block text-[0.6875rem] font-medium text-[#00E5C9] mb-2 uppercase tracking-[0.05em]">Modo Agente</label>
-                  {agentConfig && onUpdateAgentConfig && (
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#2A2A2A] border border-[rgba(255,255,255,0.08)]">
-                        <div>
-                          <div className="text-[0.75rem] font-medium text-white">Activar agente</div>
-                          <div className="text-[0.625rem] text-[#999999]">Permite al agente usar herramientas de investigación</div>
-                        </div>
-                        <button
-                          onClick={() => onUpdateAgentConfig({ enabled: !agentConfig.enabled })}
-                          className={`relative w-10 h-5 rounded-full transition-colors ${agentConfig.enabled ? 'bg-[#00E5C9]' : 'bg-[#666666]'}`}
-                        >
-                          <div className={`absolute top-[2px] w-4 h-4 rounded-full bg-white transition-all ${agentConfig.enabled ? 'left-5' : 'left-[2px]'}`} />
-                        </button>
-                      </div>
-
-                      <div>
-                        <label className="block text-[0.6875rem] font-medium text-[#999999] mb-1 uppercase tracking-[0.05em]">
-                          Máximo de iteraciones: {agentConfig.maxIterations}
-                        </label>
-                        <input
-                          type="range"
-                          min={3}
-                          max={25}
-                          value={agentConfig.maxIterations}
-                          onChange={(e) => onUpdateAgentConfig({ maxIterations: Number(e.target.value) })}
-                          className="w-full accent-[#00E5C9]"
-                        />
-                        <div className="flex justify-between text-[0.625rem] text-[#666666]">
-                          <span>3</span>
-                          <span>25</span>
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-[0.6875rem] font-medium text-[#999999] mb-1 uppercase tracking-[0.05em]">Directorio de trabajo</label>
-                        <div className="flex gap-1.5">
-                          <input
-                            value={agentConfig.workingDirectory}
-                            onChange={(e) => onUpdateAgentConfig({ workingDirectory: e.target.value })}
-                            placeholder="Ej: /home/user/documentos"
-                            className="flex-1 px-3 py-2 rounded-lg bg-[#2A2A2A] border border-[rgba(255,255,255,0.08)] text-[0.75rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors"
-                          />
-                          <button
-                            onClick={async () => {
-                              try {
-                                const { invoke } = await import('@tauri-apps/api/core')
-                                const cwd = await invoke<string>('get_cwd')
-                                onUpdateAgentConfig({ workingDirectory: cwd })
-                              } catch {}
-                            }}
-                            className="shrink-0 px-2.5 py-2 rounded-lg bg-[#2A2A2A] border border-[rgba(255,255,255,0.08)] text-[0.65rem] text-[#999999] hover:text-white hover:border-[#DCB263] transition-colors"
-                            title="Usar directorio actual"
-                          >
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                          </button>
-                          <button
-                            onClick={async () => {
-                              try {
-                                const { open } = await import('@tauri-apps/plugin-dialog')
-                                const selected = await open({ directory: true, multiple: false, title: 'Seleccionar directorio de trabajo' })
-                                if (selected) onUpdateAgentConfig({ workingDirectory: selected as string })
-                              } catch {}
-                            }}
-                            className="shrink-0 px-2.5 py-2 rounded-lg bg-[#2A2A2A] border border-[rgba(255,255,255,0.08)] text-[0.65rem] text-[#00E5C9] hover:text-white hover:border-[#00E5C9] transition-colors"
-                            title="Explorar y seleccionar carpeta"
-                          >
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#2A2A2A] border border-[rgba(255,255,255,0.08)]">
-                        <div>
-                          <div className="text-[0.75rem] font-medium text-white">Confirmar escrituras</div>
-                          <div className="text-[0.625rem] text-[#999999]">Pedir confirmación antes de escribir archivos</div>
-                        </div>
-                        <button
-                          onClick={() => onUpdateAgentConfig({ confirmWrite: !agentConfig.confirmWrite })}
-                          className={`relative w-10 h-5 rounded-full transition-colors ${agentConfig.confirmWrite ? 'bg-[#00E5C9]' : 'bg-[#666666]'}`}
-                        >
-                          <div className={`absolute top-[2px] w-4 h-4 rounded-full bg-white transition-all ${agentConfig.confirmWrite ? 'left-5' : 'left-[2px]'}`} />
-                        </button>
-                      </div>
-
-                      <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#2A2A2A] border border-[rgba(255,255,255,0.08)]">
-                        <div>
-                          <div className="text-[0.75rem] font-medium text-white">Auto-activar skills</div>
-                          <div className="text-[0.625rem] text-[#999999]">Solo inyecta skills relevantes al mensaje del usuario (ahorra tokens)</div>
-                        </div>
-                        <button
-                          onClick={() => onUpdateAgentConfig({ autoActivateSkills: !agentConfig.autoActivateSkills })}
-                          className={`relative w-10 h-5 rounded-full transition-colors ${agentConfig.autoActivateSkills ? 'bg-[#00E5C9]' : 'bg-[#666666]'}`}
-                        >
-                          <div className={`absolute top-[2px] w-4 h-4 rounded-full bg-white transition-all ${agentConfig.autoActivateSkills ? 'left-5' : 'left-[2px]'}`} />
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </>
+              <GeneralTab settings={settings} onUpdate={onUpdate} onUpdateProvider={onUpdateProvider} agentConfig={agentConfig} onUpdateAgentConfig={onUpdateAgentConfig} />
             )}
 
             {tab === 'providers' && (
-              <ProvidersTab
-                settings={settings}
-                onUpdateApiKey={onUpdateApiKey}
-                selectedProvider={selectedProvider}
-                setSelectedProvider={setSelectedProvider}
-              />
+              <ProvidersTab settings={settings} onUpdateApiKey={onUpdateApiKey} selectedProvider={selectedProvider} setSelectedProvider={setSelectedProvider} />
             )}
 
             {tab === 'search' && (
-              <>
-                <p className="text-[0.6875rem] text-[#666666] mb-3">Configura Tavily para búsqueda web. Obtén tu API key en <a href="https://app.tavily.com" target="_blank" className="text-[#00E5C9] hover:underline">app.tavily.com</a></p>
-                <div>
-                  <label className="block text-[0.6875rem] font-medium text-[#999999] mb-1 uppercase tracking-[0.05em]">Tavily API Key</label>
-                  <input
-                    type="password"
-                    value={settings.tavilyKey}
-                    onChange={(e) => onUpdateTavilyKey(e.target.value)}
-                    placeholder="tvly-..."
-                    className="w-full px-3 py-2 rounded-lg bg-[#2A2A2A] border border-[rgba(255,255,255,0.08)] text-[0.75rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors"
-                  />
-                </div>
-              </>
+              <SearchTab settings={settings} onUpdateTavilyKey={onUpdateTavilyKey} />
             )}
 
             {tab === 'skills' && (
               <SkillsTab workingDirectory={agentConfig?.workingDirectory} />
+            )}
+
+            {tab === 'memory' && (
+              <MemoryTab />
+            )}
+
+            {tab === 'mcp' && (
+              <McpTab />
             )}
 
             {tab === 'audit' && (
@@ -456,91 +137,407 @@ export default function SettingsPanel({
   )
 }
 
-// ── Provider icons ──
-const PROVIDER_ICONS: Record<string, string> = {
-  openai: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" stroke="currentColor" strokeWidth="1.5"/><path d="M9 13.5c.83 0 1.5-.67 1.5-1.5S9.83 10.5 9 10.5 7.5 11.17 7.5 12s.67 1.5 1.5 1.5zm6 0c.83 0 1.5-.67 1.5-1.5s-.67-1.5-1.5-1.5S13.5 11.17 13.5 12s.67 1.5 1.5 1.5zM12 18c-2.33 0-4.31-1.46-5.11-3.5h10.22c-.8 2.04-2.78 3.5-5.11 3.5z" fill="currentColor"/></svg>',
-  anthropic: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 2v20M6 8l6-6 6 6M6 16l6 6 6-6"/></svg>',
-  deepseek: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/></svg>',
-  groq: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="4" y="4" width="16" height="16" rx="3"/><line x1="12" y1="4" x2="12" y2="20"/><line x1="4" y1="12" x2="20" y2="12"/></svg>',
-  google: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/><path d="M6 12l4 4 8-8"/></svg>',
-  cohere: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM8 12h8M12 8v8"/></svg>',
-  kimi: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5"/></svg>',
-  glm: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M12 4v16"/></svg>',
+/* ════════════════════════════════
+   TABS — REFACTORED UI
+   ════════════════════════════════ */
+
+function GeneralTab({
+  settings,
+  onUpdate,
+  onUpdateProvider,
+  agentConfig,
+  onUpdateAgentConfig,
+}: {
+  settings: AppSettings
+  onUpdate: (u: Partial<AppSettings>) => void
+  onUpdateProvider: (p: AppSettings['defaultProvider'], m: string) => void
+  agentConfig?: AgentConfig
+  onUpdateAgentConfig?: (u: Partial<AgentConfig>) => void
+}) {
+  const providerDef = PROVIDERS.find(p => p.id === settings.defaultProvider)
+
+  return (
+    <div className="space-y-5">
+      {/* Section: Provider & Model */}
+              <Section title="Proveedor & Modelo" color="#00E5C9">
+        <div className="p-3 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] space-y-4">
+          <div>
+            <label className="block text-[0.625rem] font-medium text-[#999999] mb-2">Proveedor por defecto</label>
+            <div className="space-y-2">
+              <div className="text-[0.55rem] text-[#666666] uppercase tracking-wider font-medium">Local</div>
+              <div className="grid grid-cols-3 gap-1.5">
+                    {PROVIDERS.filter(p => p.isLocal).map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => onUpdateProvider(p.id, settings.defaultProvider === p.id ? settings.defaultModel : p.models[0])}
+                    className={`flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-[0.6rem] font-medium transition-all ${
+                      settings.defaultProvider === p.id
+                        ? 'bg-[rgba(0,229,201,0.1)] border border-[rgba(0,229,201,0.25)] text-[#00E5C9] shadow-[0_0_12px_rgba(0,229,201,0.06)]'
+                        : 'bg-[#222] border border-[rgba(255,255,255,0.04)] text-[#999999] hover:border-[rgba(255,255,255,0.1)] hover:text-[#E5E5E5]'
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              <div className="text-[0.55rem] text-[#666666] uppercase tracking-wider font-medium pt-1">Cloud (BYOK)</div>
+              <div className="grid grid-cols-3 gap-1.5">
+                {PROVIDERS.filter(p => !p.isLocal).map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => onUpdateProvider(p.id, settings.defaultProvider === p.id ? settings.defaultModel : p.models[0])}
+                    className={`flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-[0.6rem] font-medium transition-all ${
+                      settings.defaultProvider === p.id
+                        ? 'bg-[rgba(0,229,201,0.1)] border border-[rgba(0,229,201,0.25)] text-[#00E5C9] shadow-[0_0_12px_rgba(0,229,201,0.06)]'
+                        : 'bg-[#222] border border-[rgba(255,255,255,0.04)] text-[#999999] hover:border-[rgba(255,255,255,0.1)] hover:text-[#E5E5E5]'
+                    }`}
+                  >
+                    
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[0.625rem] font-medium text-[#999999] mb-2">Modelo</label>
+            <div className="flex flex-wrap gap-1.5">
+              {providerDef?.models.map(m => (
+                <button
+                  key={m}
+                  onClick={() => onUpdate({ defaultModel: m })}
+                  className={`px-2.5 py-1 rounded-md text-[0.6rem] font-mono transition-all ${
+                    settings.defaultModel === m
+                      ? 'bg-[rgba(0,229,201,0.1)] border border-[rgba(0,229,201,0.25)] text-[#00E5C9]'
+                      : 'bg-[#222] border border-[rgba(255,255,255,0.04)] text-[#999999] hover:border-[rgba(255,255,255,0.1)] hover:text-[#E5E5E5]'
+                  }`}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {settings.defaultProvider === 'ollama' && (
+            <div className="pt-2 border-t border-[rgba(255,255,255,0.04)]">
+              <div className="flex items-center gap-2 mb-2">
+                <label className="text-[0.625rem] font-medium text-[#999999]">Ollama host</label>
+                <span className="text-[0.5rem] text-[#666666]">(default: http://localhost:11434)</span>
+              </div>
+              <input
+                value={settings.ollamaHost}
+                onChange={e => onUpdate({ ollamaHost: e.target.value })}
+                placeholder="http://localhost:11434"
+                className="w-full px-3 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors"
+              />
+            </div>
+          )}
+        </div>
+      </Section>
+
+      {/* Section: Model Parameters */}
+      <Section title="Parámetros del modelo" color="#DCB263">
+        <div className="p-3 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] space-y-4">
+          <SliderControl
+            label="Temperatura"
+            value={settings.temperature}
+            min={0} max={2} step={0.1}
+            onChange={v => onUpdate({ temperature: v })}
+            descLeft="Preciso" descRight="Creativo"
+            color="#DCB263"
+          />
+          <SliderControl
+            label="Top P"
+            value={settings.topP}
+            min={0} max={1} step={0.05}
+            onChange={v => onUpdate({ topP: v })}
+            descLeft="Estricto" descRight="Flexible"
+            color="#DCB263"
+          />
+          <SliderControl
+            label="Max tokens"
+            value={settings.maxTokens}
+            min={64} max={8192} step={64}
+            onChange={v => onUpdate({ maxTokens: v })}
+            descLeft="64" descRight="8192"
+            color="#DCB263"
+          />
+        </div>
+      </Section>
+
+      {/* Section: Ollama Model Manager */}
+      {settings.defaultProvider === 'ollama' && (
+        <Section title="Gestión de modelos" color="#00E5C9">
+          <ModelManager />
+        </Section>
+      )}
+
+      {/* Section: Language */}
+      <Section title="Idioma" color="#00E5C9">
+        <div className="flex gap-2">
+          {([['es', 'Español'], ['en', 'English']] as const).map(([value, label]) => (
+            <button
+              key={value}
+              onClick={() => onUpdate({ language: value })}
+              className={`px-4 py-2 rounded-lg text-[0.7rem] font-medium transition-all ${
+                settings.language === value
+                  ? 'bg-[rgba(0,229,201,0.1)] border border-[rgba(0,229,201,0.25)] text-[#00E5C9]'
+                  : 'bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] text-[#999999] hover:border-[rgba(255,255,255,0.12)] hover:text-[#E5E5E5]'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </Section>
+
+      {/* Section: Storage */}
+      <Section title="Almacenamiento" color="#DCB263">
+        <div className="p-3 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] space-y-3">
+          <p className="text-[0.6rem] text-[#999999] leading-relaxed">
+            Las conversaciones se guardan en localStorage. Puedes exportarlas o importarlas desde un archivo JSON.
+          </p>
+          <div className="flex gap-2 flex-wrap">
+            <ActionButton variant="danger" onClick={() => { localStorage.removeItem('solaria-conversations'); window.location.reload() }}>
+              <TrashIcon />
+              Limpiar historial
+            </ActionButton>
+            <ActionButton variant="secondary" onClick={() => {
+              const data = localStorage.getItem('solaria-conversations')
+              if (!data) return
+              const blob = new Blob([data], { type: 'application/json' })
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url
+              a.download = `solaria-chats-${Date.now()}.json`
+              a.click()
+              URL.revokeObjectURL(url)
+            }}>
+              <ExportIcon />
+              Exportar
+            </ActionButton>
+            <ActionButton variant="secondary" onClick={() => {
+              const input = document.createElement('input')
+              input.type = 'file'
+              input.accept = '.json'
+              input.onchange = async (e) => {
+                const file = (e.target as HTMLInputElement).files?.[0]
+                if (!file) return
+                try {
+                  const text = await file.text()
+                  const parsed = JSON.parse(text)
+                  if (!Array.isArray(parsed)) throw new Error('Formato inválido')
+                  const existing = localStorage.getItem('solaria-conversations')
+                  const existingArr = existing ? JSON.parse(existing) : []
+                  localStorage.setItem('solaria-conversations', JSON.stringify([...parsed, ...existingArr]))
+                  window.location.reload()
+                } catch {
+                  alert('Error: archivo JSON inválido')
+                }
+              }
+              input.click()
+            }}>
+              <ImportIcon />
+              Importar
+            </ActionButton>
+          </div>
+        </div>
+      </Section>
+
+      {/* Section: Agent Mode */}
+      {agentConfig && onUpdateAgentConfig && (
+        <Section title="Modo Agente" color="#00E5C9">
+          <div className="p-3 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-[0.7rem] font-medium text-white">Activar agente</div>
+                <div className="text-[0.55rem] text-[#999999]">Permite al agente usar herramientas de investigación</div>
+              </div>
+              <Switch checked={agentConfig.enabled} onChange={v => onUpdateAgentConfig({ enabled: v })} />
+            </div>
+
+            <div className="pt-2 border-t border-[rgba(255,255,255,0.04)]">
+              <SliderControl
+                label="Máximo de iteraciones"
+                value={agentConfig.maxIterations}
+                min={3} max={25} step={1}
+                onChange={v => onUpdateAgentConfig({ maxIterations: v })}
+                descLeft="3" descRight="25"
+                color="#00E5C9"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[0.625rem] font-medium text-[#999999] mb-1.5">Directorio de trabajo</label>
+              <div className="flex gap-1.5">
+                <input
+                  value={agentConfig.workingDirectory}
+                  onChange={e => onUpdateAgentConfig({ workingDirectory: e.target.value })}
+                  placeholder="Ej: /home/user/documentos"
+                  className="flex-1 px-3 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors"
+                />
+                <ActionButton variant="ghost" small onClick={async () => {
+                  try { const { invoke } = await import('@tauri-apps/api/core'); const cwd = await invoke<string>('get_cwd'); onUpdateAgentConfig({ workingDirectory: cwd }) } catch {}
+                }}>
+                  <FolderIcon />
+                </ActionButton>
+                <ActionButton variant="ghost" small onClick={async () => {
+                  try { const { open } = await import('@tauri-apps/plugin-dialog'); const selected = await open({ directory: true, multiple: false, title: 'Seleccionar directorio' }); if (selected) onUpdateAgentConfig({ workingDirectory: selected as string }) } catch {}
+                }}>
+                  <SearchFolderIcon />
+                </ActionButton>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-[0.7rem] font-medium text-white">Confirmar escrituras</div>
+                <div className="text-[0.55rem] text-[#999999]">Pedir confirmación antes de escribir archivos</div>
+              </div>
+              <Switch checked={agentConfig.confirmWrite} onChange={v => onUpdateAgentConfig({ confirmWrite: v })} />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-[0.7rem] font-medium text-white">Auto-activar skills</div>
+                <div className="text-[0.55rem] text-[#999999]">Solo inyecta skills relevantes (ahorra tokens)</div>
+              </div>
+              <Switch checked={agentConfig.autoActivateSkills} onChange={v => onUpdateAgentConfig({ autoActivateSkills: v })} />
+            </div>
+          </div>
+        </Section>
+      )}
+    </div>
+  )
 }
 
-const PROVIDER_DATA: { id: keyof ApiKeys; label: string; placeholder: string }[] = [
-  { id: 'openai', label: 'OpenAI', placeholder: 'sk-...' },
-  { id: 'anthropic', label: 'Anthropic (Claude)', placeholder: 'sk-ant-...' },
-  { id: 'deepseek', label: 'DeepSeek', placeholder: 'sk-...' },
-  { id: 'groq', label: 'Groq', placeholder: 'gsk_...' },
-  { id: 'google', label: 'Google (Gemini)', placeholder: 'AIza...' },
-  { id: 'cohere', label: 'Cohere', placeholder: '...' },
-  { id: 'kimi', label: 'Kimi (Moonshot)', placeholder: 'sk-...' },
-  { id: 'glm', label: 'GLM (Z.AI)', placeholder: '...' },
-]
-
-function ProvidersTab({
-  settings,
-  onUpdateApiKey,
-  selectedProvider,
-  setSelectedProvider,
-}: {
+function ProvidersTab({ settings, onUpdateApiKey, selectedProvider, setSelectedProvider }: {
   settings: AppSettings
   onUpdateApiKey: (provider: keyof ApiKeys, key: string) => void
   selectedProvider: AppSettings['defaultProvider']
   setSelectedProvider: (p: AppSettings['defaultProvider']) => void
 }) {
-  const activeProvider = PROVIDER_DATA.find(p => p.id === selectedProvider) || PROVIDER_DATA[0]
+  const active = PROVIDER_DATA.find(p => p.id === selectedProvider) || PROVIDER_DATA[0]
+  const isConfigured = selectedProvider !== 'ollama' && settings.apiKeys[selectedProvider as keyof ApiKeys]?.length > 0
 
   return (
-    <div className="flex gap-4 h-full min-h-0">
-      <div className="w-[130px] shrink-0 space-y-0.5 border-r border-[rgba(255,255,255,0.06)] pr-2">
-        <p className="text-[0.55rem] text-[#666666] uppercase tracking-[0.06em] px-1.5 mb-1.5">Proveedores</p>
-        {PROVIDER_DATA.map(p => (
-          <button
-            key={p.id}
-            onClick={() => setSelectedProvider(p.id)}
-            className={`flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-[0.6875rem] transition-colors ${
-              selectedProvider === p.id
-                ? 'bg-[rgba(0,229,201,0.08)] border border-[rgba(0,229,201,0.2)] text-[#00E5C9]'
-                : 'text-[#999999] hover:bg-[rgba(255,255,255,0.04)] hover:text-[#E5E5E5] border border-transparent'
-            }`}
-          >
-            <span className="shrink-0" dangerouslySetInnerHTML={{ __html: (PROVIDER_ICONS[p.id] || '').replace(/width="20"/g, 'width="14"').replace(/height="20"/g, 'height="14"').replace('stroke="currentColor"', `stroke="${selectedProvider === p.id ? '#00E5C9' : '#999999'}"`) }} />
-            <span className="truncate">{p.label}</span>
-          </button>
-        ))}
-      </div>
+    <div className="space-y-5">
+      <SectionHeader title="API Keys" desc="Tus claves se guardan localmente en el keyring del sistema." />
 
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-3">
-          <span dangerouslySetInnerHTML={{ __html: PROVIDER_ICONS[activeProvider.id] || '' }} />
-          <div>
-            <div className="text-[0.75rem] font-semibold text-white">{activeProvider.label}</div>
-            <div className="text-[0.55rem] text-[#666666]">API Key — guardada localmente</div>
+      <div className="flex gap-3 h-full min-h-0">
+        <div className="w-[140px] shrink-0 space-y-0.5">
+          {PROVIDER_DATA.map(p => (
+            <button
+              key={p.id}
+              onClick={() => setSelectedProvider(p.id)}
+              className={`flex items-center gap-2 w-full px-2.5 py-2 rounded-lg text-[0.65rem] transition-all ${
+                selectedProvider === p.id
+                  ? 'bg-[rgba(0,229,201,0.07)] border border-[rgba(0,229,201,0.15)] text-[#00E5C9]'
+                  : 'text-[#999999] hover:bg-[rgba(255,255,255,0.03)] hover:text-[#E5E5E5] border border-transparent'
+              }`}
+            >
+              <ProviderStatusDot configured={settings.apiKeys[p.id]?.length > 0} active={selectedProvider === p.id} />
+              <span className="truncate">{p.label}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="flex-1 min-w-0 p-4 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)]">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-8 h-8 rounded-lg bg-[rgba(0,229,201,0.08)] border border-[rgba(0,229,201,0.15)] flex items-center justify-center">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00E5C9" strokeWidth="1.5">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+            </div>
+            <div>
+              <div className="text-[0.75rem] font-semibold text-white">{active.label}</div>
+              <div className="flex items-center gap-1.5">
+                {isConfigured ? (
+                  <>
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#00E5C9]" />
+                    <span className="text-[0.55rem] text-[#00E5C9]">Configurada</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#666666]" />
+                    <span className="text-[0.55rem] text-[#999999]">Sin configurar</span>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <label className="block text-[0.625rem] font-medium text-[#999999] mb-1.5">API Key</label>
+          <input
+            type="password"
+            value={settings.apiKeys[active.id]}
+            onChange={e => onUpdateApiKey(active.id, e.target.value)}
+            placeholder={active.placeholder}
+            className="w-full px-3 py-2.5 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors"
+          />
+
+          <div className="mt-3 p-2.5 rounded-lg bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.04)]">
+            <p className="text-[0.55rem] text-[#999999] leading-relaxed">
+              Tu API key se almacena en el keyring del sistema operativo y solo se envía a la API de {active.label}.
+              Nunca se comparte con otros servicios.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SearchTab({ settings, onUpdateTavilyKey }: { settings: AppSettings; onUpdateTavilyKey: (key: string) => void }) {
+  const configured = settings.tavilyKey.length > 0
+
+  return (
+    <div className="space-y-5">
+      <SectionHeader title="Búsqueda web" desc="Configura Tavily para que el agente busque información actualizada en internet." />
+
+      <div className="p-3 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] space-y-4">
+        <div className="flex items-start gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-[rgba(0,229,201,0.08)] border border-[rgba(0,229,201,0.15)] flex items-center justify-center shrink-0">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00E5C9" strokeWidth="1.5">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+          </div>
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <h3 className="text-[0.75rem] font-semibold text-white">Tavily</h3>
+              <span className={`text-[0.5rem] px-1.5 py-0.5 rounded-full border font-medium uppercase tracking-wide ${
+                configured
+                  ? 'bg-[rgba(0,229,201,0.08)] text-[#00E5C9] border-[rgba(0,229,201,0.25)]'
+                  : 'bg-[rgba(255,255,255,0.04)] text-[#999999] border-[rgba(255,255,255,0.08)]'
+              }`}>
+                {configured ? 'Activo' : 'Inactivo'}
+              </span>
+            </div>
+            <p className="text-[0.6rem] text-[#999999] mt-0.5">
+              Motor de búsqueda optimizado para IA. Obtén tu API key en{' '}
+              <a href="https://app.tavily.com" target="_blank" className="text-[#00E5C9] hover:underline">app.tavily.com</a>
+            </p>
           </div>
         </div>
 
-        <label className="block text-[0.6875rem] font-medium text-[#999999] mb-1 uppercase tracking-[0.05em]">API Key</label>
-        <input
-          type="password"
-          value={settings.apiKeys[activeProvider.id]}
-          onChange={(e) => onUpdateApiKey(activeProvider.id, e.target.value)}
-          placeholder={activeProvider.placeholder}
-          className="w-full px-3 py-2 rounded-lg bg-[#2A2A2A] border border-[rgba(255,255,255,0.08)] text-[0.75rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors"
-        />
-
-        {settings.apiKeys[activeProvider.id] && (
-          <div className="mt-2 flex items-center gap-1.5 text-[0.6rem] text-[#00E5C9]">
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-            Key configurada
-          </div>
-        )}
-
-        <div className="mt-4 pt-3 border-t border-[rgba(255,255,255,0.06)]">
-          <p className="text-[0.5625rem] text-[#666666] leading-relaxed">
-            Tu API key se almacena localmente en el keyring de tu sistema operativo y solo se envía a la API de {activeProvider.label}. Nunca se comparte con otros servicios.
-          </p>
+        <div>
+          <label className="block text-[0.625rem] font-medium text-[#999999] mb-1.5">API Key</label>
+          <input
+            type="password"
+            value={settings.tavilyKey}
+            onChange={e => onUpdateTavilyKey(e.target.value)}
+            placeholder="tvly-..."
+            className="w-full px-3 py-2.5 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors"
+          />
+          {configured && (
+            <div className="flex items-center gap-1.5 mt-2 text-[0.55rem] text-[#00E5C9]">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+              </svg>
+              Key configurada correctamente
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -566,80 +563,76 @@ function AuditTab() {
   useEffect(() => { loadLog() }, [loadLog])
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <p className="text-[0.6875rem] text-[#666666]">Registro de todas las herramientas ejecutadas por el agente.</p>
-          {totalLines > 0 && (
-            <p className="text-[0.55rem] text-[#4a4a4a] mt-0.5">{totalLines} entradas en total (mostrando últimas 50)</p>
-          )}
+    <div className="space-y-5">
+      <SectionHeader title="Auditoría" desc="Registro de todas las herramientas ejecutadas por el agente." />
+
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#00E5C9]" />
+          <span className="text-[0.6rem] text-[#999999]">
+            {totalLines > 0 ? `${totalLines} entradas totales` : 'Sin actividad'}
+          </span>
         </div>
         <div className="flex gap-1.5">
-          <button
-            onClick={loadLog}
-            className="px-2 py-1 rounded-md bg-[#2A2A2A] border border-[rgba(255,255,255,0.08)] text-[0.65rem] text-[#999999] hover:text-white transition-colors"
-          >
+          <ActionButton variant="ghost" small onClick={loadLog}>
+            <RefreshIcon />
             Recargar
-          </button>
-          <button
-            onClick={async () => {
-              try {
-                const { invoke } = await import('@tauri-apps/api/core')
-                await invoke('clear_audit_log')
-                setEntries([])
-                setTotalLines(0)
-              } catch {}
-            }}
-            className="px-2 py-1 rounded-md bg-[rgba(239,68,68,0.1)] border border-[rgba(239,68,68,0.2)] text-[0.65rem] text-[#ef4444] hover:bg-[rgba(239,68,68,0.2)] transition-colors"
-          >
+          </ActionButton>
+          <ActionButton variant="danger" small onClick={async () => {
+            try { const { invoke } = await import('@tauri-apps/api/core'); await invoke('clear_audit_log'); setEntries([]); setTotalLines(0) } catch {}
+          }}>
+            <TrashIcon />
             Limpiar
-          </button>
+          </ActionButton>
         </div>
       </div>
 
       {loading ? (
-        <div className="text-center py-8 text-[0.6875rem] text-[#666666]">Cargando...</div>
+        <div className="flex flex-col items-center justify-center py-12 gap-3">
+          <svg className="animate-spin" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#999999" strokeWidth="2">
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+          </svg>
+          <span className="text-[0.65rem] text-[#999999]">Cargando registro...</span>
+        </div>
       ) : entries.length === 0 ? (
-        <div className="text-center py-8">
-          <p className="text-[0.75rem] text-[#666666]">Sin actividad del agente aún</p>
-          <p className="text-[0.625rem] text-[#666666] opacity-70 mt-1">Activa el modo agente y ejecuta algunas herramientas para ver el registro aquí.</p>
+        <div className="flex flex-col items-center justify-center py-12 gap-3">
+          <div className="w-12 h-12 rounded-full bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.06)] flex items-center justify-center">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#666666" strokeWidth="1.5">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+            </svg>
+          </div>
+          <p className="text-[0.7rem] text-[#999999]">Sin actividad del agente aún</p>
+          <p className="text-[0.6rem] text-[#666666]">Activa el modo agente y ejecuta herramientas para ver el registro aquí.</p>
         </div>
       ) : (
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           {entries.map((e, i) => {
             const formatted = formatAuditArgs(e.tool, e.args)
             return (
-              <div
-                key={i}
-                className={`px-2 py-1.5 rounded-md border text-[0.6rem] font-mono ${
-                  e.success
-                    ? 'bg-[rgba(0,229,201,0.04)] border-[rgba(0,229,201,0.08)]'
-                    : 'bg-[rgba(239,68,68,0.04)] border-[rgba(239,68,68,0.08)]'
-                }`}
-              >
-                <div className="flex items-start gap-1.5">
-                  <span className="text-[#4a4a4a] shrink-0 mt-[1px]">{e.timestamp}</span>
+              <div key={i} className="px-3 py-2.5 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.04)] hover:border-[rgba(255,255,255,0.08)] transition-colors">
+                <div className="flex items-start gap-2.5">
+                  <div className="mt-0.5 shrink-0">
+                    {e.success ? (
+                      <span className="w-5 h-5 rounded-full bg-[rgba(0,229,201,0.08)] border border-[rgba(0,229,201,0.15)] flex items-center justify-center">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#00E5C9" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+                      </span>
+                    ) : (
+                      <span className="w-5 h-5 rounded-full bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.15)] flex items-center justify-center">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                      </span>
+                    )}
+                  </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <span className={`shrink-0 font-semibold ${e.success ? 'text-[#00E5C9]' : 'text-[#ef4444]'}`}>
-                        {e.tool}
-                      </span>
-                      <span className={`shrink-0 text-[0.5rem] px-1 rounded ${
-                        e.success
-                          ? 'bg-[rgba(0,229,201,0.1)] text-[#00E5C9]'
-                          : 'bg-[rgba(239,68,68,0.1)] text-[#ef4444]'
-                      }`}>
-                        {e.success ? 'OK' : 'FAIL'}
-                      </span>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[0.65rem] font-semibold ${e.success ? 'text-[#00E5C9]' : 'text-[#ef4444]'}`}>{e.tool}</span>
+                      <span className="text-[0.5rem] text-[#666666] font-mono">{e.timestamp}</span>
                     </div>
-                    <div className="text-[#b0b0b0] truncate mt-0.5 leading-[1.4]" title={formatted}>
-                      {formatted}
-                    </div>
+                    <div className="text-[0.6rem] text-[#999999] truncate mt-0.5 leading-relaxed" title={formatted}>{formatted}</div>
+                    {e.error && (
+                      <div className="mt-1.5 text-[0.55rem] text-[#ef4444] leading-relaxed">{e.error}</div>
+                    )}
                   </div>
                 </div>
-                {e.error && (
-                  <div className="text-[#ef4444] mt-0.5 ml-[80px] truncate text-[0.55rem]">{e.error}</div>
-                )}
               </div>
             )
           })}
@@ -649,18 +642,9 @@ function AuditTab() {
   )
 }
 
-function formatAuditArgs(_tool: string, args: string): string {
-  try {
-    const parsed = JSON.parse(args)
-    if (typeof parsed === 'object' && parsed !== null) {
-      if (parsed.command) return parsed.command
-      if (parsed.path) return parsed.path
-      if (parsed.pattern) return parsed.pattern
-      return Object.values(parsed).filter(v => typeof v === 'string').join(' ') || args
-    }
-  } catch {}
-  return args
-}
+/* ════════════════════════════════
+   SKILLS TAB (refactored)
+   ════════════════════════════════ */
 
 function SkillsTab({ workingDirectory }: { workingDirectory?: string }) {
   const [skills, setSkills] = useState<Array<{ name: string; description: string; enabled: boolean; path: string; source: string }>>([])
@@ -682,30 +666,43 @@ function SkillsTab({ workingDirectory }: { workingDirectory?: string }) {
       const { invoke } = await import('@tauri-apps/api/core')
       await invoke('toggle_skill', { name, enabled })
       await loadSkills()
-    } catch (e) {
-      console.error('Error toggling skill:', e)
-    }
+    } catch (e) { console.error('Error toggling skill:', e) }
   }
 
   const projectSkills = skills.filter(s => s.source === 'project')
   const globalSkills = skills.filter(s => s.source === 'global')
 
-  if (loading) return <div className="text-[0.6875rem] text-[#666666]">Cargando skills...</div>
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center py-12 gap-3">
+      <svg className="animate-spin" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#999999" strokeWidth="2">
+        <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+      </svg>
+      <span className="text-[0.65rem] text-[#999999]">Cargando skills...</span>
+    </div>
+  )
 
   return (
-    <div>
-      <div className="mb-3">
-        <h3 className="text-[0.75rem] font-semibold text-[#E5E5E5]">Skills</h3>
-        <p className="text-[0.625rem] text-[#666666]">
-          Las skills son guías que el agente sigue para realizar tareas específicas.
-          Las skills globales se instalan con <code className="text-[#DCB263]">npx skills add &lt;repo&gt;@&lt;skill&gt; -g</code>.
-          Las skills del proyecto viven en <code className="text-[#DCB263]">.solaria/skills/</code>.
+    <div className="space-y-5">
+      <SectionHeader title="Skills" desc="Guías que el agente sigue para realizar tareas específicas. Se inyectan automáticamente en el prompt." />
+
+      <div className="p-3 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] space-y-3">
+        <div className="flex items-center gap-2 text-[0.55rem] text-[#666666] uppercase tracking-wider font-medium">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          Instalación
+        </div>
+        <p className="text-[0.6rem] text-[#999999] leading-relaxed">
+          Globales: <code className="text-[#DCB263] px-1 py-0.5 rounded bg-[rgba(220,178,99,0.08)]">npx skills add &lt;repo&gt;@&lt;skill&gt; -g</code>
+          <br />
+          Proyecto: crea en <code className="text-[#DCB263] px-1 py-0.5 rounded bg-[rgba(220,178,99,0.08)]">.solaria/skills/</code>
         </p>
       </div>
 
       {projectSkills.length > 0 && (
-        <div className="mb-3">
-          <h4 className="text-[0.65rem] font-semibold text-[#DCB263] mb-1.5 uppercase tracking-[0.05em]">Skills del Proyecto</h4>
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="w-1 h-3.5 rounded-full bg-[#DCB263]" />
+            <h4 className="text-[0.65rem] font-semibold text-[#E5E5E5] uppercase tracking-[0.06em]">Skills del Proyecto</h4>
+          </div>
           <div className="space-y-1.5">
             {projectSkills.map((s, i) => (
               <SkillRow key={i} skill={s} onToggle={toggleSkill} />
@@ -715,10 +712,11 @@ function SkillsTab({ workingDirectory }: { workingDirectory?: string }) {
       )}
 
       {globalSkills.length > 0 && (
-        <div>
-          {projectSkills.length > 0 && (
-            <h4 className="text-[0.65rem] font-semibold text-[#00E5C9] mb-1.5 uppercase tracking-[0.05em]">Skills Globales</h4>
-          )}
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="w-1 h-3.5 rounded-full bg-[#00E5C9]" />
+            <h4 className="text-[0.65rem] font-semibold text-[#E5E5E5] uppercase tracking-[0.06em]">Skills Globales</h4>
+          </div>
           <div className="space-y-1.5">
             {globalSkills.map((s, i) => (
               <SkillRow key={i} skill={s} onToggle={toggleSkill} />
@@ -728,43 +726,708 @@ function SkillsTab({ workingDirectory }: { workingDirectory?: string }) {
       )}
 
       {skills.length === 0 && (
-        <div className="text-[0.65rem] text-[#666666] py-4 text-center">
-          No hay skills instaladas. Instala skills globales con <code className="text-[#DCB263]">npx skills add &lt;repo&gt;@&lt;skill&gt; -g</code> o crea skills de proyecto en <code className="text-[#DCB263]">.solaria/skills/</code>.
+        <div className="flex flex-col items-center justify-center py-12 gap-3">
+          <div className="w-12 h-12 rounded-full bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.06)] flex items-center justify-center">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#666666" strokeWidth="1.5">
+              <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+            </svg>
+          </div>
+          <p className="text-[0.7rem] text-[#999999]">No hay skills instaladas</p>
+          <p className="text-[0.6rem] text-[#666666]">Instala skills globales o crea skills de proyecto.</p>
         </div>
       )}
+    </div>
+  )
+}
 
-      <div className="mt-3 pt-2 border-t border-[rgba(255,255,255,0.06)]">
-        <p className="text-[0.55rem] text-[#666666]">
-          Las skills se inyectan automáticamente en el prompt del agente.
-          Skills del proyecto tienen prioridad sobre las globales con el mismo nombre.
-        </p>
+/* ════════════════════════════════
+   MEMORY TAB (unchanged — already polished)
+   ════════════════════════════════ */
+
+function MemoryTab() {
+  const memory = useMemory()
+  const [testQuery, setTestQuery] = useState('')
+  const [testing, setTesting] = useState(false)
+  const [testResults, setTestResults] = useState<SearchResult[]>([])
+  const [indexingProject, setIndexingProject] = useState(false)
+  const [lastIndexedCount, setLastIndexedCount] = useState<number | null>(null)
+
+  const handleTest = async () => {
+    if (!testQuery.trim() || !memory.config.enabled) return
+    setTesting(true)
+    try { const results = await memory.search({ query: testQuery }); setTestResults(results) } finally { setTesting(false) }
+  }
+
+  const handleIndexProject = async () => {
+    setIndexingProject(true)
+    setLastIndexedCount(null)
+    try {
+      const count = await memory.indexProject('', undefined)
+      setLastIndexedCount(count)
+      memory.refreshStats()
+    } catch (e: any) { /* error handled in hook */ } finally { setIndexingProject(false) }
+  }
+
+  const PROVIDERS = [
+    { id: 'ollama' as const, label: 'Ollama (local)', models: ['nomic-embed-text', 'mxbai-embed-large', 'all-minilm'] },
+    { id: 'openai' as const, label: 'OpenAI', models: ['text-embedding-3-small', 'text-embedding-3-large', 'text-embedding-ada-002'] },
+    { id: 'custom' as const, label: 'Custom endpoint', models: ['custom'] },
+  ]
+  const currentProviderDef = PROVIDERS.find(p => p.id === memory.config.provider) || PROVIDERS[0]
+
+  return (
+    <div className="space-y-5">
+      <SectionHeader
+       
+        title="Memoria persistente"
+        badge={memory.config.enabled ? 'ON' : 'OFF'}
+        badgeColor={memory.config.enabled ? '#00E5C9' : '#999999'}
+        desc="El agente recuerda conversaciones previas y archivos del proyecto via búsqueda vectorial."
+      />
+
+      <div className="p-3 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)]">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-[0.7rem] font-medium text-white">Activar memoria</div>
+            <div className="text-[0.55rem] text-[#999999] mt-0.5">SQLite + sqlite-vec · <code className="text-[#DCB263]">~/.solaria/memory.db</code></div>
+          </div>
+          <Switch checked={memory.config.enabled} onChange={v => memory.updateConfig({ enabled: v })} />
+        </div>
+      </div>
+
+      {memory.config.enabled && (
+        <>
+          <Section title="Proveedor" color="#00E5C9">
+            <div className="p-3 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] space-y-3">
+              <div>
+                <label className="block text-[0.625rem] font-medium text-[#999999] mb-1">Provider</label>
+                <select
+                  value={memory.config.provider}
+                  onChange={e => {
+                    const p = e.target.value as 'ollama' | 'openai' | 'custom'
+                    const def = PROVIDERS.find(x => x.id === p)
+                    memory.updateConfig({ provider: p, model: def?.models[0] || '' })
+                  }}
+                  className="w-full px-2.5 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white outline-none focus:border-[#DCB263] transition-colors appearance-none cursor-pointer"
+                >
+                  {PROVIDERS.map(p => <option key={p.id} value={p.id} className="bg-[#222]">{p.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[0.625rem] font-medium text-[#999999] mb-1">Modelo</label>
+                <input
+                  type="text" value={memory.config.model}
+                  onChange={e => memory.updateConfig({ model: e.target.value })}
+                  placeholder={currentProviderDef.models[0]}
+                  className="w-full px-2.5 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors"
+                />
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {currentProviderDef.models.map(m => (
+                    <button
+                      key={m}
+                      onClick={() => memory.updateConfig({ model: m })}
+                      className={`px-1.5 py-0.5 rounded text-[0.5rem] border transition-colors ${
+                        memory.config.model === m
+                          ? 'bg-[rgba(0,229,201,0.1)] text-[#00E5C9] border-[rgba(0,229,201,0.25)]'
+                          : 'bg-[rgba(255,255,255,0.03)] text-[#999999] border-[rgba(255,255,255,0.06)] hover:border-[rgba(255,255,255,0.12)]'
+                      }`}
+                    >{m}</button>
+                  ))}
+                </div>
+              </div>
+              {memory.config.provider === 'ollama' && (
+                <div>
+                  <label className="block text-[0.625rem] font-medium text-[#999999] mb-1">Ollama host</label>
+                  <input type="text" value={memory.config.ollamaHost} onChange={e => memory.updateConfig({ ollamaHost: e.target.value })} placeholder="http://localhost:11434" className="w-full px-2.5 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors" />
+                </div>
+              )}
+              {memory.config.provider === 'openai' && (
+                <div>
+                  <label className="block text-[0.625rem] font-medium text-[#999999] mb-1">OpenAI API key</label>
+                  <input type="password" value={memory.config.apiKey} onChange={e => memory.updateConfig({ apiKey: e.target.value })} placeholder="sk-..." className="w-full px-2.5 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors" />
+                </div>
+              )}
+              {memory.config.provider === 'custom' && (
+                <>
+                  <div>
+                    <label className="block text-[0.625rem] font-medium text-[#999999] mb-1">API URL</label>
+                    <input type="text" value={memory.config.apiUrl} onChange={e => memory.updateConfig({ apiUrl: e.target.value })} placeholder="https://api.example.com/v1/embeddings" className="w-full px-2.5 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors" />
+                  </div>
+                  <div>
+                    <label className="block text-[0.625rem] font-medium text-[#999999] mb-1">API key (opcional)</label>
+                    <input type="password" value={memory.config.apiKey} onChange={e => memory.updateConfig({ apiKey: e.target.value })} className="w-full px-2.5 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors" />
+                  </div>
+                </>
+              )}
+            </div>
+          </Section>
+
+          <Section title="Parámetros" color="#DCB263">
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="p-2.5 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)]">
+                <label className="block text-[0.55rem] text-[#999999] mb-1">Top K</label>
+                <input type="number" min="1" max="20" value={memory.config.topK} onChange={e => memory.updateConfig({ topK: parseInt(e.target.value) || 5 })} className="w-full px-2 py-1 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.7rem] text-white font-mono outline-none focus:border-[#DCB263] transition-colors" />
+                <p className="text-[0.5rem] text-[#666666] mt-1">Chunks inyectados</p>
+              </div>
+              <div className="p-2.5 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)]">
+                <label className="block text-[0.55rem] text-[#999999] mb-1">Score mínimo</label>
+                <input type="number" min="0" max="1" step="0.05" value={memory.config.minScore} onChange={e => memory.updateConfig({ minScore: parseFloat(e.target.value) || 0.7 })} className="w-full px-2 py-1 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.7rem] text-white font-mono outline-none focus:border-[#DCB263] transition-colors" />
+                <p className="text-[0.5rem] text-[#666666] mt-1">Umbral de relevancia</p>
+              </div>
+            </div>
+          </Section>
+
+          <Section title="Comportamiento" color="#00E5C9">
+            <div className="space-y-1.5">
+              <ToggleRow label="Inyección automática" desc="Buscar e inyectar contexto en cada mensaje" checked={memory.config.autoInject} onChange={v => memory.updateConfig({ autoInject: v })} />
+              <ToggleRow label="Indexar conversaciones" desc="Guardar mensajes de chat al finalizar" checked={memory.config.indexConversations} onChange={v => memory.updateConfig({ indexConversations: v })} />
+              <ToggleRow label="Indexar archivos del proyecto" desc="Incluir archivos del working directory" checked={memory.config.indexProjectFiles} onChange={v => memory.updateConfig({ indexProjectFiles: v })} />
+            </div>
+          </Section>
+
+          {memory.stats && (
+            <Section title="Estadísticas" color="#DCB263">
+              <div className="grid grid-cols-3 gap-2">
+                <StatCard value={memory.stats.total_chunks} label="chunks" />
+                <StatCard value={memory.stats.total_conversations} label="conversaciones" />
+                <StatCard value={memory.stats.total_project_files} label="archivos" />
+              </div>
+              <div className="px-3 py-2 rounded-lg bg-[rgba(0,229,201,0.04)] border border-[rgba(0,229,201,0.1)] flex items-center gap-1.5">
+                <FileIcon />
+                <span className="text-[0.55rem] text-[#00E5C9] font-mono truncate">{memory.stats.db_path}</span>
+              </div>
+            </Section>
+          )}
+
+          <Section title="Probar búsqueda" color="#DCB263">
+            <div className="p-3 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] space-y-3">
+              <div className="flex gap-2">
+                <input value={testQuery} onChange={e => setTestQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleTest()} placeholder="Escribe una consulta para buscar en memoria..." className="flex-1 px-3 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors" />
+                <ActionButton variant="primary" onClick={handleTest} disabled={testing || !testQuery.trim()}>
+                  {testing && <Spinner />}
+                  {testing ? 'Buscando...' : 'Buscar'}
+                </ActionButton>
+              </div>
+              {testResults.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-[0.55rem] text-[#999999] flex items-center gap-1.5"><SearchSmallIcon />{testResults.length} resultado{testResults.length !== 1 ? 's' : ''}</div>
+                  <div className="space-y-1.5 max-h-[200px] overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin' }}>
+                    {testResults.map((r, i) => (
+                      <div key={i} className="p-2.5 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.04)] hover:border-[rgba(255,255,255,0.1)] transition-colors">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[0.55rem] font-mono px-1.5 py-0.5 rounded bg-[rgba(255,255,255,0.04)] text-white border border-[rgba(255,255,255,0.06)]">{(1 - r.distance).toFixed(3)}</span>
+                            <span className={`text-[0.5rem] px-1.5 py-0.5 rounded-full border ${r.chunk.source === 'conversation' ? 'bg-[rgba(220,178,99,0.08)] text-[#DCB263] border-[rgba(220,178,99,0.2)]' : 'bg-[rgba(0,229,201,0.08)] text-[#00E5C9] border-[rgba(0,229,201,0.2)]'}`}>{r.chunk.source}</span>
+                          </div>
+                          <span className="text-[0.5rem] text-[#666666] truncate max-w-[40%] font-mono">{r.chunk.source_id.split('/').pop()}</span>
+                        </div>
+                        <div className="text-[0.6rem] text-[#E5E5E5] leading-relaxed line-clamp-3">{r.chunk.text}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {memory.error && <ErrorToast msg={memory.error} />}
+            </div>
+          </Section>
+
+          <Section title="Indexar proyecto" color="#00E5C9">
+            <div className="p-3 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] space-y-3">
+              <p className="text-[0.6rem] text-[#999999] leading-relaxed">Escanea el directorio de trabajo del agente e indexa archivos compatibles en la memoria vectorial. Extensiones por defecto: .md, .txt, .ts, .tsx, .rs, .py, .json, .yaml, .toml</p>
+              <ActionButton variant="primary" onClick={handleIndexProject} disabled={indexingProject}>
+                {indexingProject && <Spinner />}
+                {indexingProject ? 'Indexando archivos...' : 'Indexar directorio de trabajo'}
+              </ActionButton>
+              {lastIndexedCount !== null && (
+                <div className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg bg-[rgba(0,229,201,0.06)] border border-[rgba(0,229,201,0.12)]">
+                  <CheckIcon />
+                  <span className="text-[0.6rem] text-[#00E5C9]">{lastIndexedCount} chunk{lastIndexedCount !== 1 ? 's' : ''} indexado{lastIndexedCount !== 1 ? 's' : ''}</span>
+                </div>
+              )}
+            </div>
+          </Section>
+
+          <Section title="Zona de peligro" color="#ef4444">
+            <div className="p-3 rounded-xl bg-[rgba(239,68,68,0.04)] border border-[rgba(239,68,68,0.12)] space-y-3">
+              <div className="flex items-start gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-[rgba(239,68,68,0.1)] border border-[rgba(239,68,68,0.2)] flex items-center justify-center shrink-0">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="1.5"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                </div>
+                <div className="flex-1">
+                  <div className="text-[0.7rem] font-medium text-[#ef4444]">Borrar toda la memoria</div>
+                  <p className="text-[0.55rem] text-[#999999] mt-0.5">Elimina permanentemente todos los chunks de <code className="text-[#ef4444]">memory.db</code>. No se puede deshacer.</p>
+                </div>
+              </div>
+              <ActionButton variant="danger" onClick={memory.clearMemory}>
+                <TrashIcon />
+                Borrar toda la memoria
+              </ActionButton>
+            </div>
+          </Section>
+        </>
+      )}
+    </div>
+  )
+}
+
+/* ════════════════════════════════
+   MCP TAB
+   ════════════════════════════════ */
+
+interface McpServerItem {
+  name: string
+  command: string
+  args: string[]
+  enabled: boolean
+}
+
+interface McpToolItem {
+  name: string
+  description: string
+  server_name: string
+  input_schema: any
+}
+
+function McpTab() {
+  const [servers, setServers] = useState<McpServerItem[]>([])
+  const [tools, setTools] = useState<McpToolItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [editingIdx, setEditingIdx] = useState<number | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editCommand, setEditCommand] = useState('')
+  const [editArgs, setEditArgs] = useState('')
+  const [editEnabled, setEditEnabled] = useState(true)
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      const [svrs, tls] = await Promise.all([
+        invoke<McpServerItem[]>('mcp_list_servers'),
+        invoke<McpToolItem[]>('mcp_list_tools'),
+      ])
+      setServers(svrs)
+      setTools(tls)
+    } catch (e) {
+      setError(String(e))
+    }
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  const persist = async (newServers: McpServerItem[]) => {
+    setServers(newServers)
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      await invoke('mcp_save_servers', { servers: newServers })
+    } catch (e) {
+      setError(String(e))
+    }
+  }
+
+  const startNew = () => {
+    setEditingIdx(-1)
+    setEditName('')
+    setEditCommand('')
+    setEditArgs('')
+    setEditEnabled(true)
+    setError(null)
+  }
+
+  const editServer = (idx: number) => {
+    const s = servers[idx]
+    setEditingIdx(idx)
+    setEditName(s.name)
+    setEditCommand(s.command)
+    setEditArgs(s.args.join(' '))
+    setEditEnabled(s.enabled)
+  }
+
+  const saveEdit = async () => {
+    if (!editName.trim() || !editCommand.trim()) return
+    const argsArr = editArgs.trim().split(/\s+/).filter(Boolean)
+    const newServer: McpServerItem = { name: editName.trim(), command: editCommand.trim(), args: argsArr, enabled: editEnabled }
+    let newServers: McpServerItem[]
+    if (editingIdx === null || editingIdx < 0) {
+      newServers = [...servers, newServer]
+    } else {
+      newServers = [...servers]
+      newServers[editingIdx] = newServer
+    }
+    await persist(newServers)
+    setEditingIdx(null)
+  }
+
+  const removeServer = async (idx: number) => {
+    const s = servers[idx]
+    const newServers = servers.filter((_, i) => i !== idx)
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      await invoke('mcp_stop_server', { name: s.name })
+    } catch {}
+    await persist(newServers)
+    setTimeout(load, 100)
+  }
+
+  const toggleEnabled = async (idx: number) => {
+    const newServers = [...servers]
+    newServers[idx] = { ...newServers[idx], enabled: !newServers[idx].enabled }
+    await persist(newServers)
+  }
+
+  const startServer = async (idx: number) => {
+    const s = servers[idx]
+    setActionLoading(s.name)
+    setError(null)
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      await invoke('mcp_start_server', { server: s })
+      await load()
+    } catch (e) {
+      setError(String(e))
+    }
+    setActionLoading(null)
+  }
+
+  const stopServer = async (idx: number) => {
+    const s = servers[idx]
+    setActionLoading(s.name)
+    setError(null)
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      await invoke('mcp_stop_server', { name: s.name })
+      await load()
+    } catch (e) {
+      setError(String(e))
+    }
+    setActionLoading(null)
+  }
+
+  const restartAll = async () => {
+    setActionLoading('__all__')
+    setError(null)
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      await invoke('mcp_restart_all')
+      await load()
+    } catch (e) {
+      setError(String(e))
+    }
+    setActionLoading(null)
+  }
+
+  const isRunning = (name: string) => tools.some(t => t.server_name === name)
+  const runningCount = servers.filter(s => isRunning(s.name)).length
+
+  return (
+    <div className="space-y-5">
+      <SectionHeader title="MCP Servers" desc="Conecta servidores Model Context Protocol para que el agente use herramientas externas (filesystem, GitHub, DBs, etc)." />
+
+      {error && <ErrorToast msg={error} />}
+
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3 text-[0.6rem] text-[#999999]">
+          <span className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#00E5C9]" />
+            {runningCount}/{servers.length} conectado(s)
+          </span>
+          <span className="text-[#555555]">·</span>
+          <span>{tools.length} herramienta(s) disponible(s)</span>
+        </div>
+        <div className="flex gap-1.5">
+          <ActionButton variant="ghost" small onClick={load}><RefreshIcon />Recargar</ActionButton>
+          <ActionButton variant="secondary" small onClick={restartAll} disabled={actionLoading === '__all__' || servers.length === 0}>
+            {actionLoading === '__all__' ? <Spinner /> : <RefreshIcon />}Reiniciar todos
+          </ActionButton>
+          <ActionButton variant="primary" small onClick={startNew}>+ Añadir servidor</ActionButton>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-12 gap-3">
+          <Spinner />
+          <span className="text-[0.65rem] text-[#999999]">Cargando servidores MCP...</span>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {editingIdx !== null && (
+            <div className="p-3 rounded-xl bg-[#2A2A2A] border border-[rgba(0,229,201,0.2)] space-y-3">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[0.65rem] font-semibold text-white uppercase tracking-wider">
+                  {editingIdx < 0 ? 'Nuevo servidor MCP' : 'Editar servidor MCP'}
+                </span>
+                <button onClick={() => { setEditingIdx(null); setError(null) }} className="text-[0.6rem] text-[#666666] hover:text-white transition-colors">Cancelar</button>
+              </div>
+              <div>
+                <label className="block text-[0.6rem] font-medium text-[#999999] mb-1">Nombre único</label>
+                <input
+                  value={editName}
+                  onChange={e => setEditName(e.target.value)}
+                  placeholder="filesystem, github, postgres..."
+                  className="w-full px-3 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-[0.6rem] font-medium text-[#999999] mb-1">Comando</label>
+                <input
+                  value={editCommand}
+                  onChange={e => setEditCommand(e.target.value)}
+                  placeholder="npx · python · /ruta/al/server"
+                  className="w-full px-3 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-[0.6rem] font-medium text-[#999999] mb-1">Argumentos (separados por espacio)</label>
+                <input
+                  value={editArgs}
+                  onChange={e => setEditArgs(e.target.value)}
+                  placeholder="-y @modelcontextprotocol/server-filesystem /path"
+                  className="w-full px-3 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors font-mono"
+                />
+              </div>
+              <div className="flex items-center justify-between p-2.5 rounded-lg bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.04)]">
+                <div>
+                  <div className="text-[0.65rem] text-white font-medium">Habilitado</div>
+                  <div className="text-[0.5rem] text-[#999999]">Iniciar automáticamente al arrancar</div>
+                </div>
+                <Switch checked={editEnabled} onChange={setEditEnabled} />
+              </div>
+              <div className="flex justify-end gap-1.5 pt-1">
+                <ActionButton variant="ghost" small onClick={() => { setEditingIdx(null); setError(null) }}>Cancelar</ActionButton>
+                <ActionButton variant="primary" small onClick={saveEdit} disabled={!editName.trim() || !editCommand.trim()}>Guardar</ActionButton>
+              </div>
+            </div>
+          )}
+
+          {servers.length === 0 && editingIdx === null && (
+            <div className="flex flex-col items-center justify-center py-10 gap-3">
+              <div className="w-12 h-12 rounded-full bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.06)] flex items-center justify-center">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#666666" strokeWidth="1.5">
+                  <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+                </svg>
+              </div>
+              <p className="text-[0.7rem] text-[#999999]">Sin servidores MCP configurados</p>
+              <p className="text-[0.6rem] text-[#666666] max-w-[360px] text-center leading-relaxed">
+                MCP (Model Context Protocol) permite al agente usar herramientas externas como sistemas de archivos, GitHub o bases de datos. Añade un servidor para empezar.
+              </p>
+              <ActionButton variant="primary" small onClick={startNew}>+ Añadir primer servidor</ActionButton>
+            </div>
+          )}
+
+          {servers.map((s, idx) => {
+            const running = isRunning(s.name)
+            const serverTools = tools.filter(t => t.server_name === s.name)
+            return (
+              <div key={s.name + '_' + idx} className="p-3 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] space-y-2.5">
+                <div className="flex items-start gap-3">
+                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                    running
+                      ? 'bg-[rgba(0,229,201,0.08)] border border-[rgba(0,229,201,0.2)]'
+                      : 'bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.06)]'
+                  }`}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={running ? '#00E5C9' : '#666666'} strokeWidth="1.5">
+                      <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+                    </svg>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[0.7rem] font-semibold text-white">{s.name}</span>
+                      <span className={`text-[0.5rem] px-1.5 py-0.5 rounded-full border font-medium uppercase tracking-wide ${
+                        running
+                          ? 'bg-[rgba(0,229,201,0.08)] text-[#00E5C9] border-[rgba(0,229,201,0.25)]'
+                          : s.enabled
+                            ? 'bg-[rgba(255,255,255,0.04)] text-[#999999] border-[rgba(255,255,255,0.08)]'
+                            : 'bg-[rgba(255,255,255,0.02)] text-[#666666] border-[rgba(255,255,255,0.04)]'
+                      }`}>
+                        {running ? 'Conectado' : s.enabled ? 'Detenido' : 'Deshabilitado'}
+                      </span>
+                    </div>
+                    <div className="text-[0.6rem] text-[#999999] font-mono mt-1 truncate" title={`${s.command} ${s.args.join(' ')}`}>
+                      {s.command} {s.args.join(' ')}
+                    </div>
+                    {serverTools.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {serverTools.map(t => (
+                          <span key={t.name} className="text-[0.5rem] px-1.5 py-0.5 rounded-md bg-[rgba(0,229,201,0.06)] text-[#00E5C9] border border-[rgba(0,229,201,0.15)] font-mono" title={t.description}>
+                            {t.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <Switch checked={s.enabled} onChange={() => toggleEnabled(idx)} />
+                </div>
+                <div className="flex gap-1.5 justify-end pt-1 border-t border-[rgba(255,255,255,0.04)]">
+                  <ActionButton variant="ghost" small onClick={() => editServer(idx)}>Editar</ActionButton>
+                  {running ? (
+                    <ActionButton variant="secondary" small onClick={() => stopServer(idx)} disabled={actionLoading === s.name}>
+                      {actionLoading === s.name ? <Spinner /> : null}Detener
+                    </ActionButton>
+                  ) : (
+                    <ActionButton variant="primary" small onClick={() => startServer(idx)} disabled={!s.enabled || actionLoading === s.name}>
+                      {actionLoading === s.name ? <Spinner /> : null}Iniciar
+                    </ActionButton>
+                  )}
+                  <ActionButton variant="danger" small onClick={() => removeServer(idx)}>Eliminar</ActionButton>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ════════════════════════════════
+   REUSABLE COMPONENTS
+   ════════════════════════════════ */
+
+function Switch({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button type="button" onClick={() => onChange(!checked)}
+      className={`relative w-10 h-5 rounded-full shrink-0 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#00E5C9]/30 ${checked ? 'bg-[#00E5C9]' : 'bg-[#666666]/40'}`}>
+      <div className={`absolute top-[2px] w-4 h-4 rounded-full bg-white shadow transition-all ${checked ? 'left-[18px]' : 'left-[2px]'}`} />
+    </button>
+  )
+}
+
+function Section({ title, color, children }: { title: string; color: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="w-1 h-3.5 rounded-full" style={{ backgroundColor: color }} />
+        <h4 className="text-[0.65rem] font-semibold text-[#E5E5E5] uppercase tracking-[0.06em]">{title}</h4>
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function SectionHeader({ icon, title, desc, badge, badgeColor }: { icon?: React.ReactNode; title: string; desc: string; badge?: string; badgeColor?: string }) {
+  return (
+    <div className="flex items-start gap-2.5">
+      <div className="w-8 h-8 rounded-lg bg-[#00E5C9]/10 border border-[#00E5C9]/15 flex items-center justify-center shrink-0">
+        {icon}
+      </div>
+      <div className="flex-1">
+        <div className="flex items-center gap-2">
+          <h3 className="text-[0.8rem] font-semibold text-[#E5E5E5]">{title}</h3>
+          {badge && (
+            <span className={`text-[0.5rem] px-1.5 py-0.5 rounded-full border font-medium uppercase tracking-wide ${
+              badgeColor === '#00E5C9'
+                ? 'bg-[rgba(0,229,201,0.08)] text-[#00E5C9] border-[rgba(0,229,201,0.25)]'
+                : 'bg-[rgba(255,255,255,0.04)] text-[#999999] border-[rgba(255,255,255,0.08)]'
+            }`}>{badge}</span>
+          )}
+        </div>
+        <p className="text-[0.625rem] text-[#999999] mt-0.5 leading-relaxed">{desc}</p>
       </div>
     </div>
   )
 }
 
+function ToggleRow({ label, desc, checked, onChange }: { label: string; desc: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)]">
+      <div>
+        <div className="text-[0.65rem] text-white font-medium">{label}</div>
+        <div className="text-[0.5rem] text-[#999999]">{desc}</div>
+      </div>
+      <Switch checked={checked} onChange={onChange} />
+    </div>
+  )
+}
+
+function StatCard({ value, label }: { value: number; label: string }) {
+  return (
+    <div className="p-2.5 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] text-center">
+      <div className="text-[0.9rem] text-[#00E5C9] font-mono font-bold">{value}</div>
+      <div className="text-[0.55rem] text-[#999999] mt-0.5">{label}</div>
+    </div>
+  )
+}
+
+function SliderControl({ label, value, min, max, step, onChange, descLeft, descRight, color }: {
+  label: string; value: number; min: number; max: number; step: number; onChange: (v: number) => void;
+  descLeft: string; descRight: string; color: string
+}) {
+  const pct = ((value - min) / (max - min)) * 100
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <label className="text-[0.625rem] font-medium text-[#999999]">{label}</label>
+        <span className="text-[0.65rem] font-mono font-bold" style={{ color }}>{value}</span>
+      </div>
+      <div className="relative">
+        <input
+          type="range" min={min} max={max} step={step} value={value}
+          onChange={e => onChange(Number(e.target.value))}
+          className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+          style={{
+            background: `linear-gradient(to right, ${color} ${pct}%, rgba(255,255,255,0.06) ${pct}%)`
+          }}
+        />
+      </div>
+      <div className="flex justify-between text-[0.5rem] text-[#666666] mt-1">
+        <span>{descLeft}</span>
+        <span>{descRight}</span>
+      </div>
+    </div>
+  )
+}
+
+function ActionButton({ variant, small, onClick, disabled, children }: {
+  variant: 'primary' | 'secondary' | 'danger' | 'ghost'
+  small?: boolean
+  onClick?: () => void
+  disabled?: boolean
+  children: React.ReactNode
+}) {
+  const styles = {
+    primary: 'bg-[#00E5C9]/10 border-[#00E5C9]/25 text-[#00E5C9] hover:bg-[#00E5C9]/20 hover:border-[#00E5C9]/40',
+    secondary: 'bg-[#2A2A2A] border-[rgba(255,255,255,0.08)] text-[#E5E5E5] hover:border-[rgba(255,255,255,0.15)] hover:bg-[#333]',
+    danger: 'bg-[rgba(239,68,68,0.1)] border-[rgba(239,68,68,0.3)] text-[#ef4444] hover:bg-[rgba(239,68,68,0.18)] hover:border-[rgba(239,68,68,0.5)]',
+    ghost: 'bg-transparent border-[rgba(255,255,255,0.06)] text-[#999999] hover:text-white hover:border-[rgba(255,255,255,0.12)]'
+  }
+  return (
+    <button onClick={onClick} disabled={disabled}
+      className={`${small ? 'px-2.5 py-1.5 text-[0.6rem]' : 'px-3 py-2 text-[0.65rem]'} rounded-lg border font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 ${styles[variant]}`}>
+      {children}
+    </button>
+  )
+}
+
+function ErrorToast({ msg }: { msg: string }) {
+  return (
+    <div className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg bg-[rgba(239,68,68,0.06)] border border-[rgba(239,68,68,0.15)]">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <span className="text-[0.6rem] text-[#ef4444]">{msg}</span>
+    </div>
+  )
+}
+
+function ProviderStatusDot({ configured, active }: { configured: boolean; active: boolean }) {
+  return <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${configured ? 'bg-[#00E5C9]' : active ? 'bg-[#666666]' : 'bg-[#444]'}`} />
+}
+
 function SkillRow({ skill, onToggle, alwaysEnabled }: { skill: { name: string; description: string; enabled: boolean; path: string; source: string }; onToggle?: (name: string, enabled: boolean) => void; alwaysEnabled?: boolean }) {
   return (
-    <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#2A2A2A] border border-[rgba(255,255,255,0.08)]">
+    <div className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] hover:border-[rgba(255,255,255,0.1)] transition-colors">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className={`w-1.5 h-1.5 rounded-full ${skill.enabled ? 'bg-[#00E5C9]' : 'bg-[#666666]'}`} />
           <span className="text-[0.75rem] font-medium text-white truncate">{skill.name}</span>
-          {alwaysEnabled && (
-            <span className="text-[0.45rem] px-1 py-0.5 rounded bg-[rgba(220,178,99,0.1)] text-[#DCB263] uppercase tracking-[0.05em]">Proyecto</span>
-          )}
+          {alwaysEnabled && <span className="text-[0.45rem] px-1 py-0.5 rounded bg-[rgba(220,178,99,0.1)] text-[#DCB263] uppercase tracking-[0.05em]">Proyecto</span>}
         </div>
-        {skill.description && (
-          <div className="text-[0.6rem] text-[#999999] mt-0.5 line-clamp-2">{skill.description}</div>
-        )}
+        {skill.description && <div className="text-[0.6rem] text-[#999999] mt-0.5 line-clamp-2">{skill.description}</div>}
       </div>
       {!alwaysEnabled && onToggle && (
-        <button
-          onClick={() => onToggle(skill.name, !skill.enabled)}
-          className={`relative w-10 h-5 rounded-full shrink-0 ml-2 transition-colors ${skill.enabled ? 'bg-[#00E5C9]' : 'bg-[#666666]'}`}
-        >
-          <div className={`absolute top-[2px] w-4 h-4 rounded-full bg-white transition-all ${skill.enabled ? 'left-5' : 'left-[2px]'}`} />
-        </button>
+        <Switch checked={skill.enabled} onChange={v => onToggle(skill.name, v)} />
       )}
     </div>
   )
@@ -779,99 +1442,116 @@ function ModelManager() {
   const [message, setMessage] = useState<string | null>(null)
 
   const loadModels = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const { invoke } = await import('@tauri-apps/api/core')
-      const list = await invoke<string[]>('ollama_models')
-      setModels(list)
-    } catch (e: any) {
-      setError(e?.toString() || 'Error cargando modelos')
-    }
+    setLoading(true); setError(null)
+    try { const { invoke } = await import('@tauri-apps/api/core'); const list = await invoke<string[]>('ollama_models'); setModels(list) }
+    catch (e: any) { setError(e?.toString() || 'Error') }
     setLoading(false)
   }, [])
 
   useEffect(() => { loadModels() }, [loadModels])
 
   const handlePull = useCallback(async () => {
-    const name = pullName.trim()
-    if (!name) return
-    setPulling(true)
-    setMessage(null)
-    try {
-      const { invoke } = await import('@tauri-apps/api/core')
-      const result = await invoke<string>('ollama_pull_model', { modelName: name })
-      setMessage(result)
-      setPullName('')
-      loadModels()
-    } catch (e: any) {
-      setMessage(`Error: ${e?.toString() || 'Error desconocido'}`)
-    }
+    const name = pullName.trim(); if (!name) return
+    setPulling(true); setMessage(null)
+    try { const { invoke } = await import('@tauri-apps/api/core'); const result = await invoke<string>('ollama_pull_model', { modelName: name }); setMessage(result); setPullName(''); loadModels() }
+    catch (e: any) { setMessage(`Error: ${e?.toString() || 'Error'}`) }
     setPulling(false)
   }, [pullName, loadModels])
 
   const handleDelete = useCallback(async (name: string) => {
-    try {
-      const { invoke } = await import('@tauri-apps/api/core')
-      const result = await invoke<string>('ollama_delete_model', { modelName: name })
-      setMessage(result)
-      loadModels()
-    } catch (e: any) {
-      setMessage(`Error: ${e?.toString() || 'Error desconocido'}`)
-    }
+    try { const { invoke } = await import('@tauri-apps/api/core'); const result = await invoke<string>('ollama_delete_model', { modelName: name }); setMessage(result); loadModels() }
+    catch (e: any) { setMessage(`Error: ${e?.toString() || 'Error'}`) }
   }, [loadModels])
 
   return (
-    <div>
-      <div className="mb-2">
-        <label className="block text-[0.625rem] font-medium text-[#999999] mb-1">Modelos instalados</label>
+    <div className="p-3 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] space-y-3">
+      <div>
+        <label className="block text-[0.625rem] font-medium text-[#999999] mb-1.5">Modelos instalados</label>
         {loading ? (
-          <div className="text-[0.65rem] text-[#666666]">Cargando...</div>
+          <div className="flex items-center gap-2 py-4 text-[0.65rem] text-[#666666]"><Spinner /> Cargando...</div>
         ) : error ? (
-          <div className="text-[0.65rem] text-[#ef4444]">{error}</div>
+          <div className="text-[0.65rem] text-[#ef4444] py-2">{error}</div>
         ) : models.length === 0 ? (
-          <div className="text-[0.65rem] text-[#666666]">No hay modelos instalados</div>
+          <div className="text-[0.65rem] text-[#666666] py-2">No hay modelos instalados</div>
         ) : (
-          <div className="flex flex-wrap gap-1 max-h-[120px] overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
+          <div className="flex flex-wrap gap-1.5 max-h-[120px] overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
             {models.map(m => (
-              <div key={m} className="flex items-center gap-1 px-2 py-0.5 rounded bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)]">
+              <div key={m} className="flex items-center gap-1 px-2 py-1 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.04)]">
                 <span className="text-[0.6rem] text-[#E5E5E5] font-mono">{m}</span>
-                <button
-                  onClick={() => handleDelete(m)}
-                  className="flex items-center justify-center w-3.5 h-3.5 rounded hover:bg-[rgba(239,68,68,0.15)] text-[#666666] hover:text-[#ef4444] transition-colors"
-                  title="Eliminar modelo"
-                >
-                  <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                <button onClick={() => handleDelete(m)} className="flex items-center justify-center w-4 h-4 rounded hover:bg-[rgba(239,68,68,0.15)] text-[#666666] hover:text-[#ef4444] transition-colors">
+                  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
               </div>
             ))}
           </div>
         )}
       </div>
-
-      <div className="flex gap-1.5">
-        <input
-          value={pullName}
-          onChange={(e) => setPullName(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handlePull()}
-          placeholder="Ej: qwen3.5, llama3.2, mistral..."
-          disabled={pulling}
-          className="flex-1 px-2 py-1.5 rounded-md bg-[#2A2A2A] border border-[rgba(255,255,255,0.08)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors disabled:opacity-50"
-        />
-        <button
-          onClick={handlePull}
-          disabled={pulling || !pullName.trim()}
-          className="shrink-0 px-2.5 py-1.5 rounded-md bg-[#2A2A2A] border border-[rgba(255,255,255,0.08)] text-[0.65rem] text-[#00E5C9] font-medium hover:bg-[rgba(0,229,201,0.1)] hover:border-[rgba(0,229,201,0.3)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
+      <div className="flex gap-2">
+        <input value={pullName} onChange={e => setPullName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handlePull()} placeholder="Ej: qwen3.5, llama3.2..." disabled={pulling}
+          className="flex-1 px-3 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors disabled:opacity-50" />
+        <ActionButton variant="primary" onClick={handlePull} disabled={pulling || !pullName.trim()}>
+          {pulling && <Spinner />}
           {pulling ? 'Descargando...' : 'Descargar'}
-        </button>
+        </ActionButton>
       </div>
-
-      {message && (
-        <div className={`mt-1 text-[0.6rem] ${message.startsWith('Error') ? 'text-[#ef4444]' : 'text-[#00E5C9]'}`}>
-          {message}
-        </div>
-      )}
+      {message && <div className={`text-[0.6rem] ${message.startsWith('Error') ? 'text-[#ef4444]' : 'text-[#00E5C9]'}`}>{message}</div>}
     </div>
   )
 }
+
+/* ════════════════════════════════
+   UTILITIES
+   ════════════════════════════════ */
+
+const PROVIDER_DATA: { id: keyof ApiKeys; label: string; placeholder: string }[] = [
+  { id: 'openai', label: 'OpenAI', placeholder: 'sk-...' },
+  { id: 'anthropic', label: 'Anthropic (Claude)', placeholder: 'sk-ant-...' },
+  { id: 'deepseek', label: 'DeepSeek', placeholder: 'sk-...' },
+  { id: 'groq', label: 'Groq', placeholder: 'gsk_...' },
+  { id: 'google', label: 'Google (Gemini)', placeholder: 'AIza...' },
+  { id: 'cohere', label: 'Cohere', placeholder: '...' },
+  { id: 'kimi', label: 'Kimi (Moonshot)', placeholder: 'sk-...' },
+  { id: 'glm', label: 'GLM (Z.AI)', placeholder: '...' },
+]
+
+function formatAuditArgs(_tool: string, args: string): string {
+  try {
+    const parsed = JSON.parse(args)
+    if (typeof parsed === 'object' && parsed !== null) {
+      if (parsed.command) return parsed.command
+      if (parsed.path) return parsed.path
+      if (parsed.pattern) return parsed.pattern
+      return Object.values(parsed).filter(v => typeof v === 'string').join(' ') || args
+    }
+  } catch {}
+  return args
+}
+
+/* ════════════════════════════════
+   ICONS (inline SVG)
+   ════════════════════════════════ */
+
+function TabIcon({ name, active }: { name: string; active: boolean }) {
+  const c = active ? '#00E5C9' : '#999999'
+  const icons: Record<string, React.ReactNode> = {
+    general: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
+    providers: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>,
+    search: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
+    skills: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>,
+    memory: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/><path d="M3 12h18M12 3a14.5 14.5 0 0 1 0 18M12 3a14.5 14.5 0 0 0 0 18"/></svg>,
+    mcp: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>,
+    audit: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>,
+  }
+  return <span className="shrink-0">{icons[name]}</span>
+}
+
+function FolderIcon() { return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> }
+function SearchFolderIcon() { return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg> }
+function TrashIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg> }
+function ExportIcon() { return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> }
+function ImportIcon() { return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> }
+function RefreshIcon() { return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> }
+function CheckIcon() { return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#00E5C9" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg> }
+function SearchSmallIcon() { return <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#999999" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> }
+function FileIcon() { return <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#00E5C9" strokeWidth="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg> }
+function Spinner() { return <svg className="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> }

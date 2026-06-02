@@ -1,5 +1,43 @@
 # Changelog
 
+## [0.8.1] — 2026-06-01
+
+### Added
+- **Panel Markdowns/Wiki**: nuevo `WikiAside` que lista archivos `.md` del directorio de trabajo del agente y los renderiza con `Markdown`. Botón de documento en el header del WorkspaceAside para alternar entre conversaciones y markdowns. Seleccionar un proyecto abre automáticamente el panel de markdowns
+- **Comandos backend wiki**: `wiki_list_files(dir)` lista archivos `.md` no recursivo; `wiki_read_file(path)` lee contenido
+- **Tab MCP en Settings**: UI completa para gestionar servidores MCP — listar, añadir, editar, eliminar, iniciar/detener, ver herramientas descubiertas. Persistencia en `~/.solaria/mcp_servers.json` (backends `mcp_list_servers`, `mcp_save_servers`, `mcp_start_server`, `mcp_stop_server`, `mcp_restart_all`, `mcp_list_tools` ya existían desde v0.3.0)
+
+### Changed
+- **Sidebar izquierda**: ancho expandido de 280px → **320px** en ambos paneles (WorkspaceAside y WikiAside)
+- **Logo Solaria restaurado** en el header del sidebar (`<img src="/solaria-logo.svg">`) reemplazando el icono de reloj genérico
+- **Filas de archivos en proyectos**: eliminados los iconos de carpeta/archivo. Ahora usan el mismo estilo visual que `ConvRow` (text-[0.7rem], px-3 py-2, rounded-xl, hover bg). Límite reducido a 8 archivos + 5 conversaciones para evitar scroll vertical
+- **Badge de Conversaciones**: ahora cuenta solo conversaciones NO ancladas (antes contaba las ancladas). Proyectos muestran badge con el número de carpetas creadas
+- **Scroll sin iconos de agente**: las conversaciones sin pin/archivo ya no muestran icono alguno — solo título y tiempo relativo
+- **Botón de markdowns**: icono SVG de documento con líneas (cian `#00E5C9`, 14x14) reemplazó la letra "W" genérica. Tooltip y header del panel cambiados de "Wiki" a "Markdowns"
+
+### Fixed
+- **Scroll vertical innecesario en panel izquierdo**: corregido con `min-h-0` en el contenedor flex `flex-1` — sin esto, el tamaño mínimo implícito `min-content` impedía que se encogiera aunque tuviera `overflow-y-auto`
+- **Scrollbar estandarizado**: unificado a `width/height: 4px`, thumb `#333` → `#444` hover (antes `#4b5563` → `#6b7280`). Aplicado global en `index.css` + Firefox con `scrollbarColor: '#333 transparent'` en 6 componentes. Code blocks: `3px` horizontal
+
+## [0.8.0] — 2026-06-01
+
+### Added
+- **Memoria persistente con vector store (RAG)** — el agente ahora recuerda conversaciones previas y archivos del proyecto usando SQLite + sqlite-vec como motor de búsqueda vectorial embebido
+- **Sistema de embeddings multi-provider** — soporte para Ollama (local), OpenAI, y endpoints compatibles custom
+- **Indexación automática** — conversaciones se indexan al completarse; proyectos se indexan bajo demanda desde Settings
+- **Búsqueda semántica inyectada en system prompt** — antes de cada mensaje, se buscan chunks relevantes y se inyectan como "Contexto relevante de memoria"
+- **Tab Memoria en Settings** — configurar provider, modelo, top-k, score mínimo, auto-inject, indexar conversaciones/archivos, prueba de búsqueda, estadísticas y botón de limpieza
+- **Comando `memory_index_project_files`** — escanea recursivamente un directorio de proyecto y indexa archivos por extensión (.md, .ts, .rs, .py, etc.) en la base de datos vectorial
+- **Storage en `~/.solaria/memory.db`** — portable, sin servicios externos, formato SQLite estándar
+
+### Technical
+- Nuevas deps: `rusqlite` (con feature `bundled`), `sqlite-vec` 0.1, `zerocopy`
+- Nuevos módulos Rust: `memory.rs` (SQLite + vec0), `embeddings.rs` (Ollama/OpenAI/custom + chunking)
+- Nuevos comandos Tauri: `memory_index_text`, `memory_search`, `memory_stats`, `memory_delete_source`, `memory_clear`, `memory_index_project_files`
+- `sqlite3_vec_init` registrado como auto-extension en `tauri::Builder::default()`
+- Nuevo hook `useMemory` con API React completa (search, index, clear, formatContext)
+- 4 tests nuevos para `embeddings::chunk_text` (casos: corto, vacío, largo, preservación de contenido)
+
 ## [0.7.0] — 2026-05-30
 
 ### Added

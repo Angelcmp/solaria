@@ -88,6 +88,7 @@ const translations: Translations = {
   'settings.providers': { es: 'API Keys', en: 'API Keys' },
   'settings.search': { es: 'Búsqueda', en: 'Search' },
   'settings.agent': { es: 'Agente', en: 'Agent' },
+  'settings.memory': { es: 'Memoria', en: 'Memory' },
   'settings.audit': { es: 'Auditoría', en: 'Audit' },
   'settings.default_provider': { es: 'Proveedor por defecto', en: 'Default provider' },
   'settings.default_model': { es: 'Modelo por defecto', en: 'Default model' },

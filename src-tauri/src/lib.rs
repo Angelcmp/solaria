@@ -1,6 +1,8 @@
 pub mod audit;
+pub mod embeddings;
 mod keyring;
 mod mcp;
+mod memory;
 mod ollama;
 pub mod providers;
 mod search;
@@ -15,6 +17,14 @@ struct FileEntry {
     name: String,
     is_dir: bool,
     size: u64,
+}
+
+#[derive(Serialize, Clone)]
+struct WikiFile {
+    name: String,
+    path: String,
+    size: u64,
+    modified: i64,
 }
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
@@ -331,6 +341,50 @@ fn list_directory(path: String) -> Result<Vec<FileEntry>, String> {
     Ok(result)
 }
 
+// ── Wiki commands ────────────────────────────────────────────────────────────
+
+#[tauri::command]
+fn wiki_list_files(dir: String) -> Result<Vec<WikiFile>, String> {
+    use std::fs;
+    use std::time::UNIX_EPOCH;
+    let path = std::path::Path::new(&dir);
+    if !path.exists() { return Ok(Vec::new()); }
+    if !path.is_dir() { return Err(format!("No es un directorio: {}", dir)); }
+    let mut result = Vec::new();
+    let entries = fs::read_dir(path).map_err(|e| format!("Error leyendo directorio: {}", e))?;
+    for entry in entries {
+        let entry = match entry { Ok(e) => e, Err(_) => continue };
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name.starts_with('.') || name == "target" || name == "node_modules" { continue; }
+        let file_type = match entry.file_type() { Ok(t) => t, Err(_) => continue };
+        if !file_type.is_file() { continue; }
+        if !name.to_lowercase().ends_with(".md") { continue; }
+        let metadata = entry.metadata().ok();
+        let size = metadata.as_ref().map(|m| m.len()).unwrap_or(0);
+        let modified = metadata
+            .and_then(|m| m.modified().ok())
+            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+        result.push(WikiFile {
+            name,
+            path: entry.path().to_string_lossy().to_string(),
+            size,
+            modified,
+        });
+    }
+    result.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    Ok(result)
+}
+
+#[tauri::command]
+fn wiki_read_file(path: String) -> Result<String, String> {
+    use std::fs;
+    let p = std::path::Path::new(&path);
+    if !p.exists() { return Err(format!("Archivo no encontrado: {}", path)); }
+    fs::read_to_string(&path).map_err(|e| format!("Error leyendo archivo: {}", e))
+}
+
 #[tauri::command]
 fn write_text_file(path: String, content: String) -> Result<(), String> {
     use std::fs;
@@ -340,10 +394,220 @@ fn write_text_file(path: String, content: String) -> Result<(), String> {
     fs::write(&path, &content).map_err(|e| format!("Error writing file: {}", e))
 }
 
+// ── Memory commands ──────────────────────────────────────────────────────────
+
+#[tauri::command]
+async fn memory_index_text(
+    source: String,
+    source_id: String,
+    text: String,
+    metadata: Option<String>,
+    provider: String,
+    model: String,
+    ollama_host: Option<String>,
+    api_key: Option<String>,
+    api_url: Option<String>,
+) -> Result<i64, String> {
+    let cfg = embeddings::EmbeddingConfig {
+        provider: embeddings::EmbeddingProvider::from_str(&provider),
+        model,
+        ollama_host,
+        api_key,
+        api_url,
+    };
+    let store = memory::store();
+    let dim = store.dim();
+    let chunks = embeddings::chunk_text(&text, dim * 4);
+    if chunks.is_empty() {
+        return Err("No text to index".into());
+    }
+    let first_embed = embeddings::embed(&chunks[0], &cfg).await?;
+    if first_embed.dim != dim {
+        return Err(format!(
+            "Embedding dim {} does not match memory dim {}",
+            first_embed.dim, dim
+        ));
+    }
+    let mut last_id: i64 = {
+        memory::store()
+            .insert_chunk(&source, &source_id, &chunks[0], &first_embed.embedding, metadata.as_deref())
+            .map_err(|e| e.to_string())?
+    };
+    for chunk in chunks.iter().skip(1) {
+        let res = embeddings::embed(chunk, &cfg).await?;
+        last_id = memory::store()
+            .insert_chunk(&source, &source_id, chunk, &res.embedding, None)
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(last_id)
+}
+
+#[tauri::command]
+async fn memory_search(
+    query: String,
+    top_k: Option<usize>,
+    provider: String,
+    model: String,
+    ollama_host: Option<String>,
+    api_key: Option<String>,
+    api_url: Option<String>,
+) -> Result<Vec<memory::SearchResult>, String> {
+    let cfg = embeddings::EmbeddingConfig {
+        provider: embeddings::EmbeddingProvider::from_str(&provider),
+        model,
+        ollama_host,
+        api_key,
+        api_url,
+    };
+    let res = embeddings::embed(&query, &cfg).await?;
+    let store = memory::store();
+    if res.dim != store.dim() {
+        return Err(format!(
+            "Query embedding dim {} does not match memory dim {}",
+            res.dim,
+            store.dim()
+        ));
+    }
+    store.search(&res.embedding, top_k.unwrap_or(5)).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn memory_stats() -> memory::MemoryStats {
+    memory::store()
+        .stats()
+        .unwrap_or_else(|_| memory::MemoryStats {
+            total_chunks: 0,
+            total_conversations: 0,
+            total_project_files: 0,
+            db_path: memory::store().path(),
+            dim: memory::store().dim(),
+        })
+}
+
+#[tauri::command]
+fn memory_delete_source(source: String, source_id: String) -> Result<usize, String> {
+    memory::store()
+        .delete_by_source(&source, &source_id)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn memory_clear() -> Result<usize, String> {
+    memory::store().clear().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn memory_index_project_files(
+    working_dir: String,
+    extensions: Option<Vec<String>>,
+    provider: String,
+    model: String,
+    ollama_host: Option<String>,
+    api_key: Option<String>,
+    api_url: Option<String>,
+) -> Result<usize, String> {
+    if working_dir.is_empty() {
+        return Err("Working directory required".into());
+    }
+    let cfg = embeddings::EmbeddingConfig {
+        provider: embeddings::EmbeddingProvider::from_str(&provider),
+        model,
+        ollama_host,
+        api_key,
+        api_url,
+    };
+    let allowed_exts: Vec<String> = extensions
+        .unwrap_or_else(|| vec![
+            "md".into(), "txt".into(), "rs".into(), "ts".into(), "tsx".into(),
+            "js".into(), "jsx".into(), "py".into(), "json".into(), "yaml".into(),
+            "yml".into(), "toml".into(),
+        ])
+        .into_iter()
+        .map(|e| e.to_lowercase())
+        .collect();
+
+    let path = std::path::PathBuf::from(&working_dir);
+    if !path.exists() {
+        return Err(format!("Path does not exist: {}", working_dir));
+    }
+
+    let mut entries: Vec<std::path::PathBuf> = Vec::new();
+    collect_files(&path, &mut entries, 4)?;
+    entries.sort();
+
+    let store = memory::store();
+    let _ = store.delete_by_source("file", &working_dir);
+    let dim = store.dim();
+
+    let mut indexed = 0;
+    for file_path in entries {
+        let ext = file_path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+        if !allowed_exts.contains(&ext) {
+            continue;
+        }
+        let content = match std::fs::read_to_string(&file_path) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+        if content.trim().is_empty() || content.len() > 500_000 {
+            continue;
+        }
+        let path_str = file_path.to_string_lossy().to_string();
+        let chunks = embeddings::chunk_text(&content, dim * 4);
+        for chunk in chunks {
+            let res = match embeddings::embed(&chunk, &cfg).await {
+                Ok(r) => r,
+                Err(_) => continue,
+            };
+            if res.dim != dim {
+                continue;
+            }
+            let _ = store.insert_chunk("file", &working_dir, &chunk, &res.embedding, Some(&path_str));
+            indexed += 1;
+        }
+    }
+    Ok(indexed)
+}
+
+fn collect_files(
+    dir: &std::path::Path,
+    out: &mut Vec<std::path::PathBuf>,
+    depth: u32,
+) -> Result<(), String> {
+    if depth == 0 {
+        return Ok(());
+    }
+    let entries = std::fs::read_dir(dir).map_err(|e| format!("Read dir failed: {}", e))?;
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name.starts_with('.') || name == "target" || name == "node_modules" || name == "dist" {
+            continue;
+        }
+        let p = entry.path();
+        if p.is_dir() {
+            collect_files(&p, out, depth - 1)?;
+        } else if p.is_file() {
+            out.push(p);
+        }
+    }
+    Ok(())
+}
+
 // ── App entry ────────────────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Register sqlite-vec as a SQLite auto-extension so it loads with every connection.
+    unsafe {
+        rusqlite::ffi::sqlite3_auto_extension(Some(std::mem::transmute(
+            sqlite_vec::sqlite3_vec_init as *const (),
+        )));
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -379,6 +643,14 @@ pub fn run() {
             create_skill,
             write_text_file,
             list_directory,
+            wiki_list_files,
+            wiki_read_file,
+            memory_index_text,
+            memory_search,
+            memory_stats,
+            memory_delete_source,
+            memory_clear,
+            memory_index_project_files,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

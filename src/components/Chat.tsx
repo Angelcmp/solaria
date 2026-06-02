@@ -483,7 +483,7 @@ export default function Chat({
       <div
         ref={scrollContainerRef}
         className="flex-1 overflow-y-auto px-4 py-4 relative"
-        style={{ scrollbarWidth: 'thin', scrollbarColor: '#4b5563 transparent' }}
+        style={{ scrollbarWidth: 'thin', scrollbarColor: '#333 transparent' }}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}

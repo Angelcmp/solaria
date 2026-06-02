@@ -176,7 +176,7 @@ export default function ResearchAside(props: ResearchAsideProps) {
       </div>
 
       {/* Tab content */}
-      <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'thin', scrollbarColor: '#4b5563 transparent' }}>
+      <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'thin', scrollbarColor: '#333 transparent' }}>
         {tab === 'process' && (
           <ProcessTabContent steps={steps} isRunning={isRunning} liveThinking={liveThinking} onConfirmTool={onConfirmTool} />
         )}
@@ -220,7 +220,7 @@ function ProcessTabContent({ steps, isRunning, liveThinking, onConfirmTool }: {
   const hasFinal = steps.some(s => s.type === 'final')
 
   return (
-    <div ref={scrollRef} onScroll={handleScroll} className="h-full overflow-y-auto py-2 px-2 space-y-0.5" style={{ scrollbarWidth: 'thin', scrollbarColor: '#4b5563 transparent' }}>
+    <div ref={scrollRef} onScroll={handleScroll} className="h-full overflow-y-auto py-2 px-2 space-y-0.5" style={{ scrollbarWidth: 'thin', scrollbarColor: '#333 transparent' }}>
       {steps.length === 0 && isRunning && (
         <div className="flex items-center justify-center h-full">
           <div className="flex gap-1.5">

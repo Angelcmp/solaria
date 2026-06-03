@@ -7,7 +7,7 @@ import { useMemory, type SearchResult } from '../hooks/useMemory'
 
 interface SettingsPanelProps {
   settings: AppSettings
-  initialTab?: 'general' | 'providers' | 'search' | 'skills' | 'memory' | 'audit' | 'mcp'
+  initialTab?: 'general' | 'providers' | 'search' | 'skills' | 'memory' | 'audit' | 'mcp' | 'cookbook'
   onClose: () => void
   onUpdate: (updates: Partial<AppSettings>) => void
   onUpdateApiKey: (provider: keyof ApiKeys, key: string) => void
@@ -29,13 +29,14 @@ const PROVIDERS: { id: AppSettings['defaultProvider']; label: string; models: st
   { id: 'glm', label: 'GLM', models: ['glm-4.7', 'glm-4.7-flash', 'glm-5.1', 'glm-5', 'glm-5-turbo', 'glm-4.5', 'glm-4.5-flash'], isLocal: false },
 ]
 
-const TABS: { id: 'general' | 'providers' | 'search' | 'skills' | 'memory' | 'audit' | 'mcp'; labelKey: string; icon: string }[] = [
+const TABS: { id: 'general' | 'providers' | 'search' | 'skills' | 'memory' | 'audit' | 'mcp' | 'cookbook'; labelKey: string; icon: string }[] = [
   { id: 'general', labelKey: 'settings.general', icon: 'general' },
   { id: 'providers', labelKey: 'settings.providers', icon: 'providers' },
   { id: 'search', labelKey: 'settings.search', icon: 'search' },
   { id: 'skills', labelKey: '', icon: 'skills' },
   { id: 'memory', labelKey: 'settings.memory', icon: 'memory' },
   { id: 'mcp', labelKey: '', icon: 'mcp' },
+  { id: 'cookbook', labelKey: 'cookbook.label', icon: 'cookbook' },
   { id: 'audit', labelKey: 'settings.audit', icon: 'audit' },
 ]
 
@@ -51,7 +52,7 @@ export default function SettingsPanel({
   onUpdateAgentConfig,
 }: SettingsPanelProps) {
   const lang = settings.language as Lang
-  const [tab, setTab] = useState<'general' | 'providers' | 'search' | 'skills' | 'memory' | 'audit' | 'mcp'>(initialTab || 'general')
+  const [tab, setTab] = useState<'general' | 'providers' | 'search' | 'skills' | 'memory' | 'audit' | 'mcp' | 'cookbook'>(initialTab || 'general')
   const [selectedProvider, setSelectedProvider] = useState<AppSettings['defaultProvider']>('openai')
 
   return (
@@ -89,7 +90,7 @@ export default function SettingsPanel({
                   }`}
                 >
                   <TabIcon name={tabKey.icon} active={tab === tabKey.id} />
-                  <span>{tabKey.id === 'skills' ? 'Skills' : tabKey.id === 'mcp' ? 'MCP' : t(tabKey.labelKey, lang)}</span>
+                  <span>{tabKey.id === 'skills' ? 'Skills' : tabKey.id === 'mcp' ? 'MCP' : tabKey.id === 'cookbook' ? 'Cookbook' : t(tabKey.labelKey, lang)}</span>
                 </button>
               ))}
             </div>
@@ -125,6 +126,10 @@ export default function SettingsPanel({
 
             {tab === 'mcp' && (
               <McpTab />
+            )}
+
+            {tab === 'cookbook' && (
+              <CookbookTab lang={lang} />
             )}
 
             {tab === 'audit' && (
@@ -1500,6 +1505,428 @@ function ModelManager() {
 }
 
 /* ════════════════════════════════
+   COOKBOOK TAB
+   ════════════════════════════════ */
+
+interface CookbookModel {
+  id: string
+  name: string
+  description: string
+  descriptionEs: string
+  category: string
+  tags: string[]
+  sizeGb: number
+  vramRequiredGb: number
+  contextWindow: number
+  quantization: string
+  hfRepo: string
+  hfFile: string
+  license: string
+  languages: string[]
+  benchmarkMmlu: number | null
+  benchmarkHumaneval: number | null
+  benchmarkGsm8k: number | null
+}
+
+interface CookbookHardware {
+  cpu: { name: string; cores: number; threads: number }
+  ram: { totalGb: number; availableGb: number }
+  gpus: { name: string; vramGb: number; vendor: string }[]
+  disks: { mountPoint: string; totalGb: number; availableGb: number }[]
+}
+
+interface CookbookDownloaded {
+  id: string
+  name: string
+  filePath: string
+  sizeBytes: number
+  downloadedAt: string
+  ollamaModel: string | null
+  status: string
+}
+
+function CookbookTab({ lang }: { lang: Lang }) {
+  const [hw, setHw] = useState<CookbookHardware | null>(null)
+  const [hwLoading, setHwLoading] = useState(false)
+  const [catalog, setCatalog] = useState<CookbookModel[]>([])
+  const [downloaded, setDownloaded] = useState<CookbookDownloaded[]>([])
+  const [catalogLoading, setCatalogLoading] = useState(true)
+  const [filter, setFilter] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null)
+  const [downloadingId, setDownloadingId] = useState<string | null>(null)
+  const [downloadProgress, setDownloadProgress] = useState<{
+    downloaded: number; total: number; speedMbps: number; etaSecs: number; status: string
+  } | null>(null)
+  const [loadingOllama, setLoadingOllama] = useState<string | null>(null)
+  const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
+  const loadCatalog = useCallback(async () => {
+    setCatalogLoading(true)
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      const models = await invoke<CookbookModel[]>('cookbook_list_models', 
+        categoryFilter ? { category: categoryFilter } : {})
+      setCatalog(models)
+    } catch (e) {
+      setActionMessage({ type: 'error', text: String(e) })
+    }
+    setCatalogLoading(false)
+  }, [categoryFilter])
+
+  const loadDownloaded = useCallback(async () => {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      const list = await invoke<CookbookDownloaded[]>('cookbook_list_downloaded')
+      setDownloaded(list)
+    } catch {}
+  }, [])
+
+  const scanHardware = useCallback(async () => {
+    setHwLoading(true)
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      const info = await invoke<CookbookHardware>('cookbook_scan_hardware')
+      setHw(info)
+    } catch (e) {
+      setActionMessage({ type: 'error', text: String(e) })
+    }
+    setHwLoading(false)
+  }, [])
+
+  useEffect(() => { loadCatalog(); loadDownloaded(); scanHardware() }, [loadCatalog, loadDownloaded, scanHardware])
+
+  // Listen for download progress events
+  useEffect(() => {
+    let unlisten: (() => void) | undefined
+    import('@tauri-apps/api/event').then(({ listen }) => {
+      listen<{
+        streamId: string; modelId: string; downloaded: number; total: number
+        speedMbps: number; etaSecs: number; status: string
+      }>('cookbook://progress', (event) => {
+        setDownloadProgress(event.payload)
+        if (event.payload.status === 'complete' || event.payload.status === 'cancelled') {
+          setDownloadingId(null)
+          setDownloadProgress(null)
+          loadDownloaded()
+          if (event.payload.status === 'complete') {
+            setActionMessage({ type: 'success', text: 'Descarga completada' })
+          }
+        }
+      }).then(fn => { unlisten = fn })
+    })
+    return () => { unlisten?.() }
+  }, [loadDownloaded])
+
+  const handleDownload = async (modelId: string) => {
+    if (downloadingId) return
+    setDownloadingId(modelId)
+    setDownloadProgress(null)
+    setActionMessage(null)
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      await invoke('cookbook_download_model', { 
+        streamId: `cookbook-${modelId}`, 
+        modelId 
+      })
+    } catch (e) {
+      setActionMessage({ type: 'error', text: String(e) })
+      setDownloadingId(null)
+      setDownloadProgress(null)
+    }
+  }
+
+  const handleCancelDownload = async () => {
+    if (!downloadingId) return
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      await invoke('cookbook_cancel_download', { streamId: `cookbook-${downloadingId}` })
+    } catch {}
+  }
+
+  const handleServe = async (modelId: string) => {
+    setLoadingOllama(modelId)
+    setActionMessage(null)
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      const result = await invoke<string>('cookbook_create_ollama_model', { modelId })
+      setActionMessage({ type: 'success', text: result })
+      loadDownloaded()
+    } catch (e) {
+      setActionMessage({ type: 'error', text: String(e) })
+    }
+    setLoadingOllama(null)
+  }
+
+  const handleDelete = async (modelId: string) => {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      await invoke('cookbook_delete_model', { modelId })
+      loadDownloaded()
+    } catch (e) {
+      setActionMessage({ type: 'error', text: String(e) })
+    }
+  }
+
+  const filteredCatalog = catalog.filter(m => {
+    if (filter && !m.name.toLowerCase().includes(filter.toLowerCase()) && 
+        !m.tags.some(t => t.toLowerCase().includes(filter.toLowerCase()))) return false
+    return true
+  })
+
+  const isDownloaded = (id: string) => downloaded.some(d => d.id === id)
+  const getDownloadedStatus = (id: string) => downloaded.find(d => d.id === id)?.status
+  const hasGpu = hw?.gpus && hw.gpus.length > 0 && hw.gpus.some(g => g.vramGb > 0)
+  const maxVram = hw?.gpus ? Math.max(...hw.gpus.map(g => g.vramGb), 0) : 0
+
+  const formatSize = (gb: number) => gb >= 1 ? `${gb.toFixed(1)} GB` : `${(gb * 1024).toFixed(0)} MB`
+  const formatBytes = (bytes: number) => bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : `${(bytes / 1e6).toFixed(0)} MB`
+
+  const canRun = (vramReq: number) => vramReq <= 0.5 || !hasGpu || vramReq <= maxVram
+
+  return (
+    <div className="space-y-5">
+      <SectionHeader
+        icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00E5C9" strokeWidth="1.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>}
+        title={t('cookbook.title', lang)}
+        desc={lang === 'es' 
+          ? 'Descubre, descarga y sirve modelos GGUF optimizados para tu hardware. Integración directa con Ollama.'
+          : 'Discover, download and serve GGUF models optimized for your hardware. Direct Ollama integration.'}
+      />
+
+      {actionMessage && (
+        <div className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg border ${
+          actionMessage.type === 'success' 
+            ? 'bg-[rgba(0,229,201,0.06)] border-[rgba(0,229,201,0.15)]' 
+            : 'bg-[rgba(239,68,68,0.06)] border-[rgba(239,68,68,0.15)]'
+        }`}>
+          {actionMessage.type === 'success' ? <CheckIcon /> : (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          )}
+          <span className={`text-[0.6rem] ${actionMessage.type === 'success' ? 'text-[#00E5C9]' : 'text-[#ef4444]'}`}>
+            {actionMessage.text}
+          </span>
+        </div>
+      )}
+
+      {/* Hardware summary */}
+      {hw && (
+        <div className="p-3 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)]">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[0.55rem] text-[#999999] uppercase tracking-wider">{t('cookbook.hardware', lang)}</span>
+            <button onClick={scanHardware} disabled={hwLoading} className="text-[0.55rem] text-[#666666] hover:text-white transition-colors">
+              {hwLoading ? <Spinner /> : <RefreshIcon />}
+            </button>
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            <div className="p-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.04)] text-center">
+              <div className="text-[0.5rem] text-[#999999]">{t('cookbook.cpu', lang)}</div>
+              <div className="text-[0.65rem] text-white font-mono mt-0.5">{hw.cpu.cores}c/{hw.cpu.threads}t</div>
+              <div className="text-[0.45rem] text-[#666666] truncate">{hw.cpu.name.split('@')[0].trim().slice(0, 18)}</div>
+            </div>
+            <div className="p-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.04)] text-center">
+              <div className="text-[0.5rem] text-[#999999]">{t('cookbook.ram', lang)}</div>
+              <div className="text-[0.65rem] text-white font-mono mt-0.5">{hw.ram.totalGb.toFixed(1)} GB</div>
+              <div className="text-[0.45rem] text-[#666666]">{hw.ram.availableGb.toFixed(1)} GB libre</div>
+            </div>
+            <div className="p-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.04)] text-center">
+              <div className="text-[0.5rem] text-[#999999]">{t('cookbook.gpu', lang)}</div>
+              {hw.gpus.length > 0 ? (
+                <>
+                  <div className="text-[0.65rem] text-[#00E5C9] font-mono mt-0.5">{hw.gpus[0].vramGb > 0 ? `${hw.gpus[0].vramGb.toFixed(1)} GB` : 'N/A'}</div>
+                  <div className="text-[0.45rem] text-[#666666] truncate">{hw.gpus[0].name.slice(0, 18)}</div>
+                </>
+              ) : (
+                <div className="text-[0.5rem] text-[#666666] mt-0.5">No detectada</div>
+              )}
+            </div>
+            <div className="p-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.04)] text-center">
+              <div className="text-[0.5rem] text-[#999999]">{t('cookbook.disk', lang)}</div>
+              {hw.disks.length > 0 ? (
+                <>
+                  <div className="text-[0.65rem] text-white font-mono mt-0.5">{hw.disks[0].availableGb.toFixed(0)} GB</div>
+                  <div className="text-[0.45rem] text-[#666666]">libre</div>
+                </>
+              ) : (
+                <div className="text-[0.5rem] text-[#666666] mt-0.5">N/A</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Download progress */}
+      {downloadingId && downloadProgress && (
+        <div className="p-3 rounded-xl bg-[rgba(0,229,201,0.04)] border border-[rgba(0,229,201,0.12)] space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[0.6rem] text-[#00E5C9] font-medium">
+              {t('cookbook.downloading', lang)}: {catalog.find(m => m.id === downloadingId)?.name || downloadingId}
+            </span>
+            <button onClick={handleCancelDownload} className="text-[0.55rem] text-[#999999] hover:text-white transition-colors">
+              {t('cookbook.cancel', lang)}
+            </button>
+          </div>
+          <div className="w-full h-1.5 rounded-full bg-[rgba(255,255,255,0.06)] overflow-hidden">
+            <div
+              className="h-full rounded-full bg-[#00E5C9] transition-all duration-300"
+              style={{ width: `${downloadProgress.total > 0 ? (downloadProgress.downloaded / downloadProgress.total) * 100 : 0}%` }}
+            />
+          </div>
+          <div className="flex justify-between text-[0.5rem] text-[#999999]">
+            <span>
+              {formatBytes(downloadProgress.downloaded)} / {formatBytes(downloadProgress.total)}
+            </span>
+            <span>
+              {downloadProgress.speedMbps > 0 ? `${downloadProgress.speedMbps} MB/s` : ''}
+              {downloadProgress.etaSecs > 0 ? ` · ${Math.ceil(downloadProgress.etaSecs / 60)} min` : ''}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Downloaded models */}
+      {downloaded.length > 0 && (
+        <Section title={t('cookbook.downloaded_models', lang)} color="#DCB263">
+          <div className="space-y-1.5">
+            {downloaded.map(m => (
+              <div key={m.id} className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)]">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className={`w-1.5 h-1.5 rounded-full ${m.status === 'serving' ? 'bg-[#00E5C9]' : 'bg-[#DCB263]'}`} />
+                    <span className="text-[0.7rem] font-medium text-white truncate">{m.name}</span>
+                  </div>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-[0.5rem] text-[#999999]">{formatBytes(m.sizeBytes)}</span>
+                    {m.ollamaModel && <span className="text-[0.5rem] text-[#00E5C9] font-mono">ollama:{m.ollamaModel}</span>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {m.status !== 'serving' && (
+                    <ActionButton variant="ghost" small onClick={() => handleServe(m.id)} disabled={loadingOllama === m.id}>
+                      {loadingOllama === m.id ? <Spinner /> : null}
+                      {t('cookbook.serve', lang)}
+                    </ActionButton>
+                  )}
+                  <ActionButton variant="ghost" small onClick={() => handleDelete(m.id)}>
+                    <TrashIcon />
+                  </ActionButton>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {/* Model catalog filters */}
+      <Section title={t('cookbook.catalog', lang)} color="#00E5C9">
+        <div className="space-y-3">
+          <div className="flex gap-2">
+            <div className="flex-1 relative">
+              <input
+                value={filter}
+                onChange={e => setFilter(e.target.value)}
+                placeholder={t('cookbook.search_models', lang)}
+                className="w-full pl-8 pr-3 py-2 rounded-lg bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors"
+              />
+              <svg className="absolute left-2.5 top-1/2 -translate-y-1/2" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#666666" strokeWidth="2">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+            </div>
+            <select
+              value={categoryFilter || ''}
+              onChange={e => setCategoryFilter(e.target.value || null)}
+              className="px-2.5 py-2 rounded-lg bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] text-[0.6rem] text-white outline-none focus:border-[#DCB263] transition-colors appearance-none cursor-pointer"
+            >
+              <option value="">Todos</option>
+              <option value="chat">Chat</option>
+              <option value="code">Código</option>
+              <option value="reasoning">Razonamiento</option>
+              <option value="embedding">Embedding</option>
+            </select>
+          </div>
+
+          {/* Catalog grid */}
+          {catalogLoading ? (
+            <div className="flex flex-col items-center justify-center py-8 gap-3">
+              <Spinner />
+              <span className="text-[0.6rem] text-[#999999]">{lang === 'es' ? 'Cargando catálogo...' : 'Loading catalog...'}</span>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              {filteredCatalog.map(m => {
+                const dled = isDownloaded(m.id)
+                const dledStatus = getDownloadedStatus(m.id)
+                const willRun = canRun(m.vramRequiredGb)
+                return (
+                  <div key={m.id} className="p-3 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] hover:border-[rgba(255,255,255,0.12)] transition-colors">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[0.7rem] font-semibold text-white">{m.name}</span>
+                          <span className="text-[0.5rem] px-1.5 py-0.5 rounded-full bg-[rgba(255,255,255,0.04)] text-[#999999] border border-[rgba(255,255,255,0.06)]">{m.quantization}</span>
+                          {m.tags.includes('recommended') && (
+                            <span className="text-[0.5rem] px-1.5 py-0.5 rounded-full bg-[rgba(0,229,201,0.08)] text-[#00E5C9] border border-[rgba(0,229,201,0.15)]">★ {t('cookbook.recommended', lang)}</span>
+                          )}
+                          {m.vramRequiredGb <= 0.5 && (
+                            <span className="text-[0.5rem] px-1.5 py-0.5 rounded-full bg-[rgba(220,178,99,0.08)] text-[#DCB263] border border-[rgba(220,178,99,0.15)]">CPU</span>
+                          )}
+                          {dledStatus === 'serving' && (
+                            <span className="text-[0.5rem] px-1.5 py-0.5 rounded-full bg-[rgba(0,229,201,0.08)] text-[#00E5C9] border border-[rgba(0,229,201,0.25)] uppercase tracking-wide">{t('cookbook.serving', lang)}</span>
+                          )}
+                        </div>
+                        <div className="text-[0.6rem] text-[#999999] mt-1 leading-relaxed line-clamp-2">
+                          {lang === 'es' ? m.descriptionEs : m.description}
+                        </div>
+                        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                          <span className="text-[0.5rem] text-[#666666]">{formatSize(m.sizeGb)}</span>
+                          <span className="text-[#444]">·</span>
+                          <span className={`text-[0.5rem] ${willRun ? 'text-[#00E5C9]' : 'text-[rgba(239,68,68,0.6)]'}`}>{t('cookbook.vram_req', lang)}: {formatSize(m.vramRequiredGb)}</span>
+                          <span className="text-[#444]">·</span>
+                          <span className="text-[0.5rem] text-[#666666]">{((m.contextWindow / 1024) as number).toFixed(0)}K {t('cookbook.ctx', lang)}</span>
+                          {m.hfRepo && <><span className="text-[#444]">·</span><span className="text-[0.5rem] text-[#666666]">{m.license}</span></>}
+                        </div>
+                        {m.benchmarkMmlu && (
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-[0.45rem] text-[#666666]">MMLU: {m.benchmarkMmlu}%</span>
+                            {m.benchmarkHumaneval && <span className="text-[0.45rem] text-[#666666]">HumanEval: {m.benchmarkHumaneval}%</span>}
+                            {m.benchmarkGsm8k && <span className="text-[0.45rem] text-[#666666]">GSM8K: {m.benchmarkGsm8k}%</span>}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {dledStatus === 'serving' ? (
+                          <span className="px-2 py-1.5 rounded-lg bg-[rgba(0,229,201,0.08)] border border-[rgba(0,229,201,0.15)] text-[#00E5C9] text-[0.55rem] font-medium">{t('cookbook.serving', lang)}</span>
+                        ) : dled ? (
+                          <ActionButton variant="ghost" small onClick={() => handleServe(m.id)} disabled={loadingOllama === m.id}>
+                            {loadingOllama === m.id ? <Spinner /> : null}
+                            {t('cookbook.serve', lang)}
+                          </ActionButton>
+                        ) : m.hfRepo ? (
+                          <ActionButton
+                            variant="primary"
+                            small
+                            onClick={() => handleDownload(m.id)}
+                            disabled={downloadingId === m.id || (downloadingId !== null)}
+                          >
+                            {downloadingId === m.id ? <Spinner /> : null}
+                            {downloadingId === m.id ? t('cookbook.downloading', lang) : t('cookbook.download', lang)}
+                          </ActionButton>
+                        ) : (
+                          <span className="text-[0.55rem] text-[#666666] px-2 py-1.5">Ollama pull</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </Section>
+    </div>
+  )
+}
+
+/* ════════════════════════════════
    UTILITIES
    ════════════════════════════════ */
 
@@ -1540,6 +1967,7 @@ function TabIcon({ name, active }: { name: string; active: boolean }) {
     skills: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>,
     memory: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/><path d="M3 12h18M12 3a14.5 14.5 0 0 1 0 18M12 3a14.5 14.5 0 0 0 0 18"/></svg>,
     mcp: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>,
+    cookbook: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>,
     audit: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>,
   }
   return <span className="shrink-0">{icons[name]}</span>

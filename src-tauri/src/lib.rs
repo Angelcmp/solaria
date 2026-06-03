@@ -1,4 +1,5 @@
 pub mod audit;
+mod cookbook;
 pub mod embeddings;
 mod keyring;
 mod mcp;
@@ -597,6 +598,52 @@ fn collect_files(
     Ok(())
 }
 
+// ── Cookbook commands ────────────────────────────────────────────────────────
+
+#[tauri::command]
+fn cookbook_scan_hardware() -> cookbook::HardwareInfo {
+    cookbook::scan_hardware_cmd()
+}
+
+#[tauri::command]
+fn cookbook_list_models(category: Option<String>) -> Vec<cookbook::ModelEntry> {
+    cookbook::list_models_cmd(category)
+}
+
+#[tauri::command]
+fn cookbook_list_downloaded() -> Vec<cookbook::DownloadedModel> {
+    cookbook::list_downloaded_cmd()
+}
+
+#[tauri::command]
+async fn cookbook_download_model(
+    app: tauri::AppHandle,
+    stream_id: String,
+    model_id: String,
+) -> Result<String, String> {
+    cookbook::download_model_cmd(app, stream_id, model_id).await
+}
+
+#[tauri::command]
+fn cookbook_cancel_download(stream_id: String) {
+    cookbook::cancel_download_cmd(stream_id);
+}
+
+#[tauri::command]
+fn cookbook_delete_model(model_id: String) -> Result<String, String> {
+    cookbook::delete_model_cmd(model_id)
+}
+
+#[tauri::command]
+async fn cookbook_create_ollama_model(model_id: String) -> Result<String, String> {
+    cookbook::create_ollama_model_cmd(model_id).await
+}
+
+#[tauri::command]
+fn cookbook_get_ollama_status(model_id: String) -> Result<String, String> {
+    cookbook::get_ollama_status_cmd(model_id)
+}
+
 // ── App entry ────────────────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -651,6 +698,14 @@ pub fn run() {
             memory_delete_source,
             memory_clear,
             memory_index_project_files,
+            cookbook_scan_hardware,
+            cookbook_list_models,
+            cookbook_list_downloaded,
+            cookbook_download_model,
+            cookbook_cancel_download,
+            cookbook_delete_model,
+            cookbook_create_ollama_model,
+            cookbook_get_ollama_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -32,4 +32,5 @@ keyring = { version = "3", features = ["sync-secret-service"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
 sqlite-vec = "0.1"
 zerocopy = "0.7"
+sysinfo = "0.33"
 

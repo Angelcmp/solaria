@@ -1,4 +1,4 @@
-# Roadmap — Solaria Agent v0.8.0
+# Roadmap — Solaria Agent v0.8.1
 
 > Deep Research Agentic System con Skills + Knowledge Base
 > Enfoque: investigación, análisis, proyectos, y sistema de conocimiento personal.
@@ -161,15 +161,16 @@
 - [x] glob/grep respetan working_directory del proyecto
 - [x] fetch_url extrae texto de HTML automáticamente
 
-### P7 — Odyssey Features (Nuevas)
+### P7 — Odyssey Features
 
 > Inspirado en [pewdiepie-archdaemon/odysseus](https://github.com/pewdiepie-archdaemon/odysseus)
 
-- [ ] **Memoria persistente con vector store (RAG)** — ChromaDB/local embedding para que el agente recuerde entre sesiones. Complementa knowledge-builder.
-- [ ] **UI de MCP en Settings** — backend completo listo (`mcp.rs`, 6 comandos Tauri), solo falta frontend para gestionar servidores MCP.
+- [x] **Memoria persistente con vector store (RAG)** — SQLite + sqlite-vec como motor de búsqueda vectorial embebido. Embeddings multi-provider (Ollama, OpenAI, custom). Indexación automática de conversaciones y proyectos. Búsqueda semántica inyectada en system prompt. (v0.8.0)
+- [x] **UI de MCP en Settings** — UI completa para gestionar servidores MCP: listar, añadir, editar, eliminar, iniciar/detener, ver herramientas descubiertas. (v0.8.1)
 - [ ] **Cookbook: descubrimiento y descarga de modelos** — escanear hardware, recomendar modelos GGUF/FP8/AWQ, descargar y servir con vLLM/llama.cpp.
 - [ ] **Comparador de modelos (blind test)** — probar modelos side-by-side sin saber cuál es cuál, votar y sintetizar resultado.
 - [ ] **PWA / responsive mobile** — convertir en PWA instalable, interfaz adaptativa para móvil.
+- [x] **WikiAside: panel de markdowns** — lista archivos `.md` del working directory del agente, renderizado inline. Botón toggle en WorkspaceAside. Backend `wiki_list_files`/`wiki_read_file`. (v0.8.1)
 
 ### Bugs conocidos (todos resueltos ✅)
 

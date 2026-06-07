@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.8.3] — 2026-06-07
+## [0.8.4] — 2026-06-07
 
 ### Added
 - **CLI mode** — nuevo binario multipropósito: `solaria` (GUI, forkea al fondo), `solaria ask "prompt"` (one-shot chat), `solaria agent "task"` (agente de investigación), `solaria serve` (daemon con pid file)
@@ -9,6 +9,10 @@
 - **Flags en CLI**: `--provider`, `--model`, `--host`, `--dir`, `--dry` para controlar el modelo, directorio de trabajo y preview de tool calls
 - **Nuevo módulo `cli.rs`** — parseo de argumentos, dispatch de comandos, agent loop simplificado en Rust con tool extraction y execution
 - **`solaria --help`** — documentación de todos los comandos y flags disponibles
+
+## [0.8.3] — 2026-06-07
+
+### Added
 - **Dimensión dinámica de vectores** — `vec0` table se adapta automáticamente a la dimensión del modelo de embeddings configurado (ya no está hardcodeada a 768). Tabla `config` persistente en SQLite.
 - **Chunk overlap** — `chunk_text()` ahora acepta `overlap` para solapar chunks consecutivos
 - **Filtros en búsqueda semántica** — `SearchFilters` con filtro por `sources` (conversación/archivo) y `max_age_days`

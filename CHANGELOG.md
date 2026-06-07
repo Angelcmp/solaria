@@ -1,26 +1,34 @@
 # Changelog
 
+## [0.8.4] — 2026-06-07
+
+### Added
+- **CLI mode** — nuevo binario multipropósito: `solaria` (GUI, forkea al fondo), `solaria ask "prompt"` (one-shot chat), `solaria agent "task"` (agente de investigación), `solaria serve` (daemon con pid file)
+- **Fork auto-detach** — al ejecutar `solaria` sin args, el proceso se forkea en background y libera la terminal inmediatamente (como `code` o `subl`)
+- **Pipe stdin support** — `echo "texto" | solaria ask` lee desde stdin para integrarse con otras herramientas CLI
+- **Flags en CLI**: `--provider`, `--model`, `--host`, `--dir`, `--dry` para controlar el modelo, directorio de trabajo y preview de tool calls
+- **Nuevo módulo `cli.rs`** — parseo de argumentos, dispatch de comandos, agent loop simplificado en Rust con tool extraction y execution
+- **`solaria --help`** — documentación de todos los comandos y flags disponibles
+
 ## [0.8.3] — 2026-06-07
 
 ### Added
-- **Dimensión dinámica de vectores** — `vec0` table se adapta automáticamente a la dimensión del modelo de embeddings configurado (ya no está hardcodeada a 768). Tabla `config` persistente en SQLite. `ensure_dim()` recrea la tabla al cambiar de modelo.
-- **Chunk overlap** — `chunk_text()` ahora acepta `overlap` para solapar chunks consecutivos y no perder contexto en los cortes.
-- **Filtros en búsqueda semántica** — `SearchFilters` con filtro por `sources` (conversación/archivo) y `max_age_days` (antigüedad máxima).
-- **Decaimiento por recencia** — nuevo parámetro `recencyWeight` que mezcla similitud semántica + antigüedad. Resultados viejos pesan menos. Configurable en Settings > Memory.
-- **Deduplicación de resultados** — chunks duplicados del mismo `source:source_id` se colapsan, conservando solo el más relevante.
-- **Progreso en indexación de proyectos** — backend emite eventos `memory://index-progress` con total, progreso, archivo actual y fase. Barra de progreso visible en Settings > Memory > Indexar proyecto.
-- **Auto-index de proyecto al seleccionar** — al hacer clic en un proyecto en la sidebar, se indexan sus archivos automáticamente (cooldown de 1h).
-- **Auto-re-index en segundo plano** — cada 5 minutos verifica si el proyecto activo necesita re-indexarse, solo cuando el agente está idle.
-- **Indexación de conversaciones completas** — ahora se indexan todos los mensajes de la conversación (antes solo los últimos 6).
-- **Indexación de conversaciones de agente** — las investigaciones y reportes del agente ahora también se indexan en memoria (antes estaban excluidas).
-- **Contexto estructurado en inyección** — `formatContext()` ahora separa resultados por tipo (conversaciones previas / archivos del proyecto) con títulos, fechas y relevancia.
+- **Dimensión dinámica de vectores** — `vec0` table se adapta automáticamente a la dimensión del modelo de embeddings configurado (ya no está hardcodeada a 768). Tabla `config` persistente en SQLite.
+- **Chunk overlap** — `chunk_text()` ahora acepta `overlap` para solapar chunks consecutivos
+- **Filtros en búsqueda semántica** — `SearchFilters` con filtro por `sources` (conversación/archivo) y `max_age_days`
+- **Decaimiento por recencia** — nuevo parámetro `recencyWeight` que mezcla similitud semántica + antigüedad
+- **Deduplicación de resultados** — chunks del mismo `source:source_id` se colapsan al más relevante
+- **Progreso en indexación** — eventos `memory://index-progress` con barra en Settings > Memory
+- **Auto-index de proyecto** — al seleccionar un proyecto se indexan sus archivos automáticamente
+- **Auto-re-index en segundo plano** — cada 5 min verifica si el proyecto activo necesita re-indexarse
+- **Indexación de conversaciones completas + agentes** — todos los mensajes, incluyendo investigaciones del agente
 
 ### Changed
-- **ROADMAP.md**: Cookbook marcado como completado en v0.8.2. Recencia, dedup, auto-index, progreso y dimensión dinámica añadidos como completados.
-- **Settings > Memory**: nuevo campo "Peso recencia" en parámetros, barra de progreso en indexación de proyecto.
+- **ROADMAP.md**: Cookbook marcado como completado
+- **Settings > Memory**: campo "Peso recencia", barra de progreso en indexación
 
 ### Fixed
-- **Error de dimensión al cambiar de modelo de embeddings**: ya no falla si se usa `mxbai-embed-large` (1024d) o `text-embedding-3-small` (1536d) — la tabla vectorial se adapta automáticamente.
+- **Error de dimensión al cambiar modelo de embeddings** — ya no falla si se usa mxbai-embed-large (1024d) o text-embedding-3-small (1536d)
 
 ## [0.8.1] — 2026-06-01
 

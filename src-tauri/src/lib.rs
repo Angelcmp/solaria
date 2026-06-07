@@ -1,4 +1,5 @@
 pub mod audit;
+pub mod cli;
 mod cookbook;
 pub mod embeddings;
 mod keyring;

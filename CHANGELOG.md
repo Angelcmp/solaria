@@ -1,17 +1,26 @@
 # Changelog
 
-## [0.8.2] — 2026-06-02
+## [0.8.3] — 2026-06-07
 
 ### Added
-- **Cookbook: descubrimiento y descarga de modelos** — nueva tab en Settings para escanear hardware, explorar un catálogo curado de 15 modelos GGUF, descargar desde HuggingFace con barra de progreso (resume, velocidad, ETA, cancelable) y servirlos automáticamente en Ollama con un click (`ollama create` desde Modelfile)
-- **Escáner de hardware** — detecta CPU (cores/threads), RAM (total/disponible), GPU (NVIDIA via `nvidia-smi`, AMD via `rocm-smi`, fallback `lspci`), y discos usando `sysinfo` crate
-- **Catálogo de modelos curados**: Llama 3.2 3B, Phi-3.5 Mini, Gemma 3 4B, Mistral 7B v0.3, Qwen 2.5 7B, Llama 3.1 8B, Gemma 2 9B, DeepSeek R1 Distill 7B, Qwen 2.5 14B, Phi-4 14B, Qwen 2.5 32B, DeepSeek Coder 6.7B, Codestral 22B, Nomic Embed Text, mxbai-embed-large — cada uno con benchmarks, VRAM requerida, licencia y URL real de HuggingFace
-- **Comandos backend cookbook**: `cookbook_scan_hardware`, `cookbook_list_models`, `cookbook_list_downloaded`, `cookbook_download_model`, `cookbook_cancel_download`, `cookbook_delete_model`, `cookbook_create_ollama_model`, `cookbook_get_ollama_status`
-- **Persistencia de modelos descargados**: metadata en `~/.solaria/cookbook_models.json`, GGUF en `~/.solaria/models/`
-- **22 claves de i18n** para cookbook (es/en)
+- **Dimensión dinámica de vectores** — `vec0` table se adapta automáticamente a la dimensión del modelo de embeddings configurado (ya no está hardcodeada a 768). Tabla `config` persistente en SQLite. `ensure_dim()` recrea la tabla al cambiar de modelo.
+- **Chunk overlap** — `chunk_text()` ahora acepta `overlap` para solapar chunks consecutivos y no perder contexto en los cortes.
+- **Filtros en búsqueda semántica** — `SearchFilters` con filtro por `sources` (conversación/archivo) y `max_age_days` (antigüedad máxima).
+- **Decaimiento por recencia** — nuevo parámetro `recencyWeight` que mezcla similitud semántica + antigüedad. Resultados viejos pesan menos. Configurable en Settings > Memory.
+- **Deduplicación de resultados** — chunks duplicados del mismo `source:source_id` se colapsan, conservando solo el más relevante.
+- **Progreso en indexación de proyectos** — backend emite eventos `memory://index-progress` con total, progreso, archivo actual y fase. Barra de progreso visible en Settings > Memory > Indexar proyecto.
+- **Auto-index de proyecto al seleccionar** — al hacer clic en un proyecto en la sidebar, se indexan sus archivos automáticamente (cooldown de 1h).
+- **Auto-re-index en segundo plano** — cada 5 minutos verifica si el proyecto activo necesita re-indexarse, solo cuando el agente está idle.
+- **Indexación de conversaciones completas** — ahora se indexan todos los mensajes de la conversación (antes solo los últimos 6).
+- **Indexación de conversaciones de agente** — las investigaciones y reportes del agente ahora también se indexan en memoria (antes estaban excluidas).
+- **Contexto estructurado en inyección** — `formatContext()` ahora separa resultados por tipo (conversaciones previas / archivos del proyecto) con títulos, fechas y relevancia.
 
 ### Changed
-- **ROADMAP.md**: P7 actualizado — RAG, UI de MCP y WikiAside marcados como completados en v0.8.0/v0.8.1
+- **ROADMAP.md**: Cookbook marcado como completado en v0.8.2. Recencia, dedup, auto-index, progreso y dimensión dinámica añadidos como completados.
+- **Settings > Memory**: nuevo campo "Peso recencia" en parámetros, barra de progreso en indexación de proyecto.
+
+### Fixed
+- **Error de dimensión al cambiar de modelo de embeddings**: ya no falla si se usa `mxbai-embed-large` (1024d) o `text-embedding-3-small` (1536d) — la tabla vectorial se adapta automáticamente.
 
 ## [0.8.1] — 2026-06-01
 

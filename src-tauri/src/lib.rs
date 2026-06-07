@@ -418,17 +418,12 @@ async fn memory_index_text(
     };
     let store = memory::store();
     let dim = store.dim();
-    let chunks = embeddings::chunk_text(&text, dim * 4);
+    let chunks = embeddings::chunk_text(&text, dim * 4, dim / 4);
     if chunks.is_empty() {
         return Err("No text to index".into());
     }
     let first_embed = embeddings::embed(&chunks[0], &cfg).await?;
-    if first_embed.dim != dim {
-        return Err(format!(
-            "Embedding dim {} does not match memory dim {}",
-            first_embed.dim, dim
-        ));
-    }
+    store.ensure_dim(first_embed.dim).map_err(|e| e.to_string())?;
     let mut last_id: i64 = {
         memory::store()
             .insert_chunk(&source, &source_id, &chunks[0], &first_embed.embedding, metadata.as_deref())
@@ -452,6 +447,7 @@ async fn memory_search(
     ollama_host: Option<String>,
     api_key: Option<String>,
     api_url: Option<String>,
+    filters: Option<memory::SearchFilters>,
 ) -> Result<Vec<memory::SearchResult>, String> {
     let cfg = embeddings::EmbeddingConfig {
         provider: embeddings::EmbeddingProvider::from_str(&provider),
@@ -462,14 +458,8 @@ async fn memory_search(
     };
     let res = embeddings::embed(&query, &cfg).await?;
     let store = memory::store();
-    if res.dim != store.dim() {
-        return Err(format!(
-            "Query embedding dim {} does not match memory dim {}",
-            res.dim,
-            store.dim()
-        ));
-    }
-    store.search(&res.embedding, top_k.unwrap_or(5)).map_err(|e| e.to_string())
+    store.ensure_dim(res.dim).map_err(|e| e.to_string())?;
+    store.search(&res.embedding, top_k.unwrap_or(5), filters.as_ref()).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -499,6 +489,7 @@ fn memory_clear() -> Result<usize, String> {
 
 #[tauri::command]
 async fn memory_index_project_files(
+    app: tauri::AppHandle,
     working_dir: String,
     extensions: Option<Vec<String>>,
     provider: String,
@@ -536,18 +527,36 @@ async fn memory_index_project_files(
     collect_files(&path, &mut entries, 4)?;
     entries.sort();
 
+    let total = entries.len();
+    let _ = app.emit("memory://index-progress", serde_json::json!({
+        "working_dir": working_dir,
+        "total": total,
+        "current": 0,
+        "phase": "counting",
+    }));
+
     let store = memory::store();
     let _ = store.delete_by_source("file", &working_dir);
     let dim = store.dim();
 
     let mut indexed = 0;
-    for file_path in entries {
+    let mut last_emit = std::time::Instant::now();
+    for (idx, file_path) in entries.iter().enumerate() {
         let ext = file_path
             .extension()
             .and_then(|e| e.to_str())
             .unwrap_or("")
             .to_lowercase();
         if !allowed_exts.contains(&ext) {
+            if last_emit.elapsed().as_millis() > 200 {
+                let _ = app.emit("memory://index-progress", serde_json::json!({
+                    "working_dir": working_dir,
+                    "total": total,
+                    "current": idx + 1,
+                    "phase": "scanning",
+                }));
+                last_emit = std::time::Instant::now();
+            }
             continue;
         }
         let content = match std::fs::read_to_string(&file_path) {
@@ -558,19 +567,39 @@ async fn memory_index_project_files(
             continue;
         }
         let path_str = file_path.to_string_lossy().to_string();
-        let chunks = embeddings::chunk_text(&content, dim * 4);
-        for chunk in chunks {
-            let res = match embeddings::embed(&chunk, &cfg).await {
+        let _ = app.emit("memory://index-progress", serde_json::json!({
+            "working_dir": working_dir,
+            "total": total,
+            "current": idx + 1,
+            "phase": "indexing",
+            "file": path_str,
+            "indexed": indexed,
+        }));
+        let chunks = embeddings::chunk_text(&content, dim * 4, dim / 4);
+        let first_res = match embeddings::embed(&chunks[0], &cfg).await {
+            Ok(r) => r,
+            Err(_) => continue,
+        };
+        let _ = store.ensure_dim(first_res.dim);
+        let _ = store.insert_chunk("file", &working_dir, &chunks[0], &first_res.embedding, Some(&path_str));
+        indexed += 1;
+        for chunk in chunks.iter().skip(1) {
+            let res = match embeddings::embed(chunk, &cfg).await {
                 Ok(r) => r,
                 Err(_) => continue,
             };
-            if res.dim != dim {
-                continue;
-            }
-            let _ = store.insert_chunk("file", &working_dir, &chunk, &res.embedding, Some(&path_str));
+            let _ = store.insert_chunk("file", &working_dir, chunk, &res.embedding, Some(&path_str));
             indexed += 1;
         }
     }
+
+    let _ = app.emit("memory://index-progress", serde_json::json!({
+        "working_dir": working_dir,
+        "total": total,
+        "current": total,
+        "phase": "done",
+        "indexed": indexed,
+    }));
     Ok(indexed)
 }
 

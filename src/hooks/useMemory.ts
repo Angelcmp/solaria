@@ -12,6 +12,7 @@ export interface MemoryConfig {
   apiUrl: string
   topK: number
   minScore: number
+  recencyWeight: number
   autoInject: boolean
   indexConversations: boolean
   indexProjectFiles: boolean
@@ -29,6 +30,11 @@ export interface MemoryChunk {
 export interface SearchResult {
   chunk: MemoryChunk
   distance: number
+}
+
+export interface SearchFilters {
+  sources?: string[]
+  maxAgeDays?: number
 }
 
 export interface MemoryStats {
@@ -50,6 +56,7 @@ const DEFAULT_MEMORY_CONFIG: MemoryConfig = {
   apiUrl: '',
   topK: 5,
   minScore: 0.7,
+  recencyWeight: 0.3,
   autoInject: true,
   indexConversations: true,
   indexProjectFiles: true,
@@ -70,6 +77,7 @@ function saveConfig(config: MemoryConfig) {
 interface SearchParams {
   query: string
   topK?: number
+  filters?: SearchFilters
 }
 
 function buildEmbeddingArgs(config: MemoryConfig) {
@@ -82,17 +90,41 @@ function buildEmbeddingArgs(config: MemoryConfig) {
   }
 }
 
+export interface IndexProgress {
+  total: number
+  current: number
+  phase: string
+  file?: string
+  indexed?: number
+}
+
 export function useMemory() {
   const [config, setConfig] = useState<MemoryConfig>(loadConfig)
   const [stats, setStats] = useState<MemoryStats | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastResults, setLastResults] = useState<SearchResult[]>([])
+  const [indexProgress, setIndexProgress] = useState<IndexProgress | null>(null)
   const inflight = useRef<AbortController | null>(null)
 
   useEffect(() => {
     saveConfig(config)
   }, [config])
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined
+    const setup = async () => {
+      try {
+        const { listen } = await import('@tauri-apps/api/event')
+        const u = await listen<IndexProgress>('memory://index-progress', (event) => {
+          setIndexProgress(event.payload)
+        })
+        unlisten = u
+      } catch {}
+    }
+    setup()
+    return () => { unlisten?.() }
+  }, [])
 
   const refreshStats = useCallback(async () => {
     try {
@@ -112,7 +144,7 @@ export function useMemory() {
   }, [])
 
   const search = useCallback(
-    async ({ query, topK }: SearchParams): Promise<SearchResult[]> => {
+    async ({ query, topK, filters }: SearchParams): Promise<SearchResult[]> => {
       if (!config.enabled || !query.trim()) return []
       if (inflight.current) inflight.current.abort()
       const ctrl = new AbortController()
@@ -124,12 +156,30 @@ export function useMemory() {
         const results = await invoke<SearchResult[]>('memory_search', {
           query,
           topK: topK ?? config.topK,
+          filters: filters ?? null,
           ...args,
         })
         if (ctrl.signal.aborted) return []
-        const filtered = results.filter(r => r.distance <= 1 - config.minScore)
-        setLastResults(filtered)
-        return filtered
+        const now = Date.now() / 1000
+        const maxAge = 90 * 86400
+        const ranked = results.map(r => {
+          const age = now - r.chunk.created_at
+          const recencyNorm = Math.min(age / maxAge, 1)
+          const blended = r.distance * (1 - config.recencyWeight) + recencyNorm * config.recencyWeight
+          return { ...r, distance: blended }
+        })
+        ranked.sort((a, b) => a.distance - b.distance)
+        const deduped: SearchResult[] = []
+        const seen = new Set<string>()
+        for (const r of ranked) {
+          if (r.distance > 1 - config.minScore) continue
+          const key = `${r.chunk.source}:${r.chunk.source_id}`
+          if (seen.has(key)) continue
+          seen.add(key)
+          deduped.push(r)
+        }
+        setLastResults(deduped)
+        return deduped
       } catch (e) {
         if (!ctrl.signal.aborted) {
           setError(String(e))
@@ -231,12 +281,28 @@ export function useMemory() {
 
   const formatContext = useCallback((results: SearchResult[]): string => {
     if (results.length === 0) return ''
-    const lines = results.map((r, i) => {
-      const source = r.chunk.source === 'conversation' ? 'conversación previa' : `archivo: ${r.chunk.source_id}`
-      const score = (1 - r.distance).toFixed(2)
-      return `${i + 1}. [${source}, relevancia ${score}]\n${r.chunk.text}`
-    })
-    return lines.join('\n\n')
+    const conversations = results.filter(r => r.chunk.source === 'conversation')
+    const files = results.filter(r => r.chunk.source === 'file')
+    const parts: string[] = []
+    if (conversations.length > 0) {
+      parts.push('## Conversaciones previas relevantes')
+      conversations.forEach((r, i) => {
+        const score = (1 - r.distance).toFixed(2)
+        const meta = r.chunk.metadata ? JSON.parse(r.chunk.metadata) : {}
+        const date = new Date(r.chunk.created_at * 1000).toLocaleDateString()
+        parts.push(`### ${i + 1}. ${meta.title || 'Conversación'} (${date}, relevancia: ${score})`)
+        parts.push(r.chunk.text)
+      })
+    }
+    if (files.length > 0) {
+      parts.push('## Archivos del proyecto relevantes')
+      files.forEach((r, i) => {
+        const score = (1 - r.distance).toFixed(2)
+        parts.push(`### ${i + 1}. \`${r.chunk.source_id}\` (relevancia: ${score})`)
+        parts.push(r.chunk.text)
+      })
+    }
+    return parts.join('\n\n')
   }, [])
 
   return {
@@ -246,6 +312,7 @@ export function useMemory() {
     loading,
     error,
     lastResults,
+    indexProgress,
     search,
     indexText,
     indexFile,

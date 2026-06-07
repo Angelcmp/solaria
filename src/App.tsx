@@ -88,7 +88,7 @@ function App() {
   useEffect(() => { agentStepsRef.current = agentSteps }, [agentSteps])
   useEffect(() => { conversationsRef.current = conversations }, [conversations])
 
-  // Index completed chat conversations into memory (only when not streaming and not in agent mode)
+  // Index completed conversations into memory (chat + agent)
   useEffect(() => {
     if (!memory.config.enabled || !memory.config.indexConversations) return
     if (isStreaming || agentIsRunning) return
@@ -97,14 +97,37 @@ function App() {
     if (conv.messages.length < 2) return
     const last = conv.messages[conv.messages.length - 1]
     if (last.role !== 'assistant' || !last.content) return
-    if (conv.type === 'agent') return
     const lastIndexedRef = (window as any).__solaria_last_indexed || {}
     if (lastIndexedRef[conv.id] === last.id) return
-    const lastMessages = conv.messages.slice(-6).map(m => ({ role: m.role, content: m.content }))
-    memory.indexConversation(conv.id, conv.title, lastMessages).then(() => {
+    const allMessages = conv.messages.map(m => ({ role: m.role, content: m.content }))
+    memory.indexConversation(conv.id, conv.title, allMessages).then(() => {
       ;(window as any).__solaria_last_indexed = { ...lastIndexedRef, [conv.id]: last.id }
     }).catch(() => {})
   }, [conversations, isStreaming, agentIsRunning, activeConvId, memory])
+
+  // Auto-re-index project files in background every 5 min while idle
+  const isIdleRef = useRef(true)
+  isIdleRef.current = !isStreaming && !agentIsRunning
+  const memoryRef = useRef(memory)
+  memoryRef.current = memory
+  useEffect(() => {
+    if (!memoryRef.current.config.enabled || !memoryRef.current.config.indexProjectFiles) return
+    if (!activeProjectId) return
+    const project = projects.find(p => p.id === activeProjectId)
+    if (!project?.path) return
+    const tryIndex = () => {
+      if (!isIdleRef.current) return
+      const idx = (window as any).__solaria_project_indexed || {}
+      const last = idx[project.path] || 0
+      if (Date.now() - last > 3600000) {
+        memoryRef.current.indexProject(project.path).catch(() => {})
+        ;(window as any).__solaria_project_indexed = { ...idx, [project.path]: Date.now() }
+      }
+    }
+    tryIndex()
+    const interval = setInterval(tryIndex, 300000)
+    return () => clearInterval(interval)
+  }, [activeProjectId, projects])
 
   const handleToggleAgent = useCallback(() => {
     updateAgentConfig({ enabled: !agentConfig.enabled })
@@ -154,8 +177,8 @@ function App() {
     if (memory.config.enabled && memory.config.indexConversations && ids) {
       const conv = conversationsRef.current.find(c => c.id === ids.convId)
       if (conv) {
-        const lastMessages = conv.messages.slice(-6).map(m => ({ role: m.role, content: m.content }))
-        memory.indexConversation(conv.id, conv.title, lastMessages).catch(() => {})
+        const allMessages = conv.messages.map(m => ({ role: m.role, content: m.content }))
+        memory.indexConversation(conv.id, conv.title, allMessages).catch(() => {})
       }
     }
   }, [memory])
@@ -260,6 +283,14 @@ function App() {
               if (p.path) {
                 updateAgentConfig({ workingDirectory: p.path })
                 setSidebarMode('wiki')
+                if (memory.config.enabled && memory.config.indexProjectFiles) {
+                  const indexed = (window as any).__solaria_project_indexed || {}
+                  const lastTime = indexed[p.path] || 0
+                  if (Date.now() - lastTime > 3600000) {
+                    memory.indexProject(p.path).catch(() => {})
+                    ;(window as any).__solaria_project_indexed = { ...indexed, [p.path]: Date.now() }
+                  }
+                }
               }
             }
           }}

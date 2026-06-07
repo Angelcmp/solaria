@@ -879,6 +879,11 @@ function MemoryTab() {
                 <input type="number" min="0" max="1" step="0.05" value={memory.config.minScore} onChange={e => memory.updateConfig({ minScore: parseFloat(e.target.value) || 0.7 })} className="w-full px-2 py-1 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.7rem] text-white font-mono outline-none focus:border-[#DCB263] transition-colors" />
                 <p className="text-[0.5rem] text-[#666666] mt-1">Umbral de relevancia</p>
               </div>
+              <div className="p-2.5 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)]">
+                <label className="block text-[0.55rem] text-[#999999] mb-1">Peso recencia</label>
+                <input type="number" min="0" max="1" step="0.05" value={memory.config.recencyWeight} onChange={e => memory.updateConfig({ recencyWeight: parseFloat(e.target.value) || 0.3 })} className="w-full px-2 py-1 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.7rem] text-white font-mono outline-none focus:border-[#DCB263] transition-colors" />
+                <p className="text-[0.5rem] text-[#666666] mt-1">0 = solo similitud, 1 = solo recencia</p>
+              </div>
             </div>
           </Section>
 
@@ -939,11 +944,22 @@ function MemoryTab() {
           <Section title="Indexar proyecto" color="#00E5C9">
             <div className="p-3 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] space-y-3">
               <p className="text-[0.6rem] text-[#999999] leading-relaxed">Escanea el directorio de trabajo del agente e indexa archivos compatibles en la memoria vectorial. Extensiones por defecto: .md, .txt, .ts, .tsx, .rs, .py, .json, .yaml, .toml</p>
-              <ActionButton variant="primary" onClick={handleIndexProject} disabled={indexingProject}>
-                {indexingProject && <Spinner />}
-                {indexingProject ? 'Indexando archivos...' : 'Indexar directorio de trabajo'}
+              <ActionButton variant="primary" onClick={handleIndexProject} disabled={indexingProject || (memory.indexProgress?.phase === 'indexing')}>
+                {(indexingProject || memory.indexProgress?.phase === 'indexing') && <Spinner />}
+                {memory.indexProgress?.phase === 'indexing' ? 'Indexando...' : indexingProject ? 'Indexando archivos...' : 'Indexar directorio de trabajo'}
               </ActionButton>
-              {lastIndexedCount !== null && (
+              {memory.indexProgress && memory.indexProgress.phase === 'indexing' && memory.indexProgress.total > 0 && (
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-[0.5rem] text-[#999999]">
+                    <span className="truncate max-w-[70%]">{memory.indexProgress.file?.split('/').pop()}</span>
+                    <span>{memory.indexProgress.current} / {memory.indexProgress.total}</span>
+                  </div>
+                  <div className="w-full h-1 rounded-full bg-[rgba(255,255,255,0.06)] overflow-hidden">
+                    <div className="h-full rounded-full bg-[#00E5C9] transition-all duration-200" style={{ width: `${(memory.indexProgress.current / memory.indexProgress.total) * 100}%` }} />
+                  </div>
+                </div>
+              )}
+              {lastIndexedCount !== null && memory.indexProgress?.phase !== 'indexing' && (
                 <div className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg bg-[rgba(0,229,201,0.06)] border border-[rgba(0,229,201,0.12)]">
                   <CheckIcon />
                   <span className="text-[0.6rem] text-[#00E5C9]">{lastIndexedCount} chunk{lastIndexedCount !== 1 ? 's' : ''} indexado{lastIndexedCount !== 1 ? 's' : ''}</span>

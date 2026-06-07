@@ -204,7 +204,7 @@ async fn embed_custom(text: &str, config: &EmbeddingConfig) -> Result<EmbeddingR
     })
 }
 
-pub fn chunk_text(text: &str, max_chars: usize) -> Vec<String> {
+pub fn chunk_text(text: &str, max_chars: usize, overlap: usize) -> Vec<String> {
     let text = text.trim();
     if text.is_empty() {
         return vec![];
@@ -229,7 +229,12 @@ pub fn chunk_text(text: &str, max_chars: usize) -> Vec<String> {
         if actual_end <= start {
             start += max_chars;
         } else {
-            start = actual_end;
+            let next_start = actual_end.saturating_sub(overlap);
+            if next_start <= start {
+                start = actual_end;
+            } else {
+                start = next_start;
+            }
         }
     }
     chunks
@@ -241,24 +246,34 @@ mod tests {
 
     #[test]
     fn chunk_short_text() {
-        let chunks = chunk_text("hola mundo", 100);
+        let chunks = chunk_text("hola mundo", 100, 0);
         assert_eq!(chunks.len(), 1);
         assert_eq!(chunks[0], "hola mundo");
     }
 
     #[test]
     fn chunk_empty() {
-        let chunks = chunk_text("", 100);
+        let chunks = chunk_text("", 100, 0);
         assert!(chunks.is_empty());
     }
 
     #[test]
     fn chunk_long_text_splits_at_boundary() {
         let text = "a".repeat(500) + "." + &"b".repeat(500);
-        let chunks = chunk_text(&text, 200);
+        let chunks = chunk_text(&text, 200, 0);
         assert!(chunks.len() >= 4);
         for c in &chunks {
             assert!(c.len() <= 200);
+        }
+    }
+
+    #[test]
+    fn chunk_with_overlap() {
+        let text = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        let chunks = chunk_text(text, 10, 5);
+        assert!(chunks.len() >= 3);
+        for i in 1..chunks.len() {
+            assert!(chunks[i].contains(&chunks[i - 1][chunks[i - 1].len().saturating_sub(5)..]));
         }
     }
 

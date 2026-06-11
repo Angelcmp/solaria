@@ -144,6 +144,30 @@ const translations: Translations = {
   'cookbook.recommended': { es: 'Recomendado', en: 'Recommended' },
   'cookbook.runs_on_cpu': { es: 'Funciona en CPU', en: 'Runs on CPU' },
   'cookbook.needs_gpu': { es: 'Requiere GPU', en: 'Needs GPU' },
+
+  // Comparison
+  'comparison.title': { es: 'Comparador ciego de modelos', en: 'Blind Model Comparator' },
+  'comparison.enable': { es: 'Activar comparador', en: 'Enable comparator' },
+  'comparison.enable_desc': { es: 'Permite comparar respuestas de modelos lado a lado sin saber cuál es cuál', en: 'Compare model responses side by side without knowing which is which' },
+  'comparison.enable_desc_detail': { es: 'Al activarlo, aparecerá un botón "Comparar" en la barra de herramientas del chat.', en: 'When enabled, a "Compare" button will appear in the chat toolbar.' },
+  'comparison.select_models': { es: 'Selecciona 2-4 modelos para comparar', en: 'Select 2-4 models to compare' },
+  'comparison.write_prompt': { es: 'Escribe tu pregunta', en: 'Write your prompt' },
+  'comparison.prompt_placeholder': { es: 'Escribe la misma pregunta que se enviará a todos los modelos...', en: 'Write the same question to send to all models...' },
+  'comparison.compare_btn': { es: 'Comparar', en: 'Compare' },
+  'comparison.which_better': { es: '¿Cuál respuesta prefieres?', en: 'Which answer do you prefer?' },
+  'comparison.reveal': { es: 'Revelar identidades', en: 'Reveal identities' },
+  'comparison.new_round': { es: 'Nueva comparación', en: 'New comparison' },
+  'comparison.prompt': { es: 'Pregunta', en: 'Prompt' },
+  'comparison.result': { es: 'Resultado', en: 'Result' },
+  'comparison.label': { es: 'Etiqueta', en: 'Label' },
+  'comparison.real_model': { es: 'Modelo real', en: 'Real model' },
+  'comparison.latency': { es: 'Latencia', en: 'Latency' },
+  'comparison.cost': { es: 'Costo', en: 'Cost' },
+  'comparison.vote': { es: 'Voto', en: 'Vote' },
+  'comparison.winner': { es: 'Ganador', en: 'Winner' },
+  'comparison.error': { es: 'Error', en: 'Error' },
+  'comparison.waiting': { es: 'Esperando respuesta...', en: 'Waiting for response...' },
+  'comparison.description': { es: 'Las respuestas se etiquetan como "Modelo A" y "Modelo B" sin revelar cuál es cuál. Responde la misma pregunta a todos los modelos, compara los resultados y solo después descubre qué modelo generó cada respuesta.', en: 'Responses are labeled "Model A" and "Model B" without revealing which is which. Ask all models the same question, compare results, and only discover which model generated each response afterwards.' },
 }
 
 export function t(key: string, lang: Lang): string {

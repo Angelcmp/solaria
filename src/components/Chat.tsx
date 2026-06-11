@@ -28,6 +28,8 @@ interface ChatProps {
   onUpdateConvModel?: (convId: string, provider: string, model: string) => void
   providers?: { id: string; label: string; models: string[]; local: boolean }[]
   activeProject?: { name: string; path: string } | null
+  comparisonEnabled?: boolean
+  onOpenComparator?: () => void
 }
 
 interface QuickAction {
@@ -212,6 +214,8 @@ export default function Chat({
   onUpdateConvModel,
   providers,
   activeProject,
+  comparisonEnabled,
+  onOpenComparator,
 }: ChatProps) {
   const [input, setInput] = useState('')
   const [activePrompt, setActivePrompt] = useState<string | null>(null)
@@ -655,6 +659,17 @@ export default function Chat({
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="8" width="18" height="10" rx="2"/><circle cx="8" cy="13" r="1.5" fill="currentColor"/><circle cx="16" cy="13" r="1.5" fill="currentColor"/><path d="M12 3v3M12 16v3"/></svg>
                 <span className="text-[0.6rem] font-semibold uppercase tracking-[0.04em]">Agent</span>
               </button>
+
+              {comparisonEnabled && onOpenComparator && (
+                <button
+                  onClick={onOpenComparator}
+                  className="shrink-0 h-6 rounded flex items-center justify-center border border-[rgba(255,255,255,0.06)] text-[#999999] hover:bg-[rgba(220,178,99,0.08)] hover:border-[rgba(220,178,99,0.3)] hover:text-[#DCB263] transition-all duration-200 px-1.5 gap-1"
+                  title="Comparador ciego de modelos"
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><line x1="16" y1="5" x2="18" y2="7"/><line x1="17" y1="4" x2="18" y2="5"/></svg>
+                  <span className="text-[0.6rem] font-semibold uppercase tracking-[0.04em]">Comparar</span>
+                </button>
+              )}
 
               <div className="w-px h-3.5 bg-[rgba(255,255,255,0.06)] mx-0.5" />
 

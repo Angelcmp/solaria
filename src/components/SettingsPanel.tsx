@@ -413,6 +413,26 @@ function GeneralTab({
           </div>
         </Section>
       )}
+
+      {/* Section: Comparador ciego */}
+      <Section title="Comparador ciego de modelos" color="#DCB263">
+        <div className="p-3 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-[0.7rem] font-medium text-white">Activar comparador</div>
+              <div className="text-[0.55rem] text-[#999999]">Permite comparar respuestas de modelos lado a lado sin saber cuál es cuál</div>
+            </div>
+            <Switch checked={settings.comparisonEnabled} onChange={v => onUpdate({ comparisonEnabled: v })} />
+          </div>
+          {settings.comparisonEnabled && (
+            <div className="p-2.5 rounded-lg bg-[rgba(0,229,201,0.04)] border border-[rgba(0,229,201,0.08)]">
+              <p className="text-[0.58rem] text-[#999999] leading-relaxed">
+                Al activarlo, aparecerá un botón "Comparar" en la barra de herramientas del chat. Podrás seleccionar 2-4 modelos, enviar la misma pregunta a todos, ver las respuestas lado a lado y votar por la mejor sin saber qué modelo la generó.
+              </p>
+            </div>
+          )}
+        </div>
+      </Section>
     </div>
   )
 }

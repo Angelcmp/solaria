@@ -26,6 +26,7 @@ export interface AppSettings {
   tavilyKey: string
   apiKeys: ApiKeys
   securityProfile: SecurityProfile
+  comparisonEnabled: boolean
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -49,6 +50,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     glm: '',
   },
   securityProfile: 'explore',
+  comparisonEnabled: false,
 }
 
 const STORAGE_KEY = 'solaria-settings'

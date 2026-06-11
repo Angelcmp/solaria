@@ -168,8 +168,8 @@
 - [x] **Memoria persistente con vector store (RAG)** — SQLite + sqlite-vec como motor de búsqueda vectorial embebido. Embeddings multi-provider (Ollama, OpenAI, custom). Indexación automática de conversaciones y proyectos. Búsqueda semántica inyectada en system prompt. (v0.8.0)
 - [x] **UI de MCP en Settings** — UI completa para gestionar servidores MCP: listar, añadir, editar, eliminar, iniciar/detener, ver herramientas descubiertas. (v0.8.1)
 - [x] **Cookbook: descubrimiento y descarga de modelos** — escanear hardware, explorar catálogo curado de 15 modelos GGUF, descargar desde HuggingFace con barra de progreso (resume, velocidad, ETA, cancelable) y servir automáticamente en Ollama con un clic. (v0.8.2)
-- [ ] **Comparador de modelos (blind test)** — probar modelos side-by-side sin saber cuál es cuál, votar y sintetizar resultado.
-- [ ] **PWA / responsive mobile** — convertir en PWA instalable, interfaz adaptativa para móvil.
+- [x] **Comparador de modelos (blind test)** — probar modelos side-by-side sin saber cuál es cuál, votar y sintetizar resultado. (v0.8.5)
+- [x] ~~**PWA / responsive mobile**~~ — descartado.
 - [x] **WikiAside: panel de markdowns** — lista archivos `.md` del working directory del agente, renderizado inline. Botón toggle en WorkspaceAside. Backend `wiki_list_files`/`wiki_read_file`. (v0.8.1)
 
 ### Bugs conocidos (todos resueltos ✅)

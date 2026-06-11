@@ -3,12 +3,14 @@ import { useChat, type ProviderConfig } from './hooks/useChat'
 import { useSettings } from './hooks/useSettings'
 import { useAgent } from './hooks/useAgent'
 import { useMemory } from './hooks/useMemory'
+import { useComparison } from './hooks/useComparison'
 import type { AgentStep } from './hooks/useAgent'
 import Chat from './components/Chat'
 import WorkspaceAside, { type Project } from './components/WorkspaceAside'
 import WikiAside from './components/WikiAside'
 import SettingsPanel from './components/SettingsPanel'
 import ResearchAside from './components/ResearchAside'
+import ModelComparator from './components/ModelComparator'
 
 const PROVIDERS: { id: string; label: string; models: string[]; local: boolean }[] = [
   { id: 'ollama', label: 'Ollama (Local)', models: ['qwen3.5', 'llama3.2', 'llama3.1', 'mistral', 'phi3', 'deepseek-r1', 'gemma3', 'gemma4'], local: true },
@@ -72,6 +74,17 @@ function App() {
 
   const memory = useMemory()
 
+  const {
+    isActive: comparisonActive,
+    currentRound,
+    isStreaming: comparisonStreaming,
+    openComparator,
+    closeComparator,
+    startComparison,
+    vote,
+    reveal,
+  } = useComparison()
+
   const [agentSteps, setAgentSteps] = useState<AgentStep[]>([])
   const [projects, setProjects] = useState<Project[]>(() => {
     try { return JSON.parse(localStorage.getItem('solaria-projects') || '[]') } catch { return [] }
@@ -132,6 +145,13 @@ function App() {
   const handleToggleAgent = useCallback(() => {
     updateAgentConfig({ enabled: !agentConfig.enabled })
   }, [agentConfig.enabled, updateAgentConfig])
+
+  const handleStartComparison = useCallback((
+    prompt: string,
+    models: { providerId: string; modelName: string; apiKey?: string }[],
+  ) => {
+    startComparison(prompt, models, settings.temperature, settings.topP, settings.maxTokens)
+  }, [startComparison, settings.temperature, settings.topP, settings.maxTokens])
 
   const handleClear = useCallback(() => {
     if (activeConvId) deleteConversation(activeConvId)
@@ -325,6 +345,8 @@ function App() {
         onUpdateConvModel={updateConvModel}
         providers={PROVIDERS}
         activeProject={activeProjectId ? projects.find(p => p.id === activeProjectId) || null : null}
+        comparisonEnabled={settings.comparisonEnabled}
+        onOpenComparator={openComparator}
       />
       <ResearchAside
         steps={agentSteps}
@@ -334,6 +356,22 @@ function App() {
         onStop={agentIsRunning ? stopAgent : undefined}
         onConfirmTool={confirmTool}
       />
+
+      {comparisonActive && (
+        <ModelComparator
+          models={PROVIDERS}
+          apiKeys={settings.apiKeys as unknown as Record<string, string>}
+          temperature={settings.temperature}
+          topP={settings.topP}
+          maxTokens={settings.maxTokens}
+          onClose={closeComparator}
+          onStartComparison={handleStartComparison}
+          currentRound={currentRound}
+          isStreaming={comparisonStreaming}
+          onVote={vote}
+          onReveal={reveal}
+        />
+      )}
 
       {showSettings && (
         <SettingsPanel

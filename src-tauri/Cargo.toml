@@ -1,6 +1,6 @@
 [package]
 name = "solaria-agent"
-version = "0.2.1"
+version = "0.8.5"
 description = "Deep Research Agentic System with Skills — investigate, analyze, and automate"
 authors = ["you"]
 edition = "2021"

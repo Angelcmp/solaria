@@ -95,12 +95,32 @@ body {
   background: transparent;
 }
 
-/* Syntax highlighting */
+/* ════════════════════════════════
+   Syntax highlighting (legacy + hljs)
+   ════════════════════════════════ */
 .hl-keyword { color: #c792ea; }
 .hl-string { color: #c3e88d; }
 .hl-number { color: #f78c6c; }
 .hl-comment { color: #546e7a; font-style: italic; }
 .hl-attr { color: #ffcb6b; }
+
+.hljs-keyword { color: #c792ea; }
+.hljs-string { color: #c3e88d; }
+.hljs-number { color: #f78c6c; }
+.hljs-comment { color: #546e7a; font-style: italic; }
+.hljs-attr { color: #ffcb6b; }
+.hljs-literal { color: #f78c6c; }
+.hljs-operator { color: #89ddff; }
+.hljs-function { color: #82aaff; }
+.hljs-class { color: #ffcb6b; }
+.hljs-variable { color: #eeffff; }
+.hljs-params { color: #eeffff; }
+.hljs-punctuation { color: #89ddff; }
+.hljs-tag { color: #f07178; }
+.hljs-name { color: #f07178; }
+.hljs-property { color: #f07178; }
+.hljs-built_in { color: #ffcb6b; }
+
 .hl-inline {
   background: rgba(199, 146, 234, 0.12);
   color: #c792ea;
@@ -110,12 +130,16 @@ body {
   font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
 }
 
+/* ════════════════════════════════
+   Code blocks
+   ════════════════════════════════ */
 .hl-block {
   background: rgba(0, 0, 0, 0.35);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 8px;
   margin: 8px 0;
   position: relative;
+  overflow: hidden;
 }
 
 .hl-block pre {
@@ -131,6 +155,9 @@ body {
 
 .hl-block code {
   font-family: inherit;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
 }
 
 .hl-block pre::-webkit-scrollbar {
@@ -146,13 +173,16 @@ body {
   background: #444;
 }
 
-/* Markdown body tables */
+/* ════════════════════════════════
+   Markdown body
+   ════════════════════════════════ */
 .markdown-body table {
   border-collapse: collapse;
   width: 100%;
 }
 
-.markdown-body th, .markdown-body td {
+.markdown-body th,
+.markdown-body td {
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
@@ -164,4 +194,41 @@ body {
 .markdown-body td {
   font-weight: 350;
   letter-spacing: 0.01em;
+}
+
+.markdown-body ol {
+  list-style-type: decimal;
+  padding-left: 1.25rem;
+  margin: 0.5rem 0;
+}
+
+.markdown-body ul {
+  list-style-type: disc;
+  padding-left: 1.25rem;
+  margin: 0.5rem 0;
+}
+
+.markdown-body blockquote {
+  margin: 0.75rem 0;
+}
+
+.markdown-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+
+.markdown-body hr {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin: 1rem 0;
+}
+
+.markdown-body a {
+  color: #00E5C9;
+  text-decoration: none;
+}
+
+.markdown-body a:hover {
+  text-decoration: underline;
 }

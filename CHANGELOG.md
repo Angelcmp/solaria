@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.8.5] — 2026-06-24
+
+### Added
+- **Markdown renderer reescrito** — migración de parser manual basado en regex a `react-markdown` + `remark-gfm`, con parsing real de GFM (tablas, listas ordenadas, strikethrough, checkboxes, autolinks)
+
+### Changed
+- **Syntax highlighting con highlight.js** — reemplazo del regex manual por `highlight.js` con 13 lenguajes registrados. Los colores se mantienen idénticos a la paleta anterior (`#c792ea` keywords, `#c3e88d` strings, `#f78c6c` numbers, `#546e7a` comments, `#ffcb6b` attrs)
+- **Bloques de código con header** — cada bloque ahora tiene un header oscuro con el nombre del lenguaje (izquierda) y botón Copiar (derecha, visible en hover)
+- **Blockquotes estilizados** — barra lateral cian `#00E5C9`, fondo sutil `rgba(0,229,201,0.03)`, rounded-right
+- **Listas ordenadas** — ahora se renderizan correctamente con `<ol>` (decimal) y buen espaciado
+- **Inline code** — fondos y colores consistentes con la paleta de syntax highlighting
+
+### Fixed
+- **Bloques de código malformados** — ya no se rompen cuando el LLM genera variaciones en el formato de los backticks
+- **Tags HTML sueltos en el chat** — `hl-keyword`, `hl-string` etc. ya no se filtran como texto plano fuera de bloques de código
+- **Links rotos** — las URLs malformadas se escapan correctamente sin romper el renderizado
+
 ## [0.8.4] — 2026-06-07
 
 ### Added

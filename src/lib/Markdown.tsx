@@ -1,3 +1,41 @@
+import { useState, useCallback } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import hljs from 'highlight.js/lib/core'
+
+import python from 'highlight.js/lib/languages/python'
+import javascript from 'highlight.js/lib/languages/javascript'
+import typescript from 'highlight.js/lib/languages/typescript'
+import bash from 'highlight.js/lib/languages/bash'
+import json from 'highlight.js/lib/languages/json'
+import rust from 'highlight.js/lib/languages/rust'
+import xml from 'highlight.js/lib/languages/xml'
+import css from 'highlight.js/lib/languages/css'
+import sql from 'highlight.js/lib/languages/sql'
+import yaml from 'highlight.js/lib/languages/yaml'
+import markdown from 'highlight.js/lib/languages/markdown'
+
+hljs.registerLanguage('python', python)
+hljs.registerLanguage('py', python)
+hljs.registerLanguage('javascript', javascript)
+hljs.registerLanguage('js', javascript)
+hljs.registerLanguage('typescript', typescript)
+hljs.registerLanguage('ts', typescript)
+hljs.registerLanguage('bash', bash)
+hljs.registerLanguage('sh', bash)
+hljs.registerLanguage('shell', bash)
+hljs.registerLanguage('json', json)
+hljs.registerLanguage('rust', rust)
+hljs.registerLanguage('rs', rust)
+hljs.registerLanguage('html', xml)
+hljs.registerLanguage('xml', xml)
+hljs.registerLanguage('css', css)
+hljs.registerLanguage('sql', sql)
+hljs.registerLanguage('yaml', yaml)
+hljs.registerLanguage('yml', yaml)
+hljs.registerLanguage('markdown', markdown)
+hljs.registerLanguage('md', markdown)
+
 function escapeHtml(text: string): string {
   return text
     .replace(/&/g, '&amp;')
@@ -15,290 +53,377 @@ function sanitizeUrl(url: string): string {
   return '#'
 }
 
-const KEYWORDS = '\\b(function|const|let|var|return|if|else|for|while|do|switch|case|break|continue|new|delete|typeof|instanceof|in|of|class|extends|implements|interface|type|enum|import|export|from|default|async|await|yield|throw|try|catch|finally|this|super|true|false|null|undefined|void|static|private|protected|public|readonly|abstract|as|satisfies|using|await using|module|namespace|declare|global)\\b'
-
-function highlightCode(code: string, lang: string): string {
-  const escaped = escapeHtml(code)
-
-  if (!lang) return escaped
-
-  const patterns: { lang: string; fn: (s: string) => string }[] = [
-    { lang: 'bash', fn: h => h.replace(/^# .+/gm, '<span class="hl-comment">$&</span>') },
-    { lang: 'json', fn: h => h
-      .replace(/"([^"]+)":/g, '<span class="hl-attr">"$1"</span>:')
-      .replace(/"([^"]+)"(?=\s*[,\]}])/g, '<span class="hl-string">"$1"</span>')
-    },
-    { lang: 'rust', fn: h => applyGenericHighlight(h) },
-    { lang: 'typescript', fn: h => applyGenericHighlight(h) },
-    { lang: 'tsx', fn: h => applyGenericHighlight(h) },
-    { lang: 'ts', fn: h => applyGenericHighlight(h) },
-    { lang: 'javascript', fn: h => applyGenericHighlight(h) },
-    { lang: 'js', fn: h => applyGenericHighlight(h) },
-    { lang: 'jsx', fn: h => applyGenericHighlight(h) },
-    { lang: 'python', fn: h => applyPythonHighlight(h) },
-    { lang: 'py', fn: h => applyPythonHighlight(h) },
-  ]
-
-  const match = patterns.find(p => p.lang === lang.toLowerCase())
-  if (match) return match.fn(escaped)
-  return applyGenericHighlight(escaped)
+function extractText(node: unknown): string {
+  if (typeof node === 'string') return node
+  if (typeof node === 'number') return String(node)
+  if (Array.isArray(node)) return node.map(extractText).join('')
+  if (node && typeof node === 'object' && 'props' in node) {
+    const n = node as { props?: { children?: unknown } }
+    return extractText(n.props?.children)
+  }
+  return ''
 }
 
-function applyGenericHighlight(code: string): string {
-  return code
-    .replace(/(\/\/[^\n]*)/g, '<span class="hl-comment">$1</span>')
-    .replace(/(\/\*[\s\S]*?\*\/)/g, '<span class="hl-comment">$1</span>')
-    .replace(new RegExp(`(${KEYWORDS})`, 'g'), '<span class="hl-keyword">$1</span>')
-    .replace(/(['"`])(?:(?!\1|\\).|\\.)*\1/g, '<span class="hl-string">$&</span>')
-    .replace(/\b(\d+\.?\d*)\b/g, '<span class="hl-number">$1</span>')
-    .replace(/(\/\/[^\n]*)/g, '<span class="hl-comment">$1</span>')
-}
+/* ════════════════════════════════
+   COPY BUTTON
+   ════════════════════════════════ */
+function CopyButton({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false)
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(code).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }, [code])
 
-function applyPythonHighlight(code: string): string {
-  return code
-    .replace(/(#[^\n]*)/g, '<span class="hl-comment">$1</span>')
-    .replace(new RegExp(`(${KEYWORDS.replace('\\bconst\\b|', '').replace('\\blet\\b|', '').replace('\\bvar\\b|', '')})`, 'g'), '<span class="hl-keyword">$1</span>')
-    .replace(/(['"`])(?:(?!\1|\\).|\\.)*\1/g, '<span class="hl-string">$&</span>')
-    .replace(/\b(\d+\.?\d*)\b/g, '<span class="hl-number">$1</span>')
-}
-
-function autolink(text: string): string {
-  return text.replace(
-    /(?<!\]\()(https?:\/\/[^\s<]+[^\s<.,;:!?)}\]'"])/g,
-    '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-[#00E5C9] hover:underline break-all">$1</a>'
+  return (
+    <button
+      onClick={handleCopy}
+      className="px-2 py-0.5 rounded text-[0.55rem] text-[#999999] bg-[#2A2A2A] hover:bg-[#353535] hover:text-white border border-[rgba(255,255,255,0.08)] transition-all opacity-0 group-hover:opacity-100"
+    >
+      {copied ? '✓' : 'Copiar'}
+    </button>
   )
 }
 
-function renderInline(text: string): string {
-  let result = autolink(text)
-  result = result
-    .replace(/\*\*(.+?)\*\*/g, '<strong class="text-white" style="font-weight:500">$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em class="text-[#999999] not-italic" style="font-weight:350">$1</em>')
-    .replace(/`([^`]+)`/g, '<code class="hl-inline">$1</code>')
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m: string, text: string, url: string) =>
-      `<a href="${sanitizeUrl(url)}" target="_blank" rel="noopener noreferrer" class="text-[#00E5C9] hover:underline">${text}</a>`
+/* ════════════════════════════════
+   CODE BLOCK
+   ════════════════════════════════ */
+function Code({ inline, className, children, ...props }: any) {
+  if (inline) {
+    return (
+      <code className="hl-inline" {...props}>
+        {children}
+      </code>
     )
-  return result
+  }
+
+  const match = /language-(\w+)/.exec(className || '')
+  const lang = match ? match[1] : ''
+  const rawCode = String(children).replace(/\n$/, '')
+
+  let highlighted = escapeHtml(rawCode)
+  if (lang && hljs.getLanguage(lang)) {
+    highlighted = hljs.highlight(rawCode, { language: lang }).value
+  }
+
+  return (
+    <div className="hl-block relative group my-3">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-[rgba(255,255,255,0.06)] bg-[rgba(0,0,0,0.2)]">
+        <span className="text-[0.625rem] text-[#666666] font-mono uppercase tracking-wider">
+          {lang || 'text'}
+        </span>
+        <CopyButton code={rawCode} />
+      </div>
+      <pre className="!m-0 overflow-x-auto" style={{ scrollbarWidth: 'thin' }}>
+        <code dangerouslySetInnerHTML={{ __html: highlighted }} />
+      </pre>
+    </div>
+  )
 }
 
-function renderTable(block: string): string {
-  const lines = block.split('\n').filter(l => l.trim())
-  if (lines.length < 2) return escapeHtml(block)
-
-  const separatorIdx = lines.findIndex(l => /^\|?\s*[-|]+\s*\|?\s*$/.test(l))
-  if (separatorIdx < 0) {
-    // Not a real table, render as heading body if starts with #
-    const hm = lines[0].match(/^(#{1,3})\s+(.+)/)
-    if (hm) {
-      const level = hm[1].length
-      const size = level === 1 ? 'text-base' : level === 2 ? 'text-sm' : 'text-xs'
-      return `<h${level} class="${size} font-medium text-white mt-4 mb-2" style="letter-spacing:0.01em">${renderInline(escapeHtml(hm[2]))}</h${level}>`
-    }
-    return escapeHtml(block)
-  }
-
-  const beforeSep = lines.slice(0, separatorIdx)
-  const afterSep = lines.slice(separatorIdx + 1)
-
-  let html = ''
-
-  // Render heading lines before the separator
-  for (const line of beforeSep) {
-    const hm = line.match(/^(#{1,3})\s+(.+)/)
-    if (hm) {
-      const level = hm[1].length
-      const size = level === 1 ? 'text-base' : level === 2 ? 'text-sm' : 'text-xs'
-      const title = hm[2].split('|')[0].trim()
-      html += `<h${level} class="${size} font-medium text-white mt-4 mb-2" style="letter-spacing:0.01em">${renderInline(escapeHtml(title))}</h${level}>`
-    }
-  }
-
-  // Extract table headers from the last line before separator
-  let headers: string[] = []
-  const lastBefore = beforeSep[beforeSep.length - 1]
-  if (lastBefore) {
-    const hm = lastBefore.match(/^(#{1,3})\s+(.+)/)
-    if (hm) {
-      headers = hm[2].split('|').slice(1).map(s => s.trim()).filter(Boolean)
-    } else {
-      headers = lastBefore.split('|').filter(c => c.trim()).map(c => c.trim())
-    }
-  }
-
-  if (headers.length === 0) return html
-
-  html += '<div class="overflow-x-auto my-3"><table class="w-full text-[0.75rem] border-collapse" style="font-family:\'IBM Plex Sans\',\'Inter\',system-ui,sans-serif;letter-spacing:0.01em">'
-  html += '<thead><tr>'
-  for (const h of headers) {
-    html += `<th class="border border-[rgba(255,255,255,0.1)] px-3 py-1.5 text-left font-medium text-[#DCB263]" style="font-weight:450;letter-spacing:0.02em">${renderInline(escapeHtml(h))}</th>`
-  }
-  html += '</tr></thead><tbody>'
-
-  for (const row of afterSep) {
-    if (/^\|?\s*[-|]+\s*\|?\s*$/.test(row)) continue
-    const cols = row.split('|').filter(c => c.trim()).map(c => c.trim())
-    if (cols.length === 0) continue
-    html += '<tr>'
-    for (const c of cols) {
-      html += `<td class="border border-[rgba(255,255,255,0.1)] px-3 py-1.5" style="font-weight:350;letter-spacing:0.01em">${renderInline(escapeHtml(c))}</td>`
-    }
-    html += '</tr>'
-  }
-
-  html += '</tbody></table></div>'
-  return html
+/* Passthrough <pre> so we don't double-wrap */
+function Pre({ children }: any) {
+  return <>{children}</>
 }
 
-function renderBlockquote(text: string): string {
-  const lines = text.split('\n')
-  const result: string[] = []
-  let inBq = false
-
-  for (const line of lines) {
-    const bqMatch = line.match(/^>\s?(.+)/)
-    if (bqMatch) {
-      if (!inBq) { result.push('<blockquote class="pl-0 my-2 text-[0.75rem] text-[#b0b0b0]" style="font-weight:350">'); inBq = true }
-      result.push(renderInline(escapeHtml(bqMatch[1])))
-      result.push('<br/>')
-    } else {
-      if (inBq) { result.push('</blockquote>'); inBq = false }
-      result.push(line)
-    }
-  }
-  if (inBq) result.push('</blockquote>')
-  return result.join('\n')
+/* ════════════════════════════════
+   BLOCKQUOTE
+   ════════════════════════════════ */
+function Blockquote({ children, ...props }: any) {
+  return (
+    <blockquote
+      className="pl-3 my-3 text-[0.8125rem] text-[#b0b0b0] border-l-2 border-[#00E5C9] bg-[rgba(0,229,201,0.03)] rounded-r-lg py-2 pr-3"
+      style={{ fontWeight: 350 }}
+      {...props}
+    >
+      {children}
+    </blockquote>
+  )
 }
 
-function renderList(text: string): string {
-  const lines = text.split('\n')
-  const result: string[] = []
-  let inUl = false
-
-  for (const line of lines) {
-    const listMatch = line.match(/^(\s*)[-*+]\s+(.+)/)
-    if (listMatch) {
-      if (!inUl) { result.push('<ul class="list-disc pl-5 my-2 space-y-1">'); inUl = true }
-      result.push(`<li class="leading-[1.7]" style="font-weight:300">${renderInline(escapeHtml(listMatch[2]))}</li>`)
-    } else {
-      if (inUl) { result.push('</ul>'); inUl = false }
-      result.push(line)
-    }
-  }
-  if (inUl) result.push('</ul>')
-  return result.join('\n')
+/* ════════════════════════════════
+   LISTS
+   ════════════════════════════════ */
+function Ol({ children, ...props }: any) {
+  return (
+    <ol className="list-decimal pl-5 my-2 space-y-1" {...props}>
+      {children}
+    </ol>
+  )
 }
 
-import { useRef, useEffect } from 'react'
+function Ul({ children, ...props }: any) {
+  return (
+    <ul className="list-disc pl-5 my-2 space-y-1" {...props}>
+      {children}
+    </ul>
+  )
+}
 
+function Li({ children, ...props }: any) {
+  return (
+    <li className="leading-[1.7]" style={{ fontWeight: 300 }} {...props}>
+      {children}
+    </li>
+  )
+}
+
+/* ════════════════════════════════
+   HEADINGS
+   ════════════════════════════════ */
+function H1({ children, ...props }: any) {
+  return (
+    <h1
+      className="text-[1.0625rem] font-medium text-white mt-5 mb-3"
+      style={{ letterSpacing: '0.01em' }}
+      {...props}
+    >
+      {children}
+    </h1>
+  )
+}
+
+function H2({ children, ...props }: any) {
+  return (
+    <h2
+      className="text-[0.875rem] font-medium text-white mt-4 mb-2"
+      style={{ letterSpacing: '0.01em' }}
+      {...props}
+    >
+      {children}
+    </h2>
+  )
+}
+
+function H3({ children, ...props }: any) {
+  return (
+    <h3
+      className="text-[0.8125rem] font-normal text-white mt-3 mb-2"
+      style={{ letterSpacing: '0.01em' }}
+      {...props}
+    >
+      {children}
+    </h3>
+  )
+}
+
+/* ════════════════════════════════
+   PARAGRAPH (with agent-step detection)
+   ════════════════════════════════ */
+function P({ children, ...props }: any) {
+  return (
+    <p
+      className="my-2 leading-[1.8]"
+      style={{ fontWeight: 300, letterSpacing: '0.015em' }}
+      {...props}
+    >
+      {children}
+    </p>
+  )
+}
+
+/* ════════════════════════════════
+   EMPHASIS (agent step chips)
+   ════════════════════════════════ */
+function Em({ children, ...props }: any) {
+  const text = extractText(children)
+  if (text.startsWith('→ ')) {
+    const clean = text.slice(2)
+    const isFetch = clean.startsWith('fetch_url')
+    const glowAnim = isFetch ? 'stepGlowTeal' : 'stepGlow'
+    const borderColor = isFetch ? 'rgba(0,229,201,0.15)' : 'rgba(220,178,99,0.2)'
+    const bgColor = isFetch ? 'rgba(0,229,201,0.03)' : 'rgba(220,178,99,0.03)'
+    const textColor = isFetch ? '#00E5C9' : '#DCB263'
+    return (
+      <span
+        className="inline-block my-0.5 px-2 py-0.5 rounded border text-[0.65rem] align-middle"
+        style={{
+          borderColor,
+          backgroundColor: bgColor,
+          color: textColor,
+          fontFamily: "'IBM Plex Mono', monospace",
+          letterSpacing: '0.02em',
+          animation: `${glowAnim} 1.5s ease-in-out forwards`,
+        }}
+      >
+        → {clean}
+      </span>
+    )
+  }
+  return (
+    <em
+      className="text-[#999999] not-italic"
+      style={{ fontWeight: 350 }}
+      {...props}
+    >
+      {children}
+    </em>
+  )
+}
+
+/* ════════════════════════════════
+   STRONG
+   ════════════════════════════════ */
+function Strong({ children, ...props }: any) {
+  return (
+    <strong
+      className="text-white"
+      style={{ fontWeight: 500 }}
+      {...props}
+    >
+      {children}
+    </strong>
+  )
+}
+
+/* ════════════════════════════════
+   LINK
+   ════════════════════════════════ */
+function A({ children, href, ...props }: any) {
+  return (
+    <a
+      href={sanitizeUrl(href || '#')}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-[#00E5C9] hover:underline break-all"
+      {...props}
+    >
+      {children}
+    </a>
+  )
+}
+
+/* ════════════════════════════════
+   TABLE
+   ════════════════════════════════ */
+function Table({ children, ...props }: any) {
+  return (
+    <div className="overflow-x-auto my-3">
+      <table
+        className="w-full text-[0.75rem] border-collapse"
+        style={{
+          fontFamily: "'IBM Plex Sans', 'Inter', system-ui, sans-serif",
+          letterSpacing: '0.01em',
+        }}
+        {...props}
+      >
+        {children}
+      </table>
+    </div>
+  )
+}
+
+function Thead({ children, ...props }: any) {
+  return (
+    <thead className="bg-[rgba(255,255,255,0.04)]" {...props}>
+      {children}
+    </thead>
+  )
+}
+
+function Th({ children, ...props }: any) {
+  return (
+    <th
+      className="border border-[rgba(255,255,255,0.1)] px-3 py-1.5 text-left font-medium text-[#DCB263]"
+      style={{ fontWeight: 450, letterSpacing: '0.02em' }}
+      {...props}
+    >
+      {children}
+    </th>
+  )
+}
+
+function Td({ children, ...props }: any) {
+  return (
+    <td
+      className="border border-[rgba(255,255,255,0.1)] px-3 py-1.5"
+      style={{ fontWeight: 350, letterSpacing: '0.01em' }}
+      {...props}
+    >
+      {children}
+    </td>
+  )
+}
+
+/* ════════════════════════════════
+   HR
+   ════════════════════════════════ */
+function Hr({ ...props }: any) {
+  return <hr className="border-[rgba(255,255,255,0.08)] my-4" {...props} />
+}
+
+/* ════════════════════════════════
+   IMAGE
+   ════════════════════════════════ */
+function Img({ src, alt, ...props }: any) {
+  return (
+    <img
+      src={sanitizeUrl(src || '#')}
+      alt={alt || ''}
+      className="max-w-full h-auto rounded-lg my-3 border border-[rgba(255,255,255,0.06)]"
+      {...props}
+    />
+  )
+}
+
+/* ════════════════════════════════
+   DEL (strikethrough via GFM)
+   ════════════════════════════════ */
+function Del({ children, ...props }: any) {
+  return (
+    <del className="text-[#666666] line-through" {...props}>
+      {children}
+    </del>
+  )
+}
+
+/* ════════════════════════════════
+   MAIN EXPORT
+   ════════════════════════════════ */
 interface MarkdownProps {
   content: string
   compact?: boolean
 }
 
 export default function Markdown({ content, compact }: MarkdownProps) {
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const el = ref.current
-    if (!el) return
-    const handler = (e: MouseEvent) => {
-      const btn = (e.target as HTMLElement).closest('.hl-copy-btn') as HTMLElement
-      if (!btn) return
-      const idx = btn.dataset.idx
-      if (idx === undefined) return
-      const blocks = content.split(/(```[\s\S]*?```)/g)
-      let codeIdx = 0
-      for (const block of blocks) {
-        const match = block.match(/^```(\w*)\n([\s\S]*?)```$/)
-        if (match) {
-          if (codeIdx === parseInt(idx)) {
-            navigator.clipboard.writeText(match[2]).then(() => {
-              btn.textContent = '✓'
-              setTimeout(() => { btn.textContent = 'Copiar' }, 1500)
-            })
-            return
-          }
-          codeIdx++
-        }
-      }
-    }
-    el.addEventListener('click', handler)
-    return () => el.removeEventListener('click', handler)
-  }, [content])
-
-  const blocks = content.split(/(```[\s\S]*?```)/g)
-  const htmlParts: string[] = []
-  let codeBlockIndex = 0
-
-  for (const block of blocks) {
-    const codeMatch = block.match(/^```(\w*)\n([\s\S]*?)```$/)
-    if (codeMatch) {
-      const lang = codeMatch[1]
-      const highlighted = highlightCode(codeMatch[2], lang)
-      const idx = codeBlockIndex++
-      const langLabel = lang ? `<span class="text-[0.625rem] text-[#666666] font-mono absolute top-1 right-2">${escapeHtml(lang)}</span>` : ''
-      htmlParts.push(
-        `<div class="hl-block relative group">${langLabel}
-          <button class="hl-copy-btn absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity px-1.5 py-0.5 rounded text-[0.55rem] text-[#999999] bg-[#2A2A2A] hover:bg-[#353535] hover:text-white border border-[rgba(255,255,255,0.08)]" data-idx="${idx}">Copiar</button>
-          <pre><code>${highlighted}</code></pre>
-        </div>`
-      )
-    } else {
-      const paragraphs = block.split('\n\n')
-      for (const para of paragraphs) {
-        if (!para.trim()) continue
-
-        const lines = para.split('\n').filter(l => l.trim())
-        const separatorIdx = lines.findIndex(l => l.match(/^\|?\s*[-|]+\s*\|?\s*$/))
-        const hasTable = separatorIdx >= 0 && lines.some((l, i) => l.includes('|') && i !== separatorIdx)
-
-        if (hasTable) {
-          htmlParts.push(renderTable(para))
-        } else if (para.startsWith('#')) {
-          const match = para.match(/^(#{1,3})\s+(.+)/)
-            if (match) {
-              const level = match[1].length
-              const sizes = ['text-[1.0625rem]', 'text-[0.875rem]', 'text-[0.8125rem]']
-              const size = sizes[level - 1] || 'text-[0.75rem]'
-              const weights = ['font-medium', 'font-medium', 'font-normal']
-              const weight = weights[level - 1] || 'font-medium'
-              htmlParts.push(
-                `<h${level} class="${size} ${weight} text-white mt-4 mb-2" style="letter-spacing:0.01em">${renderInline(escapeHtml(match[2]))}</h${level}>`
-              )
-            }
-        } else {
-          const withBlockquotes = renderBlockquote(para)
-          const withLists = renderList(withBlockquotes)
-          const withInline = withLists
-            .split('\n')
-            .map(l => l.trim())
-            .filter(l => l)
-            .map(l => {
-              if (l.startsWith('<')) return l
-              if (l.startsWith('---')) return `<hr class="border-[rgba(255,255,255,0.08)] my-4" />`
-              if (/^\*→ .+\*$/.test(l.trim())) {
-                const clean = l.trim().replace(/^\*→ /, '').replace(/\*$/, '')
-                const isFetch = clean.startsWith('fetch_url')
-                const glowAnim = isFetch ? 'stepGlowTeal' : 'stepGlow'
-                const borderColor = isFetch ? 'rgba(0,229,201,0.15)' : 'rgba(220,178,99,0.2)'
-                const bgColor = isFetch ? 'rgba(0,229,201,0.03)' : 'rgba(220,178,99,0.03)'
-                const textColor = isFetch ? '#00E5C9' : '#DCB263'
-                return `<span class="inline-block my-0.5 px-2 py-0.5 rounded border text-[0.65rem] align-middle" style="border-color:${borderColor};background-color:${bgColor};color:${textColor};font-family:'IBM Plex Mono',monospace;letter-spacing:0.02em;animation:${glowAnim} 1.5s ease-in-out forwards">→ ${escapeHtml(clean)}</span>`
-              }
-              return `<p class="my-2 leading-[1.8]" style="font-weight:300;letter-spacing:0.015em">${renderInline(escapeHtml(l))}</p>`
-            })
-            .join('\n')
-          htmlParts.push(withInline)
-        }
-      }
-    }
-  }
-
   return (
     <div
       className={`markdown-body ${compact ? 'text-[0.75rem]' : 'text-[0.8125rem]'} text-[#E5E5E5]`}
-      style={{ fontFamily: "'IBM Plex Sans', 'Inter', system-ui, sans-serif", fontWeight: 300, letterSpacing: '0.015em', lineHeight: '1.7' }}
-      dangerouslySetInnerHTML={{ __html: htmlParts.join('\n') }}
-    />
+      style={{
+        fontFamily: "'IBM Plex Sans', 'Inter', system-ui, sans-serif",
+        fontWeight: 300,
+        letterSpacing: '0.015em',
+        lineHeight: '1.7',
+      }}
+    >
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          pre: Pre,
+          code: Code,
+          blockquote: Blockquote,
+          ol: Ol,
+          ul: Ul,
+          li: Li,
+          h1: H1,
+          h2: H2,
+          h3: H3,
+          p: P,
+          em: Em,
+          strong: Strong,
+          a: A,
+          table: Table,
+          thead: Thead,
+          th: Th,
+          td: Td,
+          hr: Hr,
+          img: Img,
+          del: Del,
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
   )
 }

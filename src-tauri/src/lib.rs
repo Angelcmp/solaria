@@ -12,6 +12,7 @@ mod skills;
 pub mod tools;
 
 use serde::Serialize;
+use std::io::Write;
 use std::sync::Arc;
 
 #[derive(Serialize, Clone)]
@@ -84,7 +85,7 @@ async fn ollama_chat(
     messages: String,
     system_prompt: Option<String>,
 ) -> ollama::OllamaResult {
-    ollama::send_chat(model, messages, system_prompt).await
+    ollama::send_chat(model, messages, system_prompt, None).await
 }
 
 #[tauri::command]
@@ -677,6 +678,37 @@ fn cookbook_get_ollama_status(model_id: String) -> Result<String, String> {
 // ── App entry ────────────────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+fn home_dir() -> std::path::PathBuf {
+    std::env::var("HOME")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| std::path::PathBuf::from("."))
+}
+
+fn log_path() -> std::path::PathBuf {
+    home_dir().join(".solaria").join("app.log")
+}
+
+fn write_log(level: &str, message: &str) -> Result<(), String> {
+    let path = log_path();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let line = format!("[{}] {}: {}\n", now, level, message);
+    std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .map_err(|e| e.to_string())?
+        .write_all(line.as_bytes())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn app_log(level: String, message: String) {
+    let _ = write_log(&level, &message);
+}
+
 pub fn run() {
     // Register sqlite-vec as a SQLite auto-extension so it loads with every connection.
     unsafe {
@@ -685,10 +717,14 @@ pub fn run() {
         )));
     }
 
+    let _ = std::fs::create_dir_all(home_dir().join(".solaria"));
+    let _ = write_log("info", "Tauri application starting");
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
+            app_log,
             ollama_chat,
             ollama_chat_stream,
             ollama_check,

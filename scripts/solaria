@@ -1,13 +1,16 @@
 #!/bin/bash
 # Solaria Agent - CLI wrapper
-# Pasa el directorio actual como working directory a Solaria.
+# Pasa el directorio actual como --dir a Solaria para que las herramientas
+# del agente trabajen sobre el proyecto desde el que se invoca.
 #
 # Uso:
 #   cd /mi/proyecto
 #   solaria
+#   solaria agent "investiga este código"
+#   solaria ask "resume este archivo" --model phi3:latest
 #
 # También funciona con rutas explícitas:
-#   solaria --working-dir=/otro/proyecto
+#   solaria --dir=/otro/proyecto agent "tarea"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BIN_DIR="$(cd "$SCRIPT_DIR/../src-tauri/target/release" && pwd 2>/dev/null || echo "$SCRIPT_DIR")"
@@ -27,4 +30,16 @@ else
   exit 1
 fi
 
-exec "$BIN_PATH" --working-dir="$PWD" "$@"
+# Si el usuario no pasó --dir, usamos el directorio actual como default.
+has_dir=false
+for arg in "$@"; do
+  case "$arg" in
+    --dir|--dir=*|-d) has_dir=true ;;
+  esac
+done
+
+if [ "$has_dir" = false ]; then
+  set -- "$@" "--dir=$PWD"
+fi
+
+exec "$BIN_PATH" "$@"

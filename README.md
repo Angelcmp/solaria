@@ -89,11 +89,40 @@ cd solaria
 # Instalar dependencias
 npm install
 
-# Ejecutar en modo desarrollo
+# Ejecutar en modo desarrollo (levanta automáticamente Vite en localhost:1420)
 npm run tauri dev
 
-# Build para producción
+# Build para producción (frontend embebido, no requiere servidor local)
 npm run tauri build
+```
+
+> Si al ejecutar `solaria` (modo GUI) ves `Could not connect to localhost: Connection refused`, asegúrate de haber corrido primero `npm run tauri build` para generar un binario de producción, o usa `npm run tauri dev` que levanta el servidor de desarrollo automáticamente.
+
+Una vez compilado, el binario `src-tauri/target/release/solaria-agent` se puede ejecutar directamente desde la terminal:
+
+```bash
+# GUI (se forkea al fondo; requiere un entorno gráfico)
+./src-tauri/target/release/solaria-agent
+
+# Configura tu API key (OpenAI, Anthropic, etc.)
+./src-tauri/target/release/solaria-agent set-key openai sk-...
+
+# Chat one-shot (por defecto usa OpenAI gpt-4o-mini)
+./src-tauri/target/release/solaria-agent ask "resume este archivo"
+
+# Agente de investigación sobre el directorio actual
+./src-tauri/target/release/solaria-agent agent "investiga este proyecto" --dir .
+
+# Daemon con pid file
+./src-tauri/target/release/solaria-agent serve
+```
+
+También puedes usar el wrapper `scripts/solaria` desde el repo, que usa el directorio actual como `--dir` por defecto:
+
+```bash
+./scripts/solaria set-key openai sk-...
+./scripts/solaria agent "encuentra todos los TODOs"
+./scripts/solaria ask "explica este código"
 ```
 
 Los instaladores se generan en `src-tauri/target/release/bundle/`:
@@ -139,6 +168,35 @@ Activa el agente con el botón `[🤖 AGENT]` en el input de chat. El modelo pue
 | `grep` | Busca texto dentro de archivos | Encontrar funciones, TODO, errores |
 
 Puedes configurar las herramientas permitidas y el directorio de trabajo en **Settings > Agente**.
+
+### Desde la terminal
+
+El mismo binario `solaria` (o `solaria-agent`) incluye un modo CLI. Por defecto usa **OpenAI** (`gpt-4o-mini`), así que no necesitas tener Ollama corriendo:
+
+```bash
+# Guardar tu API key (solo una vez)
+solaria set-key openai sk-...
+
+# Ejecutar el agente desde el directorio actual
+solaria agent "revisa el código y sugiere mejoras"
+
+# Especificar directorio, proveedor y modelo
+solaria agent "documenta este proyecto" --dir ./docs --provider anthropic --model claude-3-5-sonnet-20241022
+
+# Usar una API key sin guardarla
+solaria agent "investiga esto" --api-key sk-...
+
+# Preview de herramientas sin ejecutarlas
+solaria agent "borra los archivos temporales" --dry
+
+# Chat one-shot (también acepta stdin vía pipe)
+solaria ask "¿qué hace este proyecto?"
+cat README.md | solaria ask "resume esto"
+```
+
+Flags disponibles: `--provider`, `--model`, `--api-key`, `--host`, `--dir`, `--dry`.
+
+> Para usar un modelo local (Ollama), añade `--provider ollama --model <modelo> --host http://localhost:11434`.
 
 ---
 

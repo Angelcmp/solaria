@@ -4,9 +4,8 @@ use crate::providers;
 use crate::skills;
 use crate::tools;
 
-const DEFAULT_PROVIDER: &str = "ollama";
-const DEFAULT_OLLAMA_MODEL: &str = "qwen3.5";
-const DEFAULT_CLOUD_MODEL: &str = "gpt-4o-mini";
+const DEFAULT_PROVIDER: &str = "openai";
+const DEFAULT_MODEL: &str = "gpt-4o-mini";
 
 const HELP_TEXT: &str = r###"Solaria Agent — Deep Research Agentic System
 
@@ -17,14 +16,16 @@ COMMANDS:
   (none)              Launch the GUI (detached from terminal)
   ask "PROMPT"        One-shot chat — send a prompt and print the response
   agent "TASK"        Run the research agent on a task
+  set-key <PROVIDER> <KEY>
+                      Store an API key in the system keyring
   serve               Start background daemon with tray icon
 
 OPTIONS (for ask / agent):
-  --provider <NAME>   LLM provider: ollama, openai, deepseek, anthropic, groq,
-                      google, cohere, kimi, glm
-                      [default: ollama]
-  --model <NAME>      Model name
-                      [default: qwen3.5 for ollama, gpt-4o-mini for cloud]
+  --provider <NAME>   LLM provider: openai, deepseek, anthropic, groq,
+                      google, cohere, kimi, glm, ollama
+                      [default: openai]
+  --model <NAME>      Model name [default: gpt-4o-mini]
+  --api-key <KEY>     API key for the selected provider (one-shot use)
   --host <URL>        Ollama host URL [default: http://localhost:11434]
   --dir <PATH>        Working directory for agent tools [default: current dir]
   --dry               Preview tool calls without executing (agent only)
@@ -32,7 +33,8 @@ OPTIONS (for ask / agent):
 
 EXAMPLES:
   solaria                                       # Open GUI
-  solaria ask "what is Rust?"                   # Quick chat with Ollama
+  solaria set-key openai sk-...                 # Save API key
+  solaria ask "what is Rust?"                   # Quick chat with OpenAI
   solaria agent "research the history of Linux"  # Run research agent
   cat file.txt | solaria ask "summarize this"
 "###;
@@ -45,6 +47,7 @@ pub fn print_help() {
 pub struct CliConfig {
     pub provider: String,
     pub model: String,
+    pub api_key: Option<String>,
     pub ollama_host: String,
     pub working_dir: String,
     pub prompt: String,
@@ -54,7 +57,8 @@ pub struct CliConfig {
 fn parse_cli_args(args: &[String]) -> CliConfig {
     let mut config = CliConfig {
         provider: DEFAULT_PROVIDER.to_string(),
-        model: DEFAULT_OLLAMA_MODEL.to_string(),
+        model: DEFAULT_MODEL.to_string(),
+        api_key: None,
         ollama_host: "http://localhost:11434".to_string(),
         working_dir: std::env::current_dir()
             .unwrap_or_default()
@@ -76,6 +80,12 @@ fn parse_cli_args(args: &[String]) -> CliConfig {
             "--model" => {
                 if i + 1 < args.len() {
                     config.model = args[i + 1].clone();
+                    i += 1;
+                }
+            }
+            "--api-key" => {
+                if i + 1 < args.len() {
+                    config.api_key = Some(args[i + 1].clone());
                     i += 1;
                 }
             }
@@ -107,10 +117,6 @@ fn parse_cli_args(args: &[String]) -> CliConfig {
             }
         }
         i += 1;
-    }
-
-    if config.model == DEFAULT_OLLAMA_MODEL && config.provider != DEFAULT_PROVIDER {
-        config.model = DEFAULT_CLOUD_MODEL.to_string();
     }
 
     config
@@ -145,6 +151,25 @@ pub fn agent(args: &[String]) {
     runtime.block_on(run_agent(&config));
 }
 
+pub fn set_key(args: &[String]) {
+    if args.len() < 4 {
+        eprintln!("solaria: uso: solaria set-key <provider> <api-key>");
+        std::process::exit(1);
+    }
+    let provider = &args[2];
+    let key = &args[3];
+    let result = keyring::store_key(provider, key);
+    if result.success {
+        println!("API key para '{}' guardada correctamente.", provider);
+    } else {
+        eprintln!(
+            "solaria: no se pudo guardar la API key: {}",
+            result.error.unwrap_or_default()
+        );
+        std::process::exit(1);
+    }
+}
+
 pub fn serve() {
     // Drop a lock/pid file and fork the GUI process in the background
     let pid_path = home_dir().join(".solaria").join("solaria.pid");
@@ -176,11 +201,21 @@ fn home_dir() -> std::path::PathBuf {
 }
 
 async fn run_ask(config: &CliConfig, prompt: &str) {
-    let api_key = get_api_key(&config.provider);
+    let api_key = if config.provider == "ollama" {
+        None
+    } else {
+        Some(require_api_key(&config.provider, config.api_key.as_deref()))
+    };
     let messages = serde_json::json!([{"role": "user", "content": prompt}]).to_string();
 
     if config.provider == "ollama" {
-        let result = ollama::send_chat(config.model.clone(), messages, None).await;
+        let result = ollama::send_chat(
+            config.model.clone(),
+            messages,
+            None,
+            Some(config.ollama_host.clone()),
+        )
+        .await;
         if result.success {
             println!("{}", result.content);
         } else {
@@ -215,7 +250,11 @@ async fn run_ask(config: &CliConfig, prompt: &str) {
 }
 
 async fn run_agent(config: &CliConfig) {
-    let api_key = get_api_key(&config.provider);
+    let api_key = if config.provider == "ollama" {
+        None
+    } else {
+        Some(require_api_key(&config.provider, config.api_key.as_deref()))
+    };
 
     let skills_prompt = skills::get_enabled_skills_prompt(
         Some(&config.working_dir),
@@ -266,6 +305,7 @@ Para usar una herramienta, responde UNICAMENTE con:
                 config.model.clone(),
                 messages_json,
                 Some(system_prompt.clone()),
+                Some(config.ollama_host.clone()),
             )
             .await;
             (result.success, result.content, result.error)
@@ -363,8 +403,23 @@ Para usar una herramienta, responde UNICAMENTE con:
     eprintln!("⚠️  max iterations reached — agent stopped");
 }
 
-fn get_api_key(provider: &str) -> Option<String> {
+fn get_api_key(provider: &str, cli_key: Option<&str>) -> Option<String> {
+    if let Some(key) = cli_key {
+        return Some(key.to_string());
+    }
     keyring::get_key(provider).ok()
+}
+
+fn require_api_key(provider: &str, cli_key: Option<&str>) -> String {
+    match get_api_key(provider, cli_key) {
+        Some(key) => key,
+        None => {
+            eprintln!("solaria: no se encontró API key para '{}'.", provider);
+            eprintln!("  Guarda una con: solaria set-key {} <tu-api-key>", provider);
+            eprintln!("  O úsala una vez con: --api-key <tu-api-key>");
+            std::process::exit(1);
+        }
+    }
 }
 
 fn build_tool_prompt(allowed: &[&str]) -> String {

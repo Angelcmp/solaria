@@ -6,6 +6,7 @@ fn main() {
     match args.get(1).map(|s| s.as_str()) {
         Some("ask") => solaria_desktop_lib::cli::ask(&args),
         Some("agent") => solaria_desktop_lib::cli::agent(&args),
+        Some("set-key") => solaria_desktop_lib::cli::set_key(&args),
         Some("serve") => solaria_desktop_lib::cli::serve(),
         Some("--gui") => solaria_desktop_lib::run(),
         Some("-h") | Some("--help") => solaria_desktop_lib::cli::print_help(),

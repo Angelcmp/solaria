@@ -78,11 +78,15 @@ pub async fn send_chat(
     model: String,
     messages_str: String,
     system_prompt: Option<String>,
+    host: Option<String>,
 ) -> OllamaResult {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(300))
         .build()
         .unwrap_or_default();
+
+    let base_url = host.unwrap_or_else(|| "http://localhost:11434".to_string());
+    let chat_url = format!("{}/api/chat", base_url.trim_end_matches('/'));
 
     let mut ollama_messages: Vec<Message> = Vec::new();
 
@@ -113,7 +117,7 @@ pub async fn send_chat(
         stream: false,
     };
 
-    match client.post(OLLAMA_URL).json(&request).send().await {
+    match client.post(&chat_url).json(&request).send().await {
         Ok(resp) => {
             if !resp.status().is_success() {
                 return OllamaResult {

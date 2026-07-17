@@ -127,9 +127,20 @@ install_binary() {
     err "No se encontró el binario compilado en src-tauri/target/release/"
   fi
 
-  cp "$BINARY_PATH" "$INSTALL_DIR/$BINARY_NAME"
-  chmod +x "$INSTALL_DIR/$BINARY_NAME"
-  ok "Binario instalado en $INSTALL_DIR/$BINARY_NAME"
+  # Install the real binary to a lib dir and the wrapper to PATH
+  LIB_DIR="/usr/local/lib/solaria"
+  if [ ! -w "/usr/local/lib" ]; then
+    LIB_DIR="$APP_DIR"
+  fi
+  mkdir -p "$LIB_DIR"
+  cp "$BINARY_PATH" "$LIB_DIR/$BINARY_NAME"
+  chmod +x "$LIB_DIR/$BINARY_NAME"
+
+  cp "$APP_DIR/scripts/solaria" "$INSTALL_DIR/solaria"
+  chmod +x "$INSTALL_DIR/solaria"
+
+  ok "Binario instalado en $LIB_DIR/$BINARY_NAME"
+  ok "Wrapper CLI instalado en $INSTALL_DIR/solaria"
 }
 
 # ── Desktop entry (Linux) ──
@@ -184,7 +195,8 @@ print_summary() {
   echo -e "${GREEN}  Solaria instalado correctamente 🚀${NC}"
   echo -e "${GREEN}══════════════════════════════════════${NC}"
   echo ""
-  echo "  Ejecuta:  $INSTALL_DIR/$BINARY_NAME"
+  echo "  Ejecuta GUI:  $INSTALL_DIR/solaria"
+  echo "  Ejecuta CLI:  $INSTALL_DIR/solaria ask \"prompt\"  o  $INSTALL_DIR/solaria agent \"tarea\""
   echo "  Desde el menú de aplicaciones como Solaria"
   echo ""
   echo "  Para actualizar: curl -fsSL https://raw.githubusercontent.com/$REPO/$BRANCH/scripts/install.sh | bash"

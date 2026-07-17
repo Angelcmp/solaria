@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+- **CLI default provider** — `solaria ask`/`solaria agent` ahora usan OpenAI (`gpt-4o-mini`) por defecto en lugar de Ollama local, para que funcione en terminal sin necesidad de tener modelos locales descargados
+- **API key management desde terminal** — nuevo comando `solaria set-key <provider> <key>` y flag `--api-key` para uso puntual
+- **Ollama host configurable en CLI** — el flag `--host` ahora se respeta en `ask` y `agent`
+
+### Fixed
+- **Wrapper `scripts/solaria`** — corregido el flag de directorio de trabajo (`--dir` en lugar de `--working-dir`) y su orden en los argumentos; ahora también respeta un `--dir` explícito del usuario
+- **`install.sh` instala el wrapper** — ahora instala el binario real en `/usr/local/lib/solaria/` y el wrapper ejecutable como `solaria` en el PATH
+
 ## [0.8.5] — 2026-06-24
 
 ### Added

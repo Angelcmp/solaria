@@ -5,9 +5,13 @@ import { useAgent } from './hooks/useAgent'
 import { useMemory } from './hooks/useMemory'
 import { useComparison } from './hooks/useComparison'
 import type { AgentStep } from './hooks/useAgent'
+import { appLog, setupGlobalErrorLogging } from './lib/log'
 import Chat from './components/Chat'
-import WorkspaceAside, { type Project } from './components/WorkspaceAside'
-import WikiAside from './components/WikiAside'
+import WorkspaceAside from './components/workspace/WorkspaceAside'
+import type { Project } from './components/workspace/types'
+import WikiListAside from './components/WikiListAside'
+import WikiViewerAside from './components/WikiViewerAside'
+import type { WikiFile } from './components/WikiListAside'
 import SettingsPanel from './components/SettingsPanel'
 import ResearchAside from './components/ResearchAside'
 import ModelComparator from './components/ModelComparator'
@@ -25,8 +29,14 @@ const PROVIDERS: { id: string; label: string; models: string[]; local: boolean }
 ]
 
 function App() {
+  useEffect(() => {
+    setupGlobalErrorLogging()
+    appLog('info', 'App component mounted')
+  }, [])
+
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [sidebarMode, setSidebarMode] = useState<'chat' | 'wiki'>('chat')
+  const [wikiOpen, setWikiOpen] = useState(false)
+  const [wikiFile, setWikiFile] = useState<WikiFile | null>(null)
   const agentIdsRef = useRef<{ convId: string; assistantId: string } | null>(null)
 
   const {
@@ -269,54 +279,57 @@ function App() {
 
   return (
     <div className="flex h-screen bg-[#131313] overflow-hidden">
-      {sidebarMode === 'wiki' ? (
-        <WikiAside
-          workingDirectory={agentConfig.workingDirectory}
-          isCollapsed={sidebarCollapsed}
-          onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-          onBackToChat={() => setSidebarMode('chat')}
-        />
-      ) : (
-        <WorkspaceAside
-          conversations={conversations}
-          activeConvId={activeConvId}
-          isCollapsed={sidebarCollapsed}
-          onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-          onSelect={selectConversation}
-          onNew={handleNewConversation}
-          onDelete={deleteConversation}
-          onPin={togglePin}
-          onArchive={archiveConversation}
-          onRestore={restoreConversation}
-          onRename={renameConversation}
-          onShowSettings={(tab?: string) => setShowSettings(tab || 'general')}
-          onOpenWiki={() => setSidebarMode('wiki')}
-          projects={projects}
-          onAddProject={(p) => setProjects(prev => [...prev, p])}
-          onDeleteProject={(id) => { setProjects(prev => prev.filter(p => p.id !== id)); if (activeProjectId === id) setActiveProjectId(null) }}
-          onSelectProject={(p: Project) => {
-            const isActive = activeProjectId === p.id
-            if (isActive) {
-              setActiveProjectId(null)
-            } else {
-              setActiveProjectId(p.id)
-              if (p.path) {
-                updateAgentConfig({ workingDirectory: p.path })
-                setSidebarMode('wiki')
-                if (memory.config.enabled && memory.config.indexProjectFiles) {
-                  const indexed = (window as any).__solaria_project_indexed || {}
-                  const lastTime = indexed[p.path] || 0
-                  if (Date.now() - lastTime > 3600000) {
-                    memory.indexProject(p.path).catch(() => {})
-                    ;(window as any).__solaria_project_indexed = { ...indexed, [p.path]: Date.now() }
-                  }
+      <WorkspaceAside
+        conversations={conversations}
+        activeConvId={activeConvId}
+        isCollapsed={sidebarCollapsed}
+        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+        onSelect={selectConversation}
+        onNew={handleNewConversation}
+        onDelete={deleteConversation}
+        onPin={togglePin}
+        onArchive={archiveConversation}
+        onRestore={restoreConversation}
+        onRename={renameConversation}
+        onShowSettings={(tab?: string) => setShowSettings(tab || 'general')}
+        onOpenWiki={() => setWikiOpen(true)}
+        projects={projects}
+        onAddProject={(p) => setProjects(prev => [...prev, p])}
+        onUpdateProject={(p) => setProjects(prev => prev.map(proj => proj.id === p.id ? p : proj))}
+        onDeleteProject={(id) => { setProjects(prev => prev.filter(p => p.id !== id)); if (activeProjectId === id) setActiveProjectId(null) }}
+        onSelectProject={(p: Project) => {
+          const isActive = activeProjectId === p.id
+          if (isActive) {
+            setActiveProjectId(null)
+          } else {
+            setActiveProjectId(p.id)
+            if (p.path) {
+              updateAgentConfig({ workingDirectory: p.path })
+              setWikiOpen(true)
+              if (memory.config.enabled && memory.config.indexProjectFiles) {
+                const indexed = (window as any).__solaria_project_indexed || {}
+                const lastTime = indexed[p.path] || 0
+                if (Date.now() - lastTime > 3600000) {
+                  memory.indexProject(p.path).catch(() => {})
+                  ;(window as any).__solaria_project_indexed = { ...indexed, [p.path]: Date.now() }
                 }
               }
             }
-          }}
-          activeProjectId={activeProjectId}
+          }
+        }}
+        activeProjectId={activeProjectId}
+        workspaceMode={settings.workspaceMode}
+      />
+
+      {wikiOpen && (
+        <WikiListAside
+          workingDirectory={agentConfig.workingDirectory}
+          activePath={wikiFile?.path || null}
+          onSelectFile={(file) => setWikiFile(file)}
+          onClose={() => setWikiOpen(false)}
         />
       )}
+
       <Chat
         messages={messages}
         isStreaming={isStreaming || agentIsRunning}
@@ -348,6 +361,14 @@ function App() {
         comparisonEnabled={settings.comparisonEnabled}
         onOpenComparator={openComparator}
       />
+
+      {wikiFile && (
+        <WikiViewerAside
+          file={wikiFile}
+          onClose={() => setWikiFile(null)}
+        />
+      )}
+
       <ResearchAside
         steps={agentSteps}
         isRunning={agentIsRunning}

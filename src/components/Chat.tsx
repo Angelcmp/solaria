@@ -8,6 +8,8 @@ import { t } from '../lib/i18n'
 import { estimateTokens, estimateCost, formatCost } from '../lib/pricing'
 import TemplateSelector from './TemplateSelector'
 import Markdown from '../lib/Markdown'
+import ArtifactCard from './ArtifactCard'
+import ModelPicker from './ModelPicker'
 
 interface ChatProps {
   messages: Message[]
@@ -97,6 +99,12 @@ const INJECTION_PATTERNS = [
 
 function detectInjection(text: string): boolean {
   return INJECTION_PATTERNS.some(p => p.test(text))
+}
+
+function looksLikeReport(content: string): boolean {
+  if (content.length < 400) return false
+  const headingLines = content.split('\n').filter(l => /^#{1,3}\s+/.test(l)).length
+  return headingLines >= 2 || (content.length > 800 && headingLines >= 1)
 }
 
 function MoreMenu({ messages, conversationTitle, onClear }: {
@@ -222,8 +230,6 @@ export default function Chat({
   const [activeAction, setActiveAction] = useState<string | null>(null)
   const [showTemplates, setShowTemplates] = useState(false)
   const [showQuickActions, setShowQuickActions] = useState(false)
-  const [showModelPicker, setShowModelPicker] = useState(false)
-  const modelPickerRef = useRef<HTMLDivElement>(null)
   const [webSearchActive, setWebSearchActive] = useState(false)
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
@@ -256,9 +262,6 @@ export default function Chat({
     const handler = (e: MouseEvent) => {
       if (qaDropdownRef.current && !qaDropdownRef.current.contains(e.target as Node)) {
         setShowQuickActions(false)
-      }
-      if (modelPickerRef.current && !modelPickerRef.current.contains(e.target as Node)) {
-        setShowModelPicker(false)
       }
     }
     document.addEventListener('mousedown', handler)
@@ -390,10 +393,17 @@ export default function Chat({
 
   const displayMessages = messages.length > 0 ? messages : []
 
+  const runningToolCount = useMemo(() => {
+    if (!agentIsRunning) return 0
+    const lastAssistant = [...displayMessages].reverse().find(m => m.role === 'assistant')
+    if (!lastAssistant) return 0
+    return (lastAssistant.content.match(/\*→ /g) || []).length
+  }, [displayMessages, agentIsRunning])
+
   return (
     <div className="flex flex-col flex-1 min-w-0 bg-[#131313] text-[#E5E5E5]" style={{ fontFamily: "'IBM Plex Sans', 'Inter', system-ui, sans-serif" }}>
-      <header className="sticky top-0 z-40 shrink-0 border-b border-[rgba(255,255,255,0.04)] bg-[rgba(19,19,19,0.85)] backdrop-blur-[12px]" style={{ WebkitBackdropFilter: 'blur(12px)' }}>
-        <div className="flex items-center gap-2 w-full max-w-[800px] mx-auto px-4 py-1.5">
+      <header className="sticky top-0 z-40 shrink-0 bg-[rgba(19,19,19,0.9)] backdrop-blur-[16px]" style={{ WebkitBackdropFilter: 'blur(16px)' }}>
+        <div className="flex items-center gap-2 w-full max-w-[880px] mx-auto px-8 pt-3 pb-2">
           <a className="flex items-center no-underline" href="#" onClick={(e) => { e.preventDefault(); onClear() }}>
             <img src="/solaria-logo.svg" alt="Solaria" className="w-4 h-4" />
           </a>
@@ -411,50 +421,14 @@ export default function Chat({
               <span className="max-w-[120px] truncate" title={activeProject.path}>{activeProject.name}</span>
             </div>
           )}
-          <div className="relative" ref={modelPickerRef}>
-            <button
-              onClick={() => setShowModelPicker(!showModelPicker)}
-              className="flex items-center gap-1.5 px-2 py-[3px] rounded border border-[rgba(0,229,201,0.2)] bg-[rgba(0,229,201,0.07)] text-[#00E5C9] text-[0.65rem] leading-none hover:bg-[rgba(0,229,201,0.12)] transition-colors cursor-pointer whitespace-nowrap"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="21.17" y1="8" x2="12" y2="8"/><line x1="3.95" y1="6.06" x2="8.54" y2="14"/><line x1="10.88" y1="21.94" x2="15.46" y2="14"/></svg>
-              <span className="max-w-[100px] truncate">
-                {activeConversation?.model || settings.defaultModel}
-              </span>
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
-            </button>
-            {showModelPicker && providers && (
-              <div className="absolute top-full right-0 mt-1 w-[260px] max-h-[300px] overflow-y-auto bg-[#1C1B1B] border border-[rgba(255,255,255,0.1)] rounded-lg shadow-2xl z-50 py-1" style={{ scrollbarWidth: 'thin' }}>
-                {providers.map(p => (
-                  <div key={p.id}>
-                    <div className="text-[0.55rem] text-[#666666] uppercase tracking-[0.06em] px-3 py-1.5 mt-1 first:mt-0">{p.label}</div>
-                    {p.models.map(m => {
-                      const isActive = (activeConversation?.provider || settings.defaultProvider) === p.id
-                        && (activeConversation?.model || settings.defaultModel) === m
-                      return (
-                        <button
-                          key={m}
-                          onClick={() => {
-                            if (activeConversation && activeConversation.id && onUpdateConvModel) {
-                              onUpdateConvModel(activeConversation.id, p.id, m)
-                            }
-                            setShowModelPicker(false)
-                          }}
-                          className={`w-full text-left px-3 py-1.5 text-[0.6875rem] transition-colors ${
-                            isActive
-                              ? 'bg-[rgba(0,229,201,0.08)] text-[#00E5C9]'
-                              : 'text-[#E5E5E5] hover:bg-[rgba(255,255,255,0.04)]'
-                          }`}
-                        >
-                          <span className="font-mono">{m}</span>
-                          {isActive && <span className="ml-1.5 text-[0.55rem] opacity-60">✓</span>}
-                        </button>
-                      )
-                    })}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          {providers && (
+            <ModelPicker
+              activeConversation={activeConversation || null}
+              settings={settings}
+              providers={providers}
+              onUpdateConvModel={onUpdateConvModel}
+            />
+          )}
           {isAgentEnabled && (
             <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.06)] text-[#666666] text-[0.6rem] font-mono" title={agentConfig?.workingDirectory || 'Sin directorio de trabajo. Haz clic para configurar.'}>
               <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
@@ -486,7 +460,7 @@ export default function Chat({
 
       <div
         ref={scrollContainerRef}
-        className="flex-1 overflow-y-auto px-4 py-4 relative"
+        className="flex-1 overflow-y-auto px-8 py-4 relative"
         style={{ scrollbarWidth: 'thin', scrollbarColor: '#333 transparent' }}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
@@ -495,14 +469,14 @@ export default function Chat({
       >
         <div ref={messagesTopRef} />
         {isDragOver && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-[rgba(0,229,201,0.06)] border-2 border-dashed border-[rgba(0,229,201,0.3)] rounded-lg pointer-events-none">
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-[rgba(0,229,201,0.06)] border-2 border-dashed border-[rgba(0,229,201,0.3)] rounded-lg pointer-events-none mx-8 my-6">
             <div className="flex flex-col items-center gap-2">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#00E5C9" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
               <span className="text-[0.75rem] font-medium text-[#00E5C9]">{t('chat.drop_files', lang)}</span>
             </div>
           </div>
         )}
-        <div className="max-w-[720px] mx-auto h-full flex flex-col">
+        <div className="max-w-[880px] mx-auto h-full flex flex-col">
           {displayMessages.length === 0 ? (
             <div className="flex flex-col items-center justify-center flex-1 text-center gap-4 px-4 animate-[fadeIn_0.8s_ease-out] select-none">
               <img src="/solaria-logo.svg" alt="Solaria" className="w-16 h-16 opacity-70" />
@@ -516,38 +490,49 @@ export default function Chat({
               </div>
             </div>
           ) : (
-            <div className="w-full max-w-[800px] mx-auto px-4 py-3">
+            <div className="w-full py-3">
               {displayMessages.map((msg, i) => (
-                <div key={msg.id} className="mb-4 animate-[msgFadeIn_0.3s_ease-out]" style={{ animationDelay: i * 50 + 'ms' }}>
+                <div key={msg.id} className="mb-6 animate-[msgFadeIn_0.3s_ease-out]" style={{ animationDelay: i * 50 + 'ms' }}>
                   {msg.role === 'user' ? (
                     <div className="flex flex-col items-end">
-                      <div className="max-w-[70%] px-[0.6rem] py-[0.35rem] rounded-[12px_12px_4px_12px] border border-[rgba(220,178,99,0.12)] bg-[linear-gradient(135deg,rgba(220,178,99,0.08),rgba(220,178,99,0.03))] text-white text-[0.75rem] leading-[1.5]">
+                      <div className="max-w-[70%] px-4 py-2.5 rounded-2xl bg-[#1C1B1B] text-[#E5E5E5] text-[0.8125rem] leading-[1.35] border border-[rgba(255,255,255,0.08)]">
                         <Markdown content={msg.content} compact />
                       </div>
                     </div>
                   ) : (
-                    <div className="group">
-                      {msg.content === '' && isStreaming ? (
-                        <div className="flex gap-[4px] px-[0.875rem] py-[0.625rem] bg-[#1C1B1B] border border-[rgba(255,255,255,0.04)] rounded-[12px] w-fit">
-                          {[0, 0.2, 0.4].map((delay, index) => (
-                            <div key={index} className="w-[6px] h-[6px] bg-[#DCB263] rounded-full animate-[typingDot_1.4s_ease-in-out_infinite]" style={{ animationDelay: delay + 's' }} />
-                          ))}
-                        </div>
-                      ) : (
-                        <Markdown content={msg.content} />
-                      )}
-                      {i === displayMessages.length - 1 && !isStreaming && (
-                        <div className="flex gap-1.5 mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                          <button onClick={async () => await navigator.clipboard.writeText(msg.content)} className="flex items-center justify-center w-6 h-6 rounded bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[#999999] hover:bg-[rgba(255,255,255,0.08)] hover:border-[rgba(255,255,255,0.15)] hover:text-white transition-colors" title={t('chat.copy', lang)}>
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V5a2 2 0 012-2h8a2 2 0 012 2v1"/></svg>
-                          </button>
-                          {onRegenerate && msg.role === 'assistant' && msg.content && (
-                            <button onClick={onRegenerate} className="flex items-center justify-center w-6 h-6 rounded bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[#999999] hover:bg-[rgba(220,178,99,0.1)] hover:border-[rgba(220,178,99,0.3)] hover:text-[#DCB263] transition-colors" title={t('chat.regenerate', lang)}>
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-                            </button>
+                    <div className="group pt-2 pb-1">
+                      <div className="flex items-start gap-3">
+                        <img src="/solaria-logo.svg" alt="Solaria" className="w-4 h-4 mt-1 shrink-0 opacity-80" />
+                        <div className="flex-1 min-w-0">
+                          {msg.content === '' && isStreaming ? (
+                            <div className="flex gap-[4px] px-[0.875rem] py-[0.625rem] bg-[#1C1B1B] border border-[rgba(255,255,255,0.04)] rounded-[12px] w-fit">
+                              {[0, 0.2, 0.4].map((delay, index) => (
+                                <div key={index} className="w-[6px] h-[6px] bg-[#DCB263] rounded-full animate-[typingDot_1.4s_ease-in-out_infinite]" style={{ animationDelay: delay + 's' }} />
+                              ))}
+                            </div>
+                          ) : looksLikeReport(msg.content) ? (
+                            <ArtifactCard
+                              title={conversationTitle || 'Reporte'}
+                              content={msg.content}
+                              date={new Date().toLocaleDateString()}
+                            />
+                          ) : (
+                            <Markdown content={msg.content} isRunning={agentIsRunning && i === displayMessages.length - 1} />
+                          )}
+                          {i === displayMessages.length - 1 && !isStreaming && (
+                            <div className="flex gap-1.5 mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                              <button onClick={async () => await navigator.clipboard.writeText(msg.content)} className="flex items-center justify-center w-6 h-6 rounded bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[#999999] hover:bg-[rgba(255,255,255,0.08)] hover:border-[rgba(255,255,255,0.15)] hover:text-white transition-colors" title={t('chat.copy', lang)}>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V5a2 2 0 012-2h8a2 2 0 012 2v1"/></svg>
+                              </button>
+                              {onRegenerate && msg.role === 'assistant' && msg.content && (
+                                <button onClick={onRegenerate} className="flex items-center justify-center w-6 h-6 rounded bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[#999999] hover:bg-[rgba(220,178,99,0.1)] hover:border-[rgba(220,178,99,0.3)] hover:text-[#DCB263] transition-colors" title={t('chat.regenerate', lang)}>
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                                </button>
+                              )}
+                            </div>
                           )}
                         </div>
-                      )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -570,7 +555,7 @@ export default function Chat({
       </div>
 
       {activePrompt && !isAgentEnabled && (
-        <div className="w-full max-w-[800px] mx-auto px-4">
+        <div className="w-full max-w-[880px] mx-auto px-8">
           <div className="flex items-center gap-1.5 px-2 py-1 mb-1.5 rounded-md bg-[rgba(0,229,201,0.06)] border border-[rgba(0,229,201,0.12)]">
             <span className="text-[0.625rem] font-semibold text-[#00E5C9] uppercase tracking-[0.03em]">{activeAction || 'Prompt'}</span>
             <span className="text-[0.6875rem] text-[rgba(255,255,255,0.5)] truncate flex-1">{activePrompt.slice(0, 80)}...</span>
@@ -581,9 +566,18 @@ export default function Chat({
         </div>
       )}
 
+      {agentIsRunning && runningToolCount > 0 && (
+        <div className="w-full max-w-[880px] mx-auto px-8">
+          <div className="flex items-center gap-2 px-3 py-1.5 mb-2 rounded-lg bg-[#1C1B1B] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-[#DCB263]">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#DCB263] animate-pulse" />
+            <span>⏺ Ejecutando {runningToolCount} herramienta{runningToolCount !== 1 ? 's' : ''}...</span>
+          </div>
+        </div>
+      )}
+
       <div className="sticky bottom-0 z-40 bg-[linear-gradient(to_top,#131313_70%,transparent)] backdrop-blur-[8px]" style={{ WebkitBackdropFilter: 'blur(8px)' }}>
-        <div className="w-full max-w-[800px] mx-auto px-4 pb-2 pt-1">
-          <div className={'flex flex-col bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] rounded-[14px] pt-1.5 px-2 pb-2 gap-1 relative transition-all duration-300 focus-within:border-[rgba(220,178,99,0.4)] focus-within:shadow-[0_0_0_3px_rgba(220,178,99,0.08)] focus-within:bg-[rgba(255,255,255,0.06)] ' + (agentIsRunning ? 'opacity-40 pointer-events-none' : '')}>
+        <div className="w-full max-w-[880px] mx-auto px-8 pb-3 pt-1">
+          <div className={'flex flex-col bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.12)] rounded-2xl pt-2 px-3 pb-2 gap-1.5 relative transition-all duration-300 focus-within:border-[rgba(220,178,99,0.25)] focus-within:shadow-[0_0_0_1px_rgba(220,178,99,0.1)] focus-within:bg-[rgba(255,255,255,0.06)] ' + (agentIsRunning ? 'opacity-40 pointer-events-none' : '')}>
             {isAgentEnabled && agentConfig?.workingDirectory && (
               <div className="flex items-center gap-1 px-2 text-[0.5rem] text-[#555555] font-mono">
                 <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
@@ -610,14 +604,14 @@ export default function Chat({
                 placeholder={isAgentEnabled ? t('chat.placeholder.agent', lang) : t('chat.placeholder', lang)}
                 rows={1}
                 disabled={agentIsRunning}
-                className="flex-1 bg-transparent border-none outline-none text-[0.875rem] text-white placeholder-[#666666] leading-[1.5] resize-none max-h-[150px] min-h-[22px] py-[2px] overflow-y-auto"
+                className="flex-1 bg-transparent border-none outline-none text-[0.9375rem] text-white placeholder-[#666666] leading-[1.5] resize-none max-h-[150px] min-h-[26px] py-[3px] overflow-y-auto"
                 style={{ fontFamily: "'IBM Plex Sans', 'Inter', system-ui, sans-serif" }}
               />
               <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(e) => e.target.files && handleFilesSelected(e.target.files)} />
               <button
                 onClick={isStreaming ? onStop : handleSubmit}
                 disabled={!input.trim() && !isStreaming}
-                className={'shrink-0 w-8 h-8 rounded-lg border-none flex items-center justify-center transition-all duration-200 ' + (isStreaming ? 'bg-[#666666]' : input.trim() ? 'bg-[linear-gradient(135deg,#00E5C9,#DCB263)] text-[#131313] hover:shadow-[0_0_20px_rgba(0,229,201,0.3),0_0_6px_rgba(220,178,99,0.2)] hover:scale-105 active:scale-95' : 'bg-[rgba(255,255,255,0.06)] text-[#666666] opacity-30 cursor-not-allowed')}
+                className={'shrink-0 w-9 h-9 rounded-lg border-none flex items-center justify-center transition-all duration-200 ' + (isStreaming ? 'bg-[#666666]' : input.trim() ? 'bg-[linear-gradient(135deg,#00E5C9,#DCB263)] text-[#131313] hover:shadow-[0_0_12px_rgba(0,229,201,0.15)]' : 'bg-[rgba(255,255,255,0.06)] text-[#666666] opacity-30 cursor-not-allowed')}
               >
                 {isStreaming ? (
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
@@ -642,52 +636,56 @@ export default function Chat({
               </div>
             )}
 
-            <div className="flex items-center gap-1 min-h-[24px]">
+            <div className="flex items-center gap-1.5 min-h-[28px]">
               <button
                 onClick={() => setWebSearchActive(!webSearchActive)}
-                className={'shrink-0 w-6 h-6 rounded flex items-center justify-center border transition-all duration-200 ' + (webSearchActive ? 'bg-[rgba(0,229,201,0.1)] border-[rgba(0,229,201,0.3)] text-[#00E5C9]' : 'bg-transparent border-[rgba(255,255,255,0.06)] text-[#666666] hover:border-[rgba(255,255,255,0.15)] hover:text-[#999999]')}
+                className={'shrink-0 h-7 rounded flex items-center justify-center gap-1.5 border transition-all duration-200 px-2 ' + (webSearchActive ? 'bg-[rgba(0,229,201,0.1)] border-[rgba(0,229,201,0.3)] text-[#00E5C9]' : 'bg-transparent border-[rgba(255,255,255,0.06)] text-[#666666] hover:bg-[rgba(255,255,255,0.04)] hover:border-[rgba(255,255,255,0.15)] hover:text-[#999999]')}
                 title={webSearchActive ? t('chat.search_web.off', lang) : t('chat.search_web', lang)}
               >
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><ellipse cx="12" cy="12" rx="4" ry="10"/><ellipse cx="12" cy="12" rx="10" ry="4"/></svg>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><ellipse cx="12" cy="12" rx="4" ry="10"/><ellipse cx="12" cy="12" rx="10" ry="4"/></svg>
+                <span className="text-[0.65rem] font-medium">{t('chat.search_web', lang)}</span>
               </button>
 
               <button
                 onClick={onToggleAgent}
-                className={'shrink-0 h-6 rounded flex items-center justify-center border transition-all duration-200 px-1.5 gap-1 ' + (isAgentEnabled ? 'bg-[rgba(0,229,201,0.1)] border-[rgba(0,229,201,0.3)] text-[#00E5C9]' : 'bg-transparent border-[rgba(255,255,255,0.06)] text-[#666666] hover:border-[rgba(255,255,255,0.15)] hover:text-[#999999]')}
+                className={'shrink-0 h-7 rounded flex items-center justify-center gap-1.5 border transition-all duration-200 px-2 ' + (isAgentEnabled ? 'bg-[rgba(0,229,201,0.1)] border-[rgba(0,229,201,0.3)] text-[#00E5C9]' : 'bg-transparent border-[rgba(255,255,255,0.06)] text-[#666666] hover:bg-[rgba(255,255,255,0.04)] hover:border-[rgba(255,255,255,0.15)] hover:text-[#999999]')}
                 title={isAgentEnabled ? 'Modo chat normal' : t('chat.agent', lang)}
               >
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="8" width="18" height="10" rx="2"/><circle cx="8" cy="13" r="1.5" fill="currentColor"/><circle cx="16" cy="13" r="1.5" fill="currentColor"/><path d="M12 3v3M12 16v3"/></svg>
-                <span className="text-[0.6rem] font-semibold uppercase tracking-[0.04em]">Agent</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="8" width="18" height="10" rx="2"/><circle cx="8" cy="13" r="1.5" fill="currentColor"/><circle cx="16" cy="13" r="1.5" fill="currentColor"/><path d="M12 3v3M12 16v3"/></svg>
+                <span className="text-[0.65rem] font-medium">Agent</span>
               </button>
 
               {comparisonEnabled && onOpenComparator && (
                 <button
                   onClick={onOpenComparator}
-                  className="shrink-0 h-6 rounded flex items-center justify-center border border-[rgba(255,255,255,0.06)] text-[#999999] hover:bg-[rgba(220,178,99,0.08)] hover:border-[rgba(220,178,99,0.3)] hover:text-[#DCB263] transition-all duration-200 px-1.5 gap-1"
+                  className="shrink-0 h-7 rounded flex items-center justify-center gap-1.5 border border-[rgba(255,255,255,0.06)] text-[#999999] hover:bg-[rgba(220,178,99,0.08)] hover:border-[rgba(220,178,99,0.3)] hover:text-[#DCB263] transition-all duration-200 px-2"
                   title="Comparador ciego de modelos"
                 >
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><line x1="16" y1="5" x2="18" y2="7"/><line x1="17" y1="4" x2="18" y2="5"/></svg>
-                  <span className="text-[0.6rem] font-semibold uppercase tracking-[0.04em]">Comparar</span>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><line x1="16" y1="5" x2="18" y2="7"/><line x1="17" y1="4" x2="18" y2="5"/></svg>
+                  <span className="text-[0.65rem] font-medium">Comparar</span>
                 </button>
               )}
 
               <div className="w-px h-3.5 bg-[rgba(255,255,255,0.06)] mx-0.5" />
 
-              <button onClick={() => setShowTemplates(true)} className="shrink-0 w-6 h-6 rounded flex items-center justify-center border border-[rgba(255,255,255,0.06)] text-[#999999] hover:bg-[rgba(255,255,255,0.06)] hover:border-[rgba(220,178,99,0.3)] hover:text-[#DCB263] transition-all duration-200" title={t('chat.templates', lang)}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+              <button onClick={() => setShowTemplates(true)} className="shrink-0 h-7 rounded flex items-center justify-center gap-1.5 border border-[rgba(255,255,255,0.06)] text-[#999999] hover:bg-[rgba(255,255,255,0.04)] hover:border-[rgba(220,178,99,0.3)] hover:text-[#DCB263] transition-all duration-200 px-2" title={t('chat.templates', lang)}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                <span className="text-[0.65rem] font-medium">{t('chat.templates', lang)}</span>
               </button>
 
-              <button onClick={() => fileInputRef.current?.click()} className="shrink-0 w-6 h-6 rounded flex items-center justify-center border border-[rgba(255,255,255,0.06)] text-[#999999] hover:bg-[rgba(255,255,255,0.06)] hover:border-[rgba(0,229,201,0.3)] hover:text-[#00E5C9] transition-all duration-200" title={t('chat.attach_file', lang)}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+              <button onClick={() => fileInputRef.current?.click()} className="shrink-0 h-7 rounded flex items-center justify-center gap-1.5 border border-[rgba(255,255,255,0.06)] text-[#999999] hover:bg-[rgba(255,255,255,0.04)] hover:border-[rgba(0,229,201,0.3)] hover:text-[#00E5C9] transition-all duration-200 px-2" title={t('chat.attach_file', lang)}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                <span className="text-[0.65rem] font-medium">{t('chat.attach_file', lang)}</span>
               </button>
 
               <div ref={qaDropdownRef} className="relative">
                 <button
                   onClick={() => setShowQuickActions(!showQuickActions)}
-                  className={'shrink-0 w-6 h-6 rounded flex items-center justify-center border transition-all duration-200 ' + (showQuickActions ? 'bg-[rgba(220,178,99,0.1)] border-[rgba(220,178,99,0.3)] text-[#DCB263]' : 'bg-transparent border-[rgba(255,255,255,0.06)] text-[#999999] hover:bg-[rgba(255,255,255,0.06)] hover:border-[rgba(220,178,99,0.3)] hover:text-[#DCB263]')}
+                  className={'shrink-0 h-7 rounded flex items-center justify-center gap-1.5 border transition-all duration-200 px-2 ' + (showQuickActions ? 'bg-[rgba(220,178,99,0.1)] border-[rgba(220,178,99,0.3)] text-[#DCB263]' : 'bg-transparent border-[rgba(255,255,255,0.06)] text-[#999999] hover:bg-[rgba(255,255,255,0.04)] hover:border-[rgba(220,178,99,0.3)] hover:text-[#DCB263]')}
                   title={t('chat.quick_actions', lang)}
                 >
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                  <span className="text-[0.65rem] font-medium">{t('chat.quick_actions', lang)}</span>
                 </button>
                 {showQuickActions && (
                   <div className="absolute bottom-full left-0 mb-1.5 w-48 bg-[#1C1B1B] border border-[rgba(255,255,255,0.1)] rounded-lg shadow-2xl overflow-hidden animate-[fadeIn_0.15s_ease]">

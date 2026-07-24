@@ -1,33 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
-import type { Conversation } from '../hooks/useChat'
-
-export interface Project {
-  id: string
-  name: string
-  path: string
-  createdAt: number
-}
-
-interface WorkspaceAsideProps {
-  conversations: Conversation[]
-  activeConvId: string | null
-  isCollapsed: boolean
-  onToggle: () => void
-  onSelect: (id: string) => void
-  onNew: () => void
-  onDelete: (id: string) => void
-  onPin: (id: string) => void
-  onArchive: (id: string) => void
-  onRestore: (id: string) => void
-  onRename: (id: string, title: string) => void
-  onShowSettings?: (tab?: string) => void
-  projects?: Project[]
-  onAddProject?: (project: Project) => void
-  onDeleteProject?: (id: string) => void
-  onSelectProject?: (project: Project) => void
-  activeProjectId?: string | null
-  onOpenWiki?: () => void
-}
+import type { Conversation } from '../../hooks/useChat'
+import ProjectModal from '../ProjectModal'
+import type { WorkspaceAsideProps, Project } from './types'
 
 function relativeTime(ts: number): string {
   const diff = Date.now() - ts
@@ -151,9 +125,9 @@ function ConvRow({ conv, activeConvId, editingId, editTitle, setEditTitle, setEd
 
   return (
     <div
-      className={`group flex items-center gap-2 px-3 py-2 mx-1.5 rounded-xl cursor-pointer transition-all text-[0.7rem] ${
+      className={`group flex items-center gap-2 px-3 py-2 mx-1.5 rounded-lg cursor-pointer transition-all text-[0.75rem] ${
         isActive
-          ? 'bg-[rgba(0,229,201,0.08)] text-white border border-[rgba(0,229,201,0.15)]'
+          ? 'bg-[rgba(0,229,201,0.06)] text-white'
           : 'text-[#999999] hover:bg-[rgba(255,255,255,0.04)] hover:text-white'
       }`}
       onClick={() => onSelect(conv.id)}
@@ -168,7 +142,7 @@ function ConvRow({ conv, activeConvId, editingId, editTitle, setEditTitle, setEd
               if (e.key === 'Enter') { if (editTitle.trim()) onRename(conv.id, editTitle.trim()); setEditingId(null) }
               if (e.key === 'Escape') setEditingId(null)
             }}
-            className="w-full bg-[#1A1A1A] border border-[#DCB263] rounded-lg px-2 py-1 text-[0.7rem] text-white outline-none"
+            className="w-full bg-[#1A1A1A] border border-[#DCB263] rounded-lg px-2 py-1 text-[0.75rem] text-white outline-none"
             autoFocus
             onClick={e => e.stopPropagation()}
           />
@@ -179,7 +153,7 @@ function ConvRow({ conv, activeConvId, editingId, editTitle, setEditTitle, setEd
             ) : showArchived ? (
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#666666" strokeWidth="2" className="shrink-0"><path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/></svg>
             ) : null}
-            <span className="flex-1 truncate text-[0.7rem]" onDoubleClick={e => { e.stopPropagation(); setEditingId(conv.id); setEditTitle(conv.title) }}>
+            <span className="flex-1 truncate text-[0.75rem]" onDoubleClick={e => { e.stopPropagation(); setEditingId(conv.id); setEditTitle(conv.title) }}>
               {conv.title}
             </span>
             <span className="text-[0.55rem] text-[#555555] font-mono shrink-0">{relativeTime(conv.updatedAt)}</span>
@@ -218,7 +192,7 @@ function SectionHeader({ title, expanded, onToggle, badge, action }: {
 /* ════════════════════════════════
    MAIN
    ════════════════════════════════ */
-export default function WorkspaceAside({
+export default function GeneralWorkspace({
   conversations,
   activeConvId,
   isCollapsed,
@@ -233,6 +207,7 @@ export default function WorkspaceAside({
   onShowSettings,
   projects = [],
   onAddProject,
+  onUpdateProject,
   onDeleteProject,
   onSelectProject,
   activeProjectId,
@@ -246,6 +221,8 @@ export default function WorkspaceAside({
   const [projectsExpanded, setProjectsExpanded] = useState(true)
   const [projectFiles, setProjectFiles] = useState<Array<{name: string; is_dir: boolean; size: number}>>([])
   const [projectFilesLoading, setProjectFilesLoading] = useState(false)
+  const [showProjectModal, setShowProjectModal] = useState(false)
+  const [editingProject, setEditingProject] = useState<Project | null>(null)
 
   const activeProject = projects.find(p => p.id === activeProjectId)
 
@@ -310,9 +287,9 @@ export default function WorkspaceAside({
 
           {/* Search */}
           <div className="px-3 py-2.5 border-b border-[rgba(255,255,255,0.04)]">
-            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#222] border border-[rgba(255,255,255,0.04)] focus-within:border-[rgba(0,229,201,0.2)] transition-colors">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#666666" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Buscar conversaciones..." className="flex-1 bg-transparent border-none outline-none text-[0.7rem] text-white placeholder-[#555555]" />
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#1C1B1B] border border-[rgba(255,255,255,0.06)] focus-within:border-[rgba(0,229,201,0.2)] transition-colors">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#666666" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Buscar conversaciones..." className="flex-1 bg-transparent border-none outline-none text-[0.75rem] text-white placeholder-[#555555]" />
               {searchQuery && (
                 <button onClick={() => setSearchQuery('')} className="flex items-center justify-center w-5 h-5 rounded-md hover:bg-[rgba(255,255,255,0.06)] text-[#666666] hover:text-white transition-colors">
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -325,7 +302,7 @@ export default function WorkspaceAside({
           <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-2" style={{ scrollbarWidth: 'thin', scrollbarColor: '#333 transparent' }}>
 
             {/* Skills */}
-            <button onClick={() => onShowSettings?.('skills')} className="flex items-center gap-2.5 w-full px-4 py-2 mx-1.5 rounded-xl text-[0.7rem] text-[#DCB263] hover:bg-[rgba(220,178,99,0.06)] hover:border-[rgba(220,178,99,0.1)] border border-transparent transition-all mb-1">
+            <button onClick={() => onShowSettings?.('skills')} className="flex items-center gap-2.5 w-full px-4 py-2 mx-1.5 rounded-lg text-[0.75rem] text-[#DCB263] hover:bg-[rgba(220,178,99,0.06)] hover:border-[rgba(220,178,99,0.1)] border border-transparent transition-all mb-1">
               <div className="w-6 h-6 rounded-md bg-[rgba(220,178,99,0.08)] border border-[rgba(220,178,99,0.15)] flex items-center justify-center">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#DCB263" strokeWidth="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
               </div>
@@ -363,7 +340,7 @@ export default function WorkspaceAside({
 
             {/* Projects */}
             <SectionHeader title="Proyectos" expanded={projectsExpanded} onToggle={() => setProjectsExpanded(!projectsExpanded)} badge={projects.length > 0 ? projects.length.toString() : undefined} action={
-              <button onClick={async () => { try { const name = prompt('Nombre del proyecto:'); if (!name?.trim()) return; const { open } = await import('@tauri-apps/plugin-dialog'); const path = await open({ directory: true, multiple: false, title: 'Seleccionar carpeta del proyecto' }); if (path) onAddProject?.({ id: crypto.randomUUID(), name: name.trim(), path: path as string, createdAt: Date.now() }) } catch {} }} className="flex items-center justify-center w-5 h-5 rounded-md hover:bg-[rgba(255,255,255,0.06)] text-[#666666] hover:text-[#00E5C9] transition-colors" title="Nuevo proyecto">
+              <button onClick={() => { setEditingProject(null); setShowProjectModal(true) }} className="flex items-center justify-center w-5 h-5 rounded-md hover:bg-[rgba(255,255,255,0.06)] text-[#666666] hover:text-[#00E5C9] transition-colors" title="Nuevo proyecto">
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               </button>
             } />
@@ -372,14 +349,19 @@ export default function WorkspaceAside({
               <div className="px-1 space-y-0.5">
                 {projects.map(proj => (
                   <div key={proj.id}>
-                    <div className={`group flex items-center gap-2.5 px-3 py-2 mx-1 rounded-xl cursor-pointer transition-all text-[0.7rem] ${activeProjectId === proj.id ? 'bg-[rgba(0,229,201,0.08)] text-[#00E5C9] border border-[rgba(0,229,201,0.15)]' : 'text-[#999999] hover:bg-[rgba(255,255,255,0.04)] hover:text-white'}`} onClick={() => onSelectProject?.(proj)}>
+                    <div className={`group flex items-center gap-2.5 px-3 py-2 mx-1 rounded-lg cursor-pointer transition-all text-[0.75rem] ${activeProjectId === proj.id ? 'bg-[rgba(0,229,201,0.06)] text-[#00E5C9]' : 'text-[#999999] hover:bg-[rgba(255,255,255,0.04)] hover:text-white'}`} onClick={() => onSelectProject?.(proj)}>
                       <div className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 ${activeProjectId === proj.id ? 'bg-[rgba(0,229,201,0.1)] border border-[rgba(0,229,201,0.2)]' : 'bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.06)]'}`}>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={activeProjectId === proj.id ? '#00E5C9' : '#666666'} strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
                       </div>
                       <span className="flex-1 truncate font-medium">{proj.name}</span>
-                      <button onClick={e => { e.stopPropagation(); onDeleteProject?.(proj.id) }} className="opacity-0 group-hover:opacity-100 w-5 h-5 rounded-md flex items-center justify-center text-[#666666] hover:text-[#ef4444] hover:bg-[rgba(239,68,68,0.08)] transition-all">
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                      </button>
+                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={e => { e.stopPropagation(); setEditingProject(proj); setShowProjectModal(true) }} className="w-5 h-5 rounded-md flex items-center justify-center text-[#666666] hover:text-[#00E5C9] hover:bg-[rgba(0,229,201,0.08)] transition-all" title="Editar proyecto">
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.828 2.828 0 1 1 4 4L7 21l-4 1 1-4L17 3z"/></svg>
+                        </button>
+                        <button onClick={e => { e.stopPropagation(); onDeleteProject?.(proj.id) }} className="w-5 h-5 rounded-md flex items-center justify-center text-[#666666] hover:text-[#ef4444] hover:bg-[rgba(239,68,68,0.08)] transition-all" title="Eliminar proyecto">
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                      </div>
                     </div>
 
                     {activeProjectId === proj.id && (
@@ -390,7 +372,7 @@ export default function WorkspaceAside({
                           <div className="px-3 py-2 mx-1.5 text-[0.65rem] text-[#666666]">vacio</div>
                         ) : (
                           projectFiles.slice(0, 8).map(f => (
-                            <div key={f.name} className="flex items-center gap-2 px-3 py-2 mx-1.5 rounded-xl cursor-default transition-all text-[0.7rem] text-[#999999] hover:bg-[rgba(255,255,255,0.04)] hover:text-white border border-transparent">
+                            <div key={f.name} className="flex items-center gap-2 px-3 py-2 mx-1.5 rounded-lg cursor-default transition-all text-[0.75rem] text-[#999999] hover:bg-[rgba(255,255,255,0.04)] hover:text-white border border-transparent">
                               <span className="flex-1 truncate">{f.name}</span>
                               <span className="text-[0.55rem] text-[#555555] font-mono shrink-0">{formatSize(f.size)}</span>
                             </div>
@@ -398,10 +380,22 @@ export default function WorkspaceAside({
                         )}
                         {projectFiles.length > 8 && <div className="px-3 py-1 mx-1.5 text-[0.6rem] text-[#666666]">+{projectFiles.length - 8} mas</div>}
                         {projectConvs.filter(c => c.projectId === proj.id).slice(0, 5).map(conv => (
-                          <div key={conv.id} className={`group flex items-center gap-2 px-3 py-2 mx-1.5 rounded-xl cursor-pointer transition-all text-[0.7rem] ${activeConvId === conv.id ? 'bg-[rgba(0,229,201,0.08)] text-white border border-[rgba(0,229,201,0.15)]' : 'text-[#999999] hover:bg-[rgba(255,255,255,0.04)] hover:text-white border border-transparent'}`} onClick={() => onSelect(conv.id)}>
-                            <span className="flex-1 truncate">{conv.title}</span>
-                            <span className="text-[0.55rem] text-[#555555] font-mono shrink-0">{relativeTime(conv.updatedAt)}</span>
-                          </div>
+                          <ConvRow
+                            key={conv.id}
+                            conv={conv}
+                            activeConvId={activeConvId}
+                            editingId={editingId}
+                            editTitle={editTitle}
+                            setEditTitle={setEditTitle}
+                            setEditingId={setEditingId}
+                            showArchived={showArchived}
+                            onSelect={onSelect}
+                            onRename={onRename}
+                            onPin={onPin}
+                            onArchive={onArchive}
+                            onRestore={onRestore}
+                            onDelete={onDelete}
+                          />
                         ))}
                       </div>
                     )}
@@ -413,20 +407,20 @@ export default function WorkspaceAside({
 
           {/* Footer */}
           <div className="border-t border-[rgba(255,255,255,0.04)] px-3 py-2 space-y-0.5">
-            <button onClick={() => onShowSettings?.()} className="flex items-center gap-2.5 w-full px-3 py-2 rounded-xl text-[0.7rem] text-[#999999] hover:text-[#E5E5E5] hover:bg-[rgba(255,255,255,0.04)] transition-colors">
+            <button onClick={() => onShowSettings?.()} className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[0.75rem] text-[#999999] hover:text-[#E5E5E5] hover:bg-[rgba(255,255,255,0.04)] transition-colors">
               <div className="w-6 h-6 rounded-md bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.06)] flex items-center justify-center">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
               </div>
               <span>Configuracion</span>
             </button>
-            <button onClick={() => setShowArchived(!showArchived)} className="flex items-center gap-2.5 w-full px-3 py-2 rounded-xl text-[0.7rem] text-[#999999] hover:text-[#E5E5E5] hover:bg-[rgba(255,255,255,0.04)] transition-colors">
+            <button onClick={() => setShowArchived(!showArchived)} className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[0.75rem] text-[#999999] hover:text-[#E5E5E5] hover:bg-[rgba(255,255,255,0.04)] transition-colors">
               <div className="w-6 h-6 rounded-md bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.06)] flex items-center justify-center">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/></svg>
               </div>
               <span className="flex-1 text-left">{showArchived ? 'Volver' : 'Archivados'}</span>
               {archivedCount > 0 && !showArchived && <span className="text-[0.55rem] px-1.5 py-0.5 rounded-full bg-[rgba(255,255,255,0.06)] text-[#999999]">{archivedCount}</span>}
             </button>
-            <button onClick={onToggle} className="flex items-center gap-2.5 w-full px-3 py-2 rounded-xl text-[0.7rem] text-[#999999] hover:text-[#E5E5E5] hover:bg-[rgba(255,255,255,0.04)] transition-colors">
+            <button onClick={onToggle} className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[0.75rem] text-[#999999] hover:text-[#E5E5E5] hover:bg-[rgba(255,255,255,0.04)] transition-colors">
               <div className="w-6 h-6 rounded-md bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.06)] flex items-center justify-center">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
               </div>
@@ -457,6 +451,21 @@ export default function WorkspaceAside({
           </button>
         </div>
       )}
+
+      <ProjectModal
+        isOpen={showProjectModal}
+        onClose={() => { setShowProjectModal(false); setEditingProject(null) }}
+        project={editingProject ? { id: editingProject.id, name: editingProject.name, path: editingProject.path } : null}
+        onSave={(data) => {
+          if (data.id && onUpdateProject) {
+            onUpdateProject({ ...editingProject!, name: data.name, path: data.path })
+          } else {
+            onAddProject?.({ id: crypto.randomUUID(), name: data.name, path: data.path, createdAt: Date.now() })
+          }
+          setShowProjectModal(false)
+          setEditingProject(null)
+        }}
+      />
     </>
   )
 }

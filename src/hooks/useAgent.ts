@@ -248,7 +248,12 @@ function normalizeToolTags(text: string): string {
 function cleanToolCalls(text: string): string {
   const normalized = normalizeToolTags(text)
 
-  let cleaned = normalized.replace(/TOOL:\s*\{[\s\S]*?\}\s*/g, '').trim()
+  // Remove markdown code fences that wrap tool calls, then clean the tags themselves
+  let cleaned = normalized
+    .replace(/```(?:json)?\s*<tool_call>[\s\S]*?<\/tool_call>\s*```/gi, '')
+    .replace(/`\s*<tool_call>[\s\S]*?<\/tool_call>\s*`/gi, '')
+
+  cleaned = cleaned.replace(/TOOL:\s*\{[\s\S]*?\}\s*/g, '').trim()
 
   cleaned = cleaned.replace(/<tool_call>[\s\S]*?<\/tool_call>\s*/g, '').trim()
 
@@ -546,17 +551,18 @@ export function useAgent() {
         if (pureText) lastAssistantText = pureText
 
         if (toolCall) {
+          const progressLine = `*→ ${toolCall.name}*`
+          onStep(makeStep('reasoning', progressLine))
+
           if (cleanedResponse) {
             fullAssistantContent = fullAssistantContent
-              ? fullAssistantContent + '\n\n' + cleanedResponse
-              : cleanedResponse
+              ? fullAssistantContent + '\n\n' + cleanedResponse + '\n' + progressLine
+              : cleanedResponse + '\n' + progressLine
             onStep(makeStep('reasoning', cleanedResponse))
           } else {
-            const progressLine = `*→ ${toolCall.name}*`
             fullAssistantContent = fullAssistantContent
               ? fullAssistantContent + '\n' + progressLine
               : progressLine
-            onStep(makeStep('reasoning', progressLine))
           }
           updateChatMsg(fullAssistantContent)
         }

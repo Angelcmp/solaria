@@ -135,7 +135,7 @@ function Code({ inline, className, children, ...props }: any) {
   }
 
   const match = /language-(\w+)/.exec(className || '')
-  const lang = match ? match[1] : ''
+  let lang = match ? match[1] : ''
   const rawCode = extractText(children).replace(/\n$/, '')
   const lines = rawCode.split('\n')
   const showLineNumbers = lines.length > 1
@@ -143,6 +143,12 @@ function Code({ inline, className, children, ...props }: any) {
   let highlighted = escapeHtml(rawCode)
   if (lang && hljs.getLanguage(lang)) {
     highlighted = hljs.highlight(rawCode, { language: lang }).value
+  } else {
+    const detected = hljs.highlightAuto(rawCode)
+    if (detected.language) {
+      highlighted = detected.value
+      lang = detected.language
+    }
   }
 
   return (

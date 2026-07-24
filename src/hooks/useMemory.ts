@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
+import { appLog } from '../lib/log'
 
 export type MemoryProvider = 'ollama' | 'openai' | 'custom'
 
@@ -131,7 +132,9 @@ export function useMemory() {
       const s = await invoke<MemoryStats>('memory_stats')
       setStats(s)
     } catch (e) {
-      setError(String(e))
+      const msg = String(e)
+      setError(msg)
+      appLog('error', `useMemory refreshStats: ${msg}`)
     }
   }, [])
 

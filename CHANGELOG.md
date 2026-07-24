@@ -2,12 +2,22 @@
 
 ## [Unreleased]
 
+### Added
+- **System prompt por defecto** — modo chat normal ahora usa `DEFAULT_SYSTEM_PROMPT` para guiar al modelo a generar markdown válido y correctamente formateado (`useChat.ts`)
+- **Normalización de markdown** — nueva función `normalizeMarkdown()` corrige code fences mal formados (inline, sin saltos de línea, cierre pegado) antes de renderizar (`Markdown.tsx`)
+- **WikiListAside independiente** — cerrar la lista de markdowns ya no cierra el visor del `.md` abierto, manteniendo la lectura (`App.tsx`)
+
 ### Changed
+- **Burbuja de usuario rediseñada** — `rounded-2xl` uniforme, padding `px-4 py-2.5`, font-size `0.8125rem`, borde `[rgba(255,255,255,0.08)]`; separación entre mensajes `mb-6`; padding asistente `pt-2 pb-1` (`Chat.tsx`)
+- **Tool call timeline en chat** — chips individuales reemplazados por resumen `⏺ Ejecutando N herramientas...` durante ejecución del agente; chips suprimidos del markdown mientras corre (`Chat.tsx`, `Markdown.tsx`)
+- **StepCard expandido por defecto** — pasos del agente en ResearchAside ya no se auto-colapsan; usuario minimiza manualmente. Eliminada lógica `autoCollapse` (`ResearchAside.tsx`)
+- **Markdown font-weight** — cambiado de `350` a `300` en cuerpo, párrafos, énfasis, listas, blockquotes y tablas (`Markdown.tsx`, `index.css`)
 - **CLI default provider** — `solaria ask`/`solaria agent` ahora usan OpenAI (`gpt-4o-mini`) por defecto en lugar de Ollama local, para que funcione en terminal sin necesidad de tener modelos locales descargados
 - **API key management desde terminal** — nuevo comando `solaria set-key <provider> <key>` y flag `--api-key` para uso puntual
 - **Ollama host configurable en CLI** — el flag `--host` ahora se respeta en `ask` y `agent`
 
 ### Fixed
+- **stepGlow en idle** — animación de glow en tool calls ahora solo activa durante ejecución del agente; completada se renderiza sin animación (`Markdown.tsx`)
 - **Wrapper `scripts/solaria`** — corregido el flag de directorio de trabajo (`--dir` en lugar de `--working-dir`) y su orden en los argumentos; ahora también respeta un `--dir` explícito del usuario
 - **`install.sh` instala el wrapper** — ahora instala el binario real en `/usr/local/lib/solaria/` y el wrapper ejecutable como `solaria` en el PATH
 

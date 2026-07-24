@@ -3,6 +3,7 @@
 @theme {
   --color-solaria-bg: #131313;
   --color-solaria-surface: #1C1B1B;
+  --color-solaria-deep: #0F0F0F;
   --color-solaria-high: #2A2A2A;
   --color-solaria-highest: #353535;
   --color-solaria-gold: #DCB263;
@@ -13,6 +14,9 @@
   --color-solaria-gray: #E5E5E5;
   --color-solaria-gray-muted: #999999;
   --color-solaria-gray-dim: #666666;
+  --color-solaria-border: rgba(255, 255, 255, 0.08);
+  --color-solaria-border-subtle: rgba(255, 255, 255, 0.06);
+  --color-solaria-border-active: rgba(220, 178, 99, 0.25);
 }
 
 body {
@@ -60,13 +64,13 @@ body {
 }
 
 @keyframes stepGlow {
-  0%, 100% { box-shadow: 0 0 4px rgba(220,178,99,0.1), inset 0 0 4px rgba(220,178,99,0.05); }
-  50% { box-shadow: 0 0 8px rgba(220,178,99,0.2), inset 0 0 6px rgba(220,178,99,0.08); }
+  0%, 100% { box-shadow: 0 0 3px rgba(220,178,99,0.08); }
+  50% { box-shadow: 0 0 6px rgba(220,178,99,0.14); }
 }
 
 @keyframes stepGlowTeal {
-  0%, 100% { box-shadow: 0 0 4px rgba(0,229,201,0.1), inset 0 0 4px rgba(0,229,201,0.05); }
-  50% { box-shadow: 0 0 8px rgba(0,229,201,0.2), inset 0 0 6px rgba(0,229,201,0.08); }
+  0%, 100% { box-shadow: 0 0 3px rgba(0,229,201,0.08); }
+  50% { box-shadow: 0 0 6px rgba(0,229,201,0.14); }
 }
 
 * {
@@ -122,31 +126,41 @@ body {
 .hljs-built_in { color: #ffcb6b; }
 
 .hl-inline {
-  background: rgba(199, 146, 234, 0.12);
-  color: #c792ea;
+  background: rgba(255, 255, 255, 0.08);
+  color: #E5E5E5;
   padding: 1px 5px;
-  border-radius: 3px;
+  border-radius: 4px;
   font-size: 0.85em;
   font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 /* ════════════════════════════════
    Code blocks
    ════════════════════════════════ */
 .hl-block {
-  background: rgba(0, 0, 0, 0.35);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: #0F0F0F;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
-  margin: 8px 0;
+  margin: 12px 0;
   position: relative;
   overflow: hidden;
 }
 
+.hl-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.2);
+}
+
 .hl-block pre {
-  padding: 12px 14px;
+  padding: 16px 18px;
   margin: 0;
   overflow-x: auto;
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   line-height: 1.5;
   font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
   color: #eeffff;
@@ -158,6 +172,17 @@ body {
   background: transparent;
   padding: 0;
   border-radius: 0;
+}
+
+.hl-line-numbers {
+  user-select: none;
+  text-align: right;
+  color: #444;
+  font-size: 0.7rem;
+  line-height: 1.5;
+  padding-right: 12px;
+  min-width: 32px;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
 }
 
 .hl-block pre::-webkit-scrollbar {
@@ -173,9 +198,28 @@ body {
   background: #444;
 }
 
+.hl-block-single .hl-block-header {
+  padding-bottom: 6px;
+}
+
+.hl-block-single pre {
+  padding: 10px 16px;
+}
+
 /* ════════════════════════════════
    Markdown body
    ════════════════════════════════ */
+.markdown-body {
+  font-size: 0.875rem;
+  line-height: 1.7;
+  font-weight: 300;
+  letter-spacing: 0.015em;
+}
+
+.markdown-body p {
+  margin: 0.75rem 0;
+}
+
 .markdown-body table {
   border-collapse: collapse;
   width: 100%;
@@ -183,7 +227,8 @@ body {
 
 .markdown-body th,
 .markdown-body td {
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: none;
+  padding: 8px 12px;
 }
 
 .markdown-body th {
@@ -192,24 +237,39 @@ body {
 }
 
 .markdown-body td {
-  font-weight: 350;
+  font-weight: 300;
   letter-spacing: 0.01em;
 }
 
 .markdown-body ol {
   list-style-type: decimal;
   padding-left: 1.25rem;
-  margin: 0.5rem 0;
+  margin: 0.75rem 0;
 }
 
 .markdown-body ul {
   list-style-type: disc;
   padding-left: 1.25rem;
-  margin: 0.5rem 0;
+  margin: 0.75rem 0;
+}
+
+.markdown-body ul.contains-task-list {
+  list-style-type: none;
+  padding-left: 0;
+}
+
+.markdown-body ul.contains-task-list > li {
+  display: flex;
+  align-items: flex-start;
+}
+
+.markdown-body ul.contains-task-list > li > input[type="checkbox"] {
+  display: none;
 }
 
 .markdown-body blockquote {
   margin: 0.75rem 0;
+  border-radius: 0 8px 8px 0;
 }
 
 .markdown-body img {
@@ -220,7 +280,7 @@ body {
 
 .markdown-body hr {
   border: none;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
   margin: 1rem 0;
 }
 
@@ -231,4 +291,31 @@ body {
 
 .markdown-body a:hover {
   text-decoration: underline;
+}
+
+/* Compact mode scaling */
+.markdown-compact {
+  line-height: 1.6;
+}
+
+.markdown-compact h1 { font-size: 1rem !important; }
+.markdown-compact h2 { font-size: 0.875rem !important; }
+.markdown-compact h3 { font-size: 0.8125rem !important; }
+.markdown-compact h4 { font-size: 0.75rem !important; }
+.markdown-compact h5 { font-size: 0.7rem !important; }
+.markdown-compact h6 { font-size: 0.7rem !important; }
+
+.markdown-compact p,
+.markdown-compact li,
+.markdown-compact blockquote {
+  margin: 0.5rem 0;
+}
+
+.markdown-compact .hl-block {
+  margin: 8px 0;
+}
+
+.markdown-compact .hl-block pre {
+  padding: 12px 14px;
+  font-size: 0.75rem;
 }

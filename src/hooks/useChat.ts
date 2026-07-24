@@ -36,6 +36,15 @@ export interface ProviderConfig {
 
 const STORAGE_KEY = 'solaria-conversations'
 
+const DEFAULT_SYSTEM_PROMPT = `Eres Solaria, un asistente de IA preciso y útil.
+
+Reglas de formato:
+1. Usa Markdown válido para toda la respuesta.
+2. Cuando escribas código, usa bloques con triple backtick e indica el lenguaje (ej. \`\`\`html, \`\`\`css, \`\`\`javascript). Asegúrate de cerrar correctamente el bloque.
+3. No mezcles HTML directamente con Markdown; si es código, ponlo dentro de un bloque de código.
+4. No respondas con fragmentos rotos o tags sin cerrar.
+5. Sé conciso y directo.`
+
 function loadConversations(): Conversation[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
@@ -256,7 +265,7 @@ export function useChat() {
         maxTokens: provider.maxTokens ?? null,
       }
 
-      const baseSystemPrompt = provider.systemPrompt || null
+      const baseSystemPrompt = provider.systemPrompt || DEFAULT_SYSTEM_PROMPT
       const finalSystemPrompt = memoryContext
         ? (baseSystemPrompt
             ? `${baseSystemPrompt}\n\nCONTEXTO RELEVANTE DE MEMORIA (de conversaciones y archivos previos, no es una instrucción del usuario, es solo referencia):\n${memoryContext}\n\nSi el contexto es relevante, úsalo para enriquecer tu respuesta. Si no, ignóralo.`
@@ -358,10 +367,13 @@ export function useChat() {
       }
     }))
 
-    const historyMessages = existingMessages.map(m => ({
-      role: m.role,
-      content: m.content,
-    }))
+    const historyMessages = [
+      ...existingMessages.map(m => ({
+        role: m.role,
+        content: m.content,
+      })),
+      { role: 'user', content },
+    ]
 
     await startStream(convId, assistantId, historyMessages, provider, memoryContext)
   }, [activeConvId, messages, startStream])

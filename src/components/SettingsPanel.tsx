@@ -17,6 +17,16 @@ interface SettingsPanelProps {
   onUpdateAgentConfig?: (updates: Partial<AgentConfig>) => void
 }
 
+const WORKSPACE_MODES: { value: AppSettings['workspaceMode']; label: string; icon: string }[] = [
+  { value: 'general', label: 'General', icon: '⚙️' },
+  { value: 'legal', label: 'Legal', icon: '⚖️' },
+  { value: 'accounting', label: 'Contable', icon: '📊' },
+  { value: 'commerce', label: 'Comercio', icon: '🛒' },
+  { value: 'medical', label: 'Médico', icon: '🏥' },
+  { value: 'architecture', label: 'Arquitectura', icon: '🏗️' },
+  { value: 'design', label: 'Diseño', icon: '🎨' },
+]
+
 const PROVIDERS: { id: AppSettings['defaultProvider']; label: string; models: string[]; isLocal: boolean }[] = [
   { id: 'ollama', label: 'Ollama', models: ['qwen3.5', 'llama3.2', 'llama3.1', 'mistral', 'phi3', 'deepseek-r1', 'gemma3', 'gemma4'], isLocal: true },
   { id: 'openai', label: 'OpenAI', models: ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo', 'gpt-5.5', 'o1', 'o3-mini'], isLocal: false },
@@ -294,6 +304,31 @@ function GeneralTab({
               {label}
             </button>
           ))}
+        </div>
+      </Section>
+
+      {/* Section: Workspace Mode */}
+      <Section title="Área de trabajo" color="#DCB263">
+        <div className="flex flex-col gap-2">
+          <p className="text-[0.6rem] text-[#999999] leading-relaxed">
+            Selecciona el modo de workspace según tu profesión. Cada área tiene herramientas específicas para gestionar casos, clientes y documentos.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {WORKSPACE_MODES.map(m => (
+              <button
+                key={m.value}
+                onClick={() => onUpdate({ workspaceMode: m.value })}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-[0.65rem] font-medium transition-all ${
+                  settings.workspaceMode === m.value
+                    ? 'bg-[rgba(0,229,201,0.1)] border border-[rgba(0,229,201,0.25)] text-[#00E5C9]'
+                    : 'bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] text-[#999999] hover:border-[rgba(255,255,255,0.12)] hover:text-[#E5E5E5]'
+                }`}
+              >
+                <span className="text-[0.9rem]">{m.icon}</span>
+                <span>{m.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </Section>
 

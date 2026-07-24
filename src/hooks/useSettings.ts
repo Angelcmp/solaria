@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
+import { appLog } from '../lib/log'
 
 export interface ApiKeys {
   openai: string
@@ -14,6 +15,8 @@ export interface ApiKeys {
 
 export type SecurityProfile = 'explore' | 'execute'
 
+export type WorkspaceMode = 'general' | 'legal' | 'accounting' | 'commerce' | 'medical' | 'architecture' | 'design'
+
 export interface AppSettings {
   ollamaHost: string
   ollamaTimeout: number
@@ -27,6 +30,7 @@ export interface AppSettings {
   apiKeys: ApiKeys
   securityProfile: SecurityProfile
   comparisonEnabled: boolean
+  workspaceMode: WorkspaceMode
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -51,6 +55,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   },
   securityProfile: 'explore',
   comparisonEnabled: false,
+  workspaceMode: 'general',
 }
 
 const STORAGE_KEY = 'solaria-settings'
@@ -77,9 +82,10 @@ export function useSettings() {
         try {
           const key = await invoke<string>('get_api_key', { provider: p })
           if (key) loaded[p] = key
-        } catch {
+        } catch (e) {
           const cached = localStorage.getItem(`solaria-key-${p}`)
           if (cached) loaded[p] = cached
+          appLog('warn', `useSettings loadKeys ${p}: ${e}`)
         }
       }
       if (Object.keys(loaded).length > 0) {
@@ -94,8 +100,9 @@ export function useSettings() {
       try {
         const key = await invoke<string>('get_api_key', { provider: 'tavily' })
         if (key) setSettings(prev => ({ ...prev, tavilyKey: key }))
-      } catch {
+      } catch (e) {
         // localStorage fallback is already loaded from loadSettings
+        appLog('warn', `useSettings loadTavily: ${e}`)
       }
     }
     loadKeys()

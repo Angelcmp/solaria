@@ -73,6 +73,35 @@ body {
   50% { box-shadow: 0 0 6px rgba(0,229,201,0.14); }
 }
 
+@keyframes streamingCursor {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.streaming-cursor::after {
+  content: '▌';
+  display: inline;
+  margin-left: 2px;
+  color: #DCB263;
+  animation: streamingCursor 1s ease-in-out infinite;
+}
+
+.streaming-message {
+  position: relative;
+}
+
+.streaming-message::before {
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(to bottom, rgba(220,178,99,0.3), rgba(220,178,99,0.05));
+  border-radius: 2px;
+  animation: stepGlow 2s ease-in-out infinite;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -127,7 +156,7 @@ body {
 
 .hl-inline {
   background: rgba(255, 255, 255, 0.08);
-  color: #E5E5E5;
+  color: #c792ea;
   padding: 1px 5px;
   border-radius: 4px;
   font-size: 0.85em;

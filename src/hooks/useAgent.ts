@@ -508,7 +508,10 @@ export function useAgent() {
 
     let skillsPrompt = ''
     try {
-      const params: Record<string, unknown> = { workingDir: agentConfig.workingDirectory || null }
+      const params: Record<string, unknown> = {
+        workingDir: agentConfig.workingDirectory || null,
+        autoActivate: agentConfig.autoActivateSkills,
+      }
       if (agentConfig.autoActivateSkills) {
         params.query = userInput
       }
@@ -641,7 +644,7 @@ export function useAgent() {
           const filePath = toolCall.arguments.path || ''
           const fileContent = toolCall.arguments.content || ''
           _writeFileName = filePath.split('/').pop() || filePath
-          reportPreview = `📄 \`${_writeFileName}\` guardado correctamente`
+          reportPreview = `[DOCUMENT] \`${_writeFileName}\` guardado correctamente`
           reportForLLM = `Resultado de write_file (${filePath}): ${fileContent.length} caracteres.\nPrimeros 500:\n\`\`\`\n${fileContent.slice(0, 500)}\n\`\`\`\nEl archivo completo fue escrito en disco.`
         }
 
@@ -665,7 +668,7 @@ export function useAgent() {
         messages.push({ role: 'tool', content: resultContent })
 
         if (isWriteFile) {
-          const confirmMsg = `✅ Archivo guardado: \`${_writeFileName}\``
+          const confirmMsg = `Archivo guardado: \`${_writeFileName}\``
           fullAssistantContent = fullAssistantContent
             ? fullAssistantContent + '\n\n' + confirmMsg
             : confirmMsg

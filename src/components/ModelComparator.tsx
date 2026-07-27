@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { estimateTokens, estimateCost, formatCost } from '../lib/pricing'
 import type { ComparisonRound } from '../hooks/useComparison'
 import Markdown from '../lib/Markdown'
+import { CheckIcon, ThumbsUpIcon, SearchIcon, TrophyIcon, CrossIcon, RefreshIcon } from './Icons'
 
 interface ModelComparatorProps {
   models: { id: string; label: string; models: string[]; local: boolean }[]
@@ -136,7 +137,7 @@ export default function ModelComparator({
                               }`}
                             >
                               {model}
-                              {sel && <span className="ml-1 text-[0.5rem]">✓</span>}
+                              {sel && <CheckIcon size={10} color="#00E5C9" className="ml-1" />}
                             </button>
                           )
                         })}
@@ -232,7 +233,8 @@ export default function ModelComparator({
                           onClick={() => onVote(resp.blindLabel)}
                           className="px-3 py-1.5 rounded-lg text-[0.7rem] font-medium bg-[#222] border border-[rgba(255,255,255,0.08)] text-[#E5E5E5] hover:bg-[rgba(0,229,201,0.08)] hover:border-[rgba(0,229,201,0.25)] hover:text-[#00E5C9] transition-all"
                         >
-                          👍 {resp.blindLabel}
+                          <ThumbsUpIcon size={12} color="#00E5C9" className="mr-1" />
+                          {resp.blindLabel}
                         </button>
                       ))}
                     </div>
@@ -245,7 +247,8 @@ export default function ModelComparator({
                         onClick={onReveal}
                         className="px-4 py-2 rounded-lg text-[0.7rem] font-medium bg-[rgba(0,229,201,0.08)] border border-[rgba(0,229,201,0.2)] text-[#00E5C9] hover:bg-[rgba(0,229,201,0.15)] transition-all"
                       >
-                        🔍 Revelar identidades
+                        <SearchIcon size={12} color="#00E5C9" className="mr-1" />
+                        Revelar identidades
                       </button>
                     </div>
                   )}
@@ -282,7 +285,21 @@ export default function ModelComparator({
                                     <td className="py-2.5 font-mono text-[#999999]">~{tokens}</td>
                                     <td className="py-2.5 font-mono text-[#999999]">{resp.latencyMs < 1000 ? `${resp.latencyMs}ms` : `${(resp.latencyMs / 1000).toFixed(1)}s`}</td>
                                     <td className="py-2.5 font-mono text-[#999999]">{costStr}</td>
-                                    <td className="py-2.5">{won ? '🏆 Ganador' : resp.error ? '❌ Error' : '—'}</td>
+                                    <td className="py-2.5">
+                                      {won ? (
+                                        <span className="flex items-center gap-1 text-[#DCB263]">
+                                          <TrophyIcon size={12} color="#DCB263" />
+                                          Ganador
+                                        </span>
+                                      ) : resp.error ? (
+                                        <span className="flex items-center gap-1 text-[#ef4444]">
+                                          <CrossIcon size={12} color="#ef4444" />
+                                          Error
+                                        </span>
+                                      ) : (
+                                        '—'
+                                      )}
+                                    </td>
                                   </tr>
                                 )
                               })}
@@ -304,7 +321,8 @@ export default function ModelComparator({
                         }}
                         className="px-4 py-2 rounded-lg text-[0.7rem] font-medium bg-[#222] border border-[rgba(255,255,255,0.08)] text-[#E5E5E5] hover:bg-[rgba(255,255,255,0.06)] hover:border-[rgba(255,255,255,0.15)] transition-all"
                       >
-                        🔄 Nueva comparación
+                        <RefreshIcon size={12} color="#999999" className="mr-1" />
+                        Nueva comparación
                       </button>
                     </div>
                   )}

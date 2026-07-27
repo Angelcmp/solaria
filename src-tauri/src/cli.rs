@@ -259,6 +259,7 @@ async fn run_agent(config: &CliConfig) {
     let skills_prompt = skills::get_enabled_skills_prompt(
         Some(&config.working_dir),
         Some(&config.prompt),
+        false,
     );
 
     let allowed_tools = vec![

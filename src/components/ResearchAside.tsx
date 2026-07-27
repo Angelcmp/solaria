@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import type { AgentStep } from '../hooks/useAgent'
 import Markdown from '../lib/Markdown'
+import { BulletIcon, CheckIcon, WarningIcon, ChevronUpIcon, ChevronDownIcon } from './Icons'
 
 interface ResearchAsideProps {
   steps: AgentStep[]
@@ -17,6 +18,7 @@ interface SourceItem {
   url: string
   title: string
   status: 'pending' | 'fetched' | 'error'
+  score: number
 }
 
 interface ReportFile {
@@ -25,9 +27,44 @@ interface ReportFile {
   written: boolean
 }
 
+interface TavilyResultLike {
+  url?: string
+  title?: string
+  score?: number
+}
+
+interface WebSearchResult {
+  success?: boolean
+  results?: TavilyResultLike[]
+  answer?: string
+  error?: string
+}
+
+function defaultScore(status: SourceItem['status']): number {
+  if (status === 'fetched') return 0.75
+  if (status === 'error') return 0.15
+  return 0.35
+}
+
 function extractSources(steps: AgentStep[]): SourceItem[] {
   const sources: SourceItem[] = []
   const seen = new Set<string>()
+  const searchScores = new Map<string, number>()
+
+  for (const step of steps) {
+    if (step.type === 'tool_result' && step.toolName === 'web_search' && step.toolResult) {
+      try {
+        const parsed: WebSearchResult = JSON.parse(step.toolResult)
+        if (parsed.results) {
+          for (const r of parsed.results) {
+            if (r.url) {
+              searchScores.set(r.url, r.score ?? 0.7)
+            }
+          }
+        }
+      } catch {}
+    }
+  }
 
   for (const step of steps) {
     if (step.type === 'tool_call' && step.toolArgs) {
@@ -37,14 +74,14 @@ function extractSources(steps: AgentStep[]): SourceItem[] {
           const key = `search:${args.query}`
           if (!seen.has(key)) {
             seen.add(key)
-            sources.push({ url: '', title: `Búsqueda: ${args.query.slice(0, 60)}`, status: 'pending' })
+            sources.push({ url: '', title: `Búsqueda: ${args.query.slice(0, 60)}`, status: 'pending', score: 0.5 })
           }
         }
         if (step.toolName === 'fetch_url' && args.url) {
           if (!seen.has(args.url)) {
             seen.add(args.url)
             const title = args.url.replace(/https?:\/\//, '').split('/')[0] || args.url
-            sources.push({ url: args.url, title, status: 'pending' })
+            sources.push({ url: args.url, title, status: 'pending', score: searchScores.get(args.url) ?? 0.5 })
           }
         }
       } catch {}
@@ -55,6 +92,9 @@ function extractSources(steps: AgentStep[]): SourceItem[] {
         const existing = sources.find(s => s.url === url)
         if (existing) {
           existing.status = step.toolResult.startsWith('ERROR') ? 'error' : 'fetched'
+          if (existing.score === undefined || existing.score <= 0.5) {
+            existing.score = defaultScore(existing.status)
+          }
         }
       }
     }
@@ -241,10 +281,10 @@ function ProcessTabContent({ steps, isRunning, liveThinking, onConfirmTool }: {
 
       {steps.length > 3 && (
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.04)] text-[0.55rem]">
-          <span className="text-[#DCB263]">⏺ {toolCalls} herramienta{toolCalls !== 1 ? 's' : ''}</span>
+          <span className="flex items-center gap-1 text-[#DCB263]"><BulletIcon size={6} color="#DCB263" />{toolCalls} herramienta{toolCalls !== 1 ? 's' : ''}</span>
           <span className="text-[#4a4a4a]">·</span>
           <span className="text-[#00E5C9]">{results} resultado{results !== 1 ? 's' : ''}</span>
-          {hasFinal && <><span className="text-[#4a4a4a]">·</span><span className="text-[#999999]">✓ final</span></>}
+          {hasFinal && <><span className="text-[#4a4a4a]">·</span><span className="flex items-center gap-1 text-[#999999]"><CheckIcon size={10} color="#999999" />final</span></>}
           <span className="ml-auto text-[#4a4a4a]">{steps.length} pasos</span>
         </div>
       )}
@@ -350,15 +390,19 @@ function StepCard({ step, stepIndex, totalSteps, isLast, isRunning, onConfirmToo
               <div className="flex-1 text-[0.6rem] text-[#999999] font-mono bg-[rgba(0,0,0,0.25)] rounded px-2 py-1.5 whitespace-pre-wrap break-all overflow-x-auto" style={{ maxHeight: '120px' }}>
                 {formatArgs(step.toolArgs)}
               </div>
-              <button onClick={() => handleCopy(step.toolArgs!)} className="shrink-0 px-1.5 py-0.5 rounded text-[0.55rem] text-[#666666] hover:text-white hover:bg-[rgba(255,255,255,0.08)] transition-colors border border-[rgba(255,255,255,0.06)]" title="Copiar args">{copied ? '✓' : 'Copiar'}</button>
+              <button onClick={() => handleCopy(step.toolArgs!)} className="shrink-0 px-1.5 py-0.5 rounded text-[0.55rem] text-[#666666] hover:text-white hover:bg-[rgba(255,255,255,0.08)] transition-colors border border-[rgba(255,255,255,0.06)] flex items-center gap-1" title="Copiar args">
+                {copied ? <CheckIcon size={10} color="#00E5C9" /> : null}
+                {copied ? 'Listo' : 'Copiar'}
+              </button>
             </div>
           )}
 
           {step.type === 'tool_result' && step.toolResult && (
             <div>
               {step.toolWarning && (
-                <div className="text-[0.55rem] text-[#f59e0b] bg-[rgba(245,158,11,0.1)] border border-[rgba(245,158,11,0.2)] rounded px-2 py-1 mb-1.5">
-                  ⚠ {step.toolWarning}
+                <div className="flex items-center gap-1 text-[0.55rem] text-[#f59e0b] bg-[rgba(245,158,11,0.1)] border border-[rgba(245,158,11,0.2)] rounded px-2 py-1 mb-1.5">
+                  <WarningIcon size={10} color="#f59e0b" />
+                  {step.toolWarning}
                 </div>
               )}
               {step.toolResult.startsWith('[PENDIENTE') ? (
@@ -373,11 +417,14 @@ function StepCard({ step, stepIndex, totalSteps, isLast, isRunning, onConfirmToo
                   </div>
                   <div className="flex flex-col gap-1 shrink-0">
                     {step.toolResult.length > 800 && (
-                      <button onClick={() => setShowFull(!showFull)} className="px-1.5 py-0.5 rounded text-[0.55rem] text-[#00E5C9] hover:bg-[rgba(0,229,201,0.1)] transition-colors border border-[rgba(255,255,255,0.06)]">
-                        {showFull ? '▲' : '▼'}
+                      <button onClick={() => setShowFull(!showFull)} className="px-1.5 py-0.5 rounded text-[#00E5C9] hover:bg-[rgba(0,229,201,0.1)] transition-colors border border-[rgba(255,255,255,0.06)] flex items-center justify-center">
+                        {showFull ? <ChevronUpIcon size={10} color="#00E5C9" /> : <ChevronDownIcon size={10} color="#00E5C9" />}
                       </button>
                     )}
-                    <button onClick={() => handleCopy(step.toolResult!)} className="px-1.5 py-0.5 rounded text-[0.55rem] text-[#666666] hover:text-white hover:bg-[rgba(255,255,255,0.08)] transition-colors border border-[rgba(255,255,255,0.06)]" title="Copiar resultado">{copied ? '✓' : 'Copiar'}</button>
+                    <button onClick={() => handleCopy(step.toolResult!)} className="px-1.5 py-0.5 rounded text-[0.55rem] text-[#666666] hover:text-white hover:bg-[rgba(255,255,255,0.08)] transition-colors border border-[rgba(255,255,255,0.06)] flex items-center gap-1" title="Copiar resultado">
+                      {copied ? <CheckIcon size={10} color="#00E5C9" /> : null}
+                      {copied ? 'Listo' : 'Copiar'}
+                    </button>
                   </div>
                 </div>
               )}
@@ -440,24 +487,25 @@ function DocumentTabContent({ reports }: { reports: ReportFile[] }) {
   }
 
   return (
-    <div className="p-3 space-y-3">
+    <div className={`${reports.length > 1 ? 'p-3 space-y-3' : 'h-full'}`}>
       {reports.map((r, i) => (
-        <div key={i} className="bg-[#0F0F0F] rounded-xl border border-[rgba(255,255,255,0.08)] overflow-hidden">
-          <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[rgba(255,255,255,0.06)] bg-[rgba(0,0,0,0.2)]">
+        <div key={i} className={`bg-[#0F0F0F] rounded-xl border border-[rgba(255,255,255,0.08)] border-l-2 border-l-[rgba(0,229,201,0.15)] overflow-hidden flex flex-col ${reports.length === 1 ? 'h-full' : ''}`}>
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-[rgba(255,255,255,0.06)] bg-[rgba(0,0,0,0.25)]">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#00E5C9" strokeWidth="1.5">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
             </svg>
             <span className="text-[0.7rem] text-[#00E5C9] font-mono truncate flex-1" title={r.path}>{r.path.split('/').pop()}</span>
-            {r.written && <span className="text-[0.55rem] text-[#00E5C9] bg-[rgba(0,229,201,0.1)] px-1.5 py-0.5 rounded">✓ escrito</span>}
+            {r.written && <span className="flex items-center gap-1 text-[0.55rem] text-[#00E5C9] bg-[rgba(0,229,201,0.1)] px-1.5 py-0.5 rounded"><CheckIcon size={10} color="#00E5C9" /> escrito</span>}
             <button
               onClick={() => handleCopy(r.content)}
-              className="shrink-0 px-2 py-1 rounded-md text-[0.55rem] text-[#999999] hover:text-white hover:bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.06)] transition-colors"
+              className="shrink-0 px-2 py-1 rounded-md text-[0.55rem] text-[#999999] hover:text-white hover:bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.06)] transition-colors flex items-center gap-1"
               title="Copiar contenido"
             >
-              {copied ? '✓ Copiado' : 'Copiar'}
+              {copied ? <CheckIcon size={10} color="#00E5C9" /> : null}
+              {copied ? 'Copiado' : 'Copiar'}
             </button>
           </div>
-          <div className="p-3">
+          <div className="flex-1 overflow-y-auto p-5 bg-[#0F0F0F]" style={{ scrollbarWidth: 'thin', scrollbarColor: '#333 transparent' }}>
             <Markdown content={r.content} />
           </div>
         </div>
@@ -486,10 +534,25 @@ function Favicon({ url, domain }: { url?: string; domain: string }) {
   )
 }
 
+function scoreColor(score: number): string {
+  if (score >= 0.8) return 'bg-[rgba(0,229,201,0.12)] text-[#00E5C9]'
+  if (score >= 0.5) return 'bg-[rgba(220,178,99,0.12)] text-[#DCB263]'
+  return 'bg-[rgba(255,255,255,0.05)] text-[#999999]'
+}
+
+function scoreDot(score: number): string {
+  if (score >= 0.8) return '#00E5C9'
+  if (score >= 0.5) return '#DCB263'
+  return '#666666'
+}
+
 function ReferencesTabContent({ sources }: { sources: SourceItem[] }) {
   const fetched = sources.filter(s => s.status === 'fetched').length
   const errors = sources.filter(s => s.status === 'error').length
   const pending = sources.filter(s => s.status === 'pending').length
+  const avgScore = sources.length > 0
+    ? sources.reduce((sum, s) => sum + (s.score ?? 0), 0) / sources.length
+    : 0
 
   if (sources.length === 0) {
     return (
@@ -512,6 +575,10 @@ function ReferencesTabContent({ sources }: { sources: SourceItem[] }) {
         {pending > 0 && <span className="text-[#DCB263]"> · {pending} pendiente{pending !== 1 ? 's' : ''}</span>}
         <span className="ml-auto text-[#4a4a4a]">{sources.length} total</span>
       </div>
+      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[rgba(0,229,201,0.03)] border border-[rgba(0,229,201,0.08)] text-[0.6rem]">
+        <span className="text-[#666666]">Relevancia promedio</span>
+        <span className="ml-auto text-[#00E5C9] font-medium">{(avgScore * 100).toFixed(0)}%</span>
+      </div>
       {sources.map((s, i) => (
         <div key={i} className="px-3 py-2.5 rounded-lg bg-[#1C1B1B] border border-[rgba(255,255,255,0.06)]">
           <div className="flex items-center gap-2">
@@ -520,6 +587,10 @@ function ReferencesTabContent({ sources }: { sources: SourceItem[] }) {
             {s.status === 'error' && <span className="w-1.5 h-1.5 rounded-full bg-[#ef4444] shrink-0" />}
             {s.url && <Favicon url={s.url} domain={s.url} />}
             <span className="text-[0.7rem] text-[#E5E5E5] truncate flex-1">{s.title}</span>
+            <span title={`Score: ${((s.score ?? 0) * 100).toFixed(0)}%`} className={`shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded text-[0.55rem] font-medium ${scoreColor(s.score ?? 0)}`}>
+              <span className="w-1 h-1 rounded-full" style={{ backgroundColor: scoreDot(s.score ?? 0) }} />
+              {((s.score ?? 0) * 100).toFixed(0)}%
+            </span>
           </div>
           {s.url && (
             <a href={s.url} target="_blank" rel="noopener noreferrer" className="block text-[0.6rem] text-[#00E5C9] truncate mt-0.5 hover:underline ml-[18px]">

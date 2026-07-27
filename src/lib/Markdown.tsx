@@ -13,22 +13,15 @@ import css from 'highlight.js/lib/languages/css'
 import sql from 'highlight.js/lib/languages/sql'
 import yaml from 'highlight.js/lib/languages/yaml'
 import markdown from 'highlight.js/lib/languages/markdown'
-
-const MarkdownContext = createContext({ isRunning: false })
-
-function normalizeMarkdown(content: string): string {
-  return content
-    // Opening fence at start of line must be followed by a newline
-    .replace(/^(```[a-zA-Z0-9]*)(?!\n)/gm, '$1\n')
-    // Opening fence inline with no following newline: split before and after it
-    .replace(/([^\n])(```[a-zA-Z0-9]*)(?!\n)/g, '$1\n$2\n')
-    // Opening fence inline with following newline: move it to its own line
-    .replace(/([^\n])(```[a-zA-Z0-9]*\n)/g, '$1\n$2')
-    // Closing fence must be on its own line
-    .replace(/([^\n])(```)(\n|$)/gm, '$1\n$2$3')
-    // Trim excessive blank lines to at most two
-    .replace(/\n{4,}/g, '\n\n\n')
-}
+import { CheckIcon } from '../components/Icons'
+import java from 'highlight.js/lib/languages/java'
+import cpp from 'highlight.js/lib/languages/cpp'
+import go from 'highlight.js/lib/languages/go'
+import php from 'highlight.js/lib/languages/php'
+import ruby from 'highlight.js/lib/languages/ruby'
+import kotlin from 'highlight.js/lib/languages/kotlin'
+import swift from 'highlight.js/lib/languages/swift'
+import dockerfile from 'highlight.js/lib/languages/dockerfile'
 
 hljs.registerLanguage('python', python)
 hljs.registerLanguage('py', python)
@@ -50,6 +43,35 @@ hljs.registerLanguage('yaml', yaml)
 hljs.registerLanguage('yml', yaml)
 hljs.registerLanguage('markdown', markdown)
 hljs.registerLanguage('md', markdown)
+hljs.registerLanguage('java', java)
+hljs.registerLanguage('cpp', cpp)
+hljs.registerLanguage('c++', cpp)
+hljs.registerLanguage('go', go)
+hljs.registerLanguage('golang', go)
+hljs.registerLanguage('php', php)
+hljs.registerLanguage('ruby', ruby)
+hljs.registerLanguage('rb', ruby)
+hljs.registerLanguage('kotlin', kotlin)
+hljs.registerLanguage('kt', kotlin)
+hljs.registerLanguage('swift', swift)
+hljs.registerLanguage('dockerfile', dockerfile)
+hljs.registerLanguage('docker', dockerfile)
+
+const MarkdownContext = createContext({ isRunning: false })
+
+function normalizeMarkdown(content: string): string {
+  return content
+    // Opening fence at start of line must be followed by a newline
+    .replace(/^(```[a-zA-Z0-9]*)(?!\n)/gm, '$1\n')
+    // Opening fence inline with no following newline: split before and after it
+    .replace(/([^\n])(```[a-zA-Z0-9]*)(?!\n)/g, '$1\n$2\n')
+    // Opening fence inline with following newline: move it to its own line
+    .replace(/([^\n])(```[a-zA-Z0-9]*\n)/g, '$1\n$2')
+    // Closing fence must be on its own line
+    .replace(/([^\n])(```)(\n|$)/gm, '$1\n$2$3')
+    // Trim excessive blank lines to at most two
+    .replace(/\n{4,}/g, '\n\n\n')
+}
 
 function escapeHtml(text: string): string {
   return text
@@ -94,9 +116,10 @@ function CopyButton({ code }: { code: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="px-2 py-0.5 rounded text-[0.55rem] text-[#999999] bg-[#2A2A2A] hover:bg-[#353535] hover:text-white border border-[rgba(255,255,255,0.08)] transition-all opacity-0 group-hover:opacity-100"
+      className="px-2 py-0.5 rounded text-[0.55rem] text-[#999999] bg-[#2A2A2A] hover:bg-[#353535] hover:text-white border border-[rgba(255,255,255,0.08)] transition-all opacity-0 group-hover:opacity-100 flex items-center gap-1"
     >
-      {copied ? '✓' : 'Copiar'}
+      {copied ? <CheckIcon size={10} color="#00E5C9" /> : null}
+      {copied ? 'Listo' : 'Copiar'}
     </button>
   )
 }
@@ -114,14 +137,20 @@ function Code({ inline, className, children, ...props }: any) {
   }
 
   const match = /language-(\w+)/.exec(className || '')
-  const lang = match ? match[1] : ''
-  const rawCode = String(children).replace(/\n$/, '')
+  let lang = match ? match[1] : ''
+  const rawCode = extractText(children).replace(/\n$/, '')
   const lines = rawCode.split('\n')
   const showLineNumbers = lines.length > 1
 
   let highlighted = escapeHtml(rawCode)
   if (lang && hljs.getLanguage(lang)) {
     highlighted = hljs.highlight(rawCode, { language: lang }).value
+  } else {
+    const detected = hljs.highlightAuto(rawCode)
+    if (detected.language) {
+      highlighted = detected.value
+      lang = detected.language
+    }
   }
 
   return (

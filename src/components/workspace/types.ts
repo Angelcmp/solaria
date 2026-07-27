@@ -27,5 +27,4 @@ export interface WorkspaceAsideProps {
   onSelectProject?: (project: Project) => void
   activeProjectId?: string | null
   onOpenWiki?: () => void
-  workspaceMode?: 'general' | 'legal' | 'accounting' | 'commerce' | 'medical' | 'architecture' | 'design'
 }

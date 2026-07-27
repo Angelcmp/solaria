@@ -2,11 +2,17 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 
+export interface MessageAttachment {
+  name: string
+  size: number
+}
+
 export interface Message {
   id: string
   role: 'user' | 'assistant'
   content: string
   timestamp: number
+  attachments?: MessageAttachment[]
 }
 
 export interface Conversation {
@@ -315,7 +321,7 @@ export function useChat() {
     }
   }, [appendToAssistantMessage, cleanupStreamListeners])
 
-  const sendMessage = useCallback(async (content: string, provider: ProviderConfig, memoryContext?: string) => {
+  const sendMessage = useCallback(async (content: string, provider: ProviderConfig, memoryContext?: string, attachments?: MessageAttachment[]) => {
     let convId = activeConvId
     let existingMessages = messages
 
@@ -342,6 +348,7 @@ export function useChat() {
       role: 'user',
       content,
       timestamp: Date.now(),
+      attachments,
     }
 
     const assistantId = crypto.randomUUID()

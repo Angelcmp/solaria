@@ -131,19 +131,19 @@ fn discover_from_dir(dir: &PathBuf, source: &str, force_enabled: bool) -> Vec<Sk
     skills
 }
 
-pub fn discover_skills() -> Vec<SkillDefinition> {
-    discover_from_dir(&global_skills_dir(), "global", false)
+pub fn discover_skills(auto_activate: bool) -> Vec<SkillDefinition> {
+    discover_from_dir(&global_skills_dir(), "global", auto_activate)
 }
 
-pub fn discover_project_skills(working_dir: &str) -> Vec<SkillDefinition> {
+pub fn discover_project_skills(working_dir: &str, auto_activate: bool) -> Vec<SkillDefinition> {
     let dir = PathBuf::from(working_dir).join(".solaria").join("skills");
-    discover_from_dir(&dir, "project", false)
+    discover_from_dir(&dir, "project", auto_activate)
 }
 
-pub fn discover_all_skills(working_dir: Option<&str>) -> Vec<SkillDefinition> {
-    let global = discover_skills();
+pub fn discover_all_skills(working_dir: Option<&str>, auto_activate: bool) -> Vec<SkillDefinition> {
+    let global = discover_skills(auto_activate);
     let project = if let Some(wd) = working_dir {
-        discover_project_skills(wd)
+        discover_project_skills(wd, auto_activate)
     } else {
         Vec::new()
     };
@@ -174,8 +174,8 @@ fn skill_relevant(skill: &SkillDefinition, query: &str) -> bool {
     })
 }
 
-pub fn get_enabled_skills_prompt(working_dir: Option<&str>, query: Option<&str>) -> String {
-    let all = discover_all_skills(working_dir);
+pub fn get_enabled_skills_prompt(working_dir: Option<&str>, query: Option<&str>, auto_activate: bool) -> String {
+    let all = discover_all_skills(working_dir, auto_activate);
     let enabled: Vec<_> = all.into_iter()
         .filter(|s| s.enabled)
         .filter(|s| {

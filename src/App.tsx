@@ -12,7 +12,7 @@ import type { Project } from './components/workspace/types'
 import WikiListAside from './components/WikiListAside'
 import WikiViewerAside from './components/WikiViewerAside'
 import type { WikiFile } from './components/WikiListAside'
-import SettingsPanel from './components/SettingsPanel'
+import SettingsPanel, { type SettingsPanelProps } from './components/SettingsPanel'
 import ResearchAside from './components/ResearchAside'
 import ModelComparator from './components/ModelComparator'
 
@@ -247,7 +247,7 @@ function App() {
     return () => window.removeEventListener('keydown', handler)
   }, [handleNewConversation, handleClear, handleToggleAgent])
 
-  const handleSend = useCallback(async (content: string) => {
+  const handleSend = useCallback(async (content: string, attachments?: { name: string; size: number }[]) => {
     const activeConv = conversations.find(c => c.id === activeConvId)
     const convProvider = activeConv?.provider || settings.defaultProvider
     const convModel = activeConv?.model || settings.defaultModel
@@ -271,7 +271,7 @@ function App() {
       agentIdsRef.current = ids
       runAgent(content, providerConfig, handleAgentStep, handleAgentComplete, { memoryContext })
     } else {
-      sendMessage(content, providerConfig, memoryContext)
+      sendMessage(content, providerConfig, memoryContext, attachments)
     }
   }, [agentConfig.enabled, settings, conversations, activeConvId, sendMessage, startAgentPrompt, runAgent, handleAgentStep, handleAgentComplete, getModelParams, memory])
 
@@ -318,7 +318,6 @@ function App() {
           }
         }}
         activeProjectId={activeProjectId}
-        workspaceMode={settings.workspaceMode}
       />
 
       {wikiOpen && (
@@ -397,7 +396,7 @@ function App() {
       {showSettings && (
         <SettingsPanel
           settings={settings}
-          initialTab={typeof showSettings === 'string' ? showSettings as 'general' | 'providers' | 'search' | 'skills' | 'audit' | 'mcp' | 'memory' : undefined}
+          initialTab={typeof showSettings === 'string' ? showSettings as SettingsPanelProps['initialTab'] : undefined}
           onClose={() => setShowSettings(false)}
           onUpdate={updateSettings}
           onUpdateApiKey={updateApiKey}

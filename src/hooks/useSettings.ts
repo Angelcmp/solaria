@@ -15,8 +15,6 @@ export interface ApiKeys {
 
 export type SecurityProfile = 'explore' | 'execute'
 
-export type WorkspaceMode = 'general' | 'legal' | 'accounting' | 'commerce' | 'medical' | 'architecture' | 'design'
-
 export interface AppSettings {
   ollamaHost: string
   ollamaTimeout: number
@@ -30,7 +28,6 @@ export interface AppSettings {
   apiKeys: ApiKeys
   securityProfile: SecurityProfile
   comparisonEnabled: boolean
-  workspaceMode: WorkspaceMode
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -55,7 +52,6 @@ const DEFAULT_SETTINGS: AppSettings = {
   },
   securityProfile: 'explore',
   comparisonEnabled: false,
-  workspaceMode: 'general',
 }
 
 const STORAGE_KEY = 'solaria-settings'

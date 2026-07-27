@@ -1,13 +1,19 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import type { AppSettings, ApiKeys } from '../hooks/useSettings'
 import type { AgentConfig } from '../hooks/useAgent'
 import type { Lang } from '../lib/i18n'
 import { t } from '../lib/i18n'
 import { useMemory, type SearchResult } from '../hooks/useMemory'
+import { StarIcon, BulletIcon } from './Icons'
 
-interface SettingsPanelProps {
+type SettingsTab = 'general' | 'providers' | 'agent' | 'skills' | 'advanced'
+type AdvancedSubTab = 'memory' | 'mcp' | 'cookbook' | 'audit'
+type LegacyTab = 'search' | 'memory' | 'audit' | 'mcp' | 'cookbook'
+
+export interface SettingsPanelProps {
   settings: AppSettings
-  initialTab?: 'general' | 'providers' | 'search' | 'skills' | 'memory' | 'audit' | 'mcp' | 'cookbook'
+  initialTab?: SettingsTab | LegacyTab
+  initialAdvancedTab?: AdvancedSubTab
   onClose: () => void
   onUpdate: (updates: Partial<AppSettings>) => void
   onUpdateApiKey: (provider: keyof ApiKeys, key: string) => void
@@ -16,16 +22,6 @@ interface SettingsPanelProps {
   agentConfig?: AgentConfig
   onUpdateAgentConfig?: (updates: Partial<AgentConfig>) => void
 }
-
-const WORKSPACE_MODES: { value: AppSettings['workspaceMode']; label: string; icon: string }[] = [
-  { value: 'general', label: 'General', icon: '⚙️' },
-  { value: 'legal', label: 'Legal', icon: '⚖️' },
-  { value: 'accounting', label: 'Contable', icon: '📊' },
-  { value: 'commerce', label: 'Comercio', icon: '🛒' },
-  { value: 'medical', label: 'Médico', icon: '🏥' },
-  { value: 'architecture', label: 'Arquitectura', icon: '🏗️' },
-  { value: 'design', label: 'Diseño', icon: '🎨' },
-]
 
 const PROVIDERS: { id: AppSettings['defaultProvider']; label: string; models: string[]; isLocal: boolean }[] = [
   { id: 'ollama', label: 'Ollama', models: ['qwen3.5', 'llama3.2', 'llama3.1', 'mistral', 'phi3', 'deepseek-r1', 'gemma3', 'gemma4'], isLocal: true },
@@ -39,20 +35,34 @@ const PROVIDERS: { id: AppSettings['defaultProvider']; label: string; models: st
   { id: 'glm', label: 'GLM', models: ['glm-4.7', 'glm-4.7-flash', 'glm-5.1', 'glm-5', 'glm-5-turbo', 'glm-4.5', 'glm-4.5-flash'], isLocal: false },
 ]
 
-const TABS: { id: 'general' | 'providers' | 'search' | 'skills' | 'memory' | 'audit' | 'mcp' | 'cookbook'; labelKey: string; icon: string }[] = [
+const TABS: { id: SettingsTab; labelKey: string; icon: string }[] = [
   { id: 'general', labelKey: 'settings.general', icon: 'general' },
   { id: 'providers', labelKey: 'settings.providers', icon: 'providers' },
-  { id: 'search', labelKey: 'settings.search', icon: 'search' },
-  { id: 'skills', labelKey: '', icon: 'skills' },
+  { id: 'agent', labelKey: 'settings.agent', icon: 'agent' },
+  { id: 'skills', labelKey: 'settings.skills', icon: 'skills' },
+  { id: 'advanced', labelKey: 'settings.advanced', icon: 'advanced' },
+]
+
+const ADVANCED_TABS: { id: AdvancedSubTab; labelKey: string; icon: string }[] = [
   { id: 'memory', labelKey: 'settings.memory', icon: 'memory' },
-  { id: 'mcp', labelKey: '', icon: 'mcp' },
+  { id: 'mcp', labelKey: 'settings.mcp', icon: 'mcp' },
   { id: 'cookbook', labelKey: 'cookbook.label', icon: 'cookbook' },
   { id: 'audit', labelKey: 'settings.audit', icon: 'audit' },
 ]
 
+function resolveInitialTab(initialTab?: SettingsTab | LegacyTab, initialAdvancedTab?: AdvancedSubTab): { tab: SettingsTab; advancedTab: AdvancedSubTab } {
+  if (!initialTab) return { tab: 'general', advancedTab: initialAdvancedTab || 'memory' }
+  if (initialTab === 'search') return { tab: 'providers', advancedTab: initialAdvancedTab || 'memory' }
+  if (initialTab === 'memory' || initialTab === 'mcp' || initialTab === 'cookbook' || initialTab === 'audit') {
+    return { tab: 'advanced', advancedTab: initialAdvancedTab || initialTab }
+  }
+  return { tab: initialTab, advancedTab: initialAdvancedTab || 'memory' }
+}
+
 export default function SettingsPanel({
   settings,
   initialTab,
+  initialAdvancedTab,
   onClose,
   onUpdate,
   onUpdateApiKey,
@@ -62,8 +72,16 @@ export default function SettingsPanel({
   onUpdateAgentConfig,
 }: SettingsPanelProps) {
   const lang = settings.language as Lang
-  const [tab, setTab] = useState<'general' | 'providers' | 'search' | 'skills' | 'memory' | 'audit' | 'mcp' | 'cookbook'>(initialTab || 'general')
-  const [selectedProvider, setSelectedProvider] = useState<AppSettings['defaultProvider']>('openai')
+  const resolved = useMemo(() => resolveInitialTab(initialTab, initialAdvancedTab), [initialTab, initialAdvancedTab])
+  const [tab, setTab] = useState<SettingsTab>(resolved.tab)
+  const [advancedTab, setAdvancedTab] = useState<AdvancedSubTab>(resolved.advancedTab)
+  const [selectedProvider, setSelectedProvider] = useState<keyof ApiKeys | 'tavily'>('openai')
+
+  useEffect(() => {
+    const next = resolveInitialTab(initialTab, initialAdvancedTab)
+    setTab(next.tab)
+    setAdvancedTab(next.advancedTab)
+  }, [initialTab, initialAdvancedTab])
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -100,14 +118,14 @@ export default function SettingsPanel({
                   }`}
                 >
                   <TabIcon name={tabKey.icon} active={tab === tabKey.id} />
-                  <span>{tabKey.id === 'skills' ? 'Skills' : tabKey.id === 'mcp' ? 'MCP' : tabKey.id === 'cookbook' ? 'Cookbook' : t(tabKey.labelKey, lang)}</span>
+                  <span>{t(tabKey.labelKey, lang)}</span>
                 </button>
               ))}
             </div>
             <div className="px-4 pt-3 mt-2 border-t border-[rgba(255,255,255,0.04)]">
               <div className="flex items-center gap-1.5 text-[0.5rem] text-[#555555]">
                 <div className="w-1.5 h-1.5 rounded-full bg-[#00E5C9]/40" />
-                Solaria v0.8.0
+                Solaria v0.9.0
               </div>
             </div>
           </div>
@@ -115,35 +133,23 @@ export default function SettingsPanel({
           {/* Content */}
           <div className="flex-1 overflow-y-auto p-6 space-y-6" style={{ scrollbarWidth: 'thin', scrollbarColor: '#333 transparent' }}>
             {tab === 'general' && (
-              <GeneralTab settings={settings} onUpdate={onUpdate} onUpdateProvider={onUpdateProvider} agentConfig={agentConfig} onUpdateAgentConfig={onUpdateAgentConfig} />
+              <GeneralTab settings={settings} onUpdate={onUpdate} onUpdateProvider={onUpdateProvider} />
             )}
 
             {tab === 'providers' && (
-              <ProvidersTab settings={settings} onUpdateApiKey={onUpdateApiKey} selectedProvider={selectedProvider} setSelectedProvider={setSelectedProvider} />
+              <ProvidersTab settings={settings} onUpdateApiKey={onUpdateApiKey} onUpdateTavilyKey={onUpdateTavilyKey} selectedProvider={selectedProvider} setSelectedProvider={setSelectedProvider} />
             )}
 
-            {tab === 'search' && (
-              <SearchTab settings={settings} onUpdateTavilyKey={onUpdateTavilyKey} />
+            {tab === 'agent' && (
+              <AgentTab settings={settings} onUpdate={onUpdate} agentConfig={agentConfig} onUpdateAgentConfig={onUpdateAgentConfig} />
             )}
 
             {tab === 'skills' && (
-              <SkillsTab workingDirectory={agentConfig?.workingDirectory} />
+              <SkillsTab workingDirectory={agentConfig?.workingDirectory} autoActivateSkills={agentConfig?.autoActivateSkills} />
             )}
 
-            {tab === 'memory' && (
-              <MemoryTab />
-            )}
-
-            {tab === 'mcp' && (
-              <McpTab />
-            )}
-
-            {tab === 'cookbook' && (
-              <CookbookTab lang={lang} />
-            )}
-
-            {tab === 'audit' && (
-              <AuditTab />
+            {tab === 'advanced' && (
+              <AdvancedTab advancedTab={advancedTab} setAdvancedTab={setAdvancedTab} lang={lang} />
             )}
           </div>
         </div>
@@ -160,28 +166,24 @@ function GeneralTab({
   settings,
   onUpdate,
   onUpdateProvider,
-  agentConfig,
-  onUpdateAgentConfig,
 }: {
   settings: AppSettings
   onUpdate: (u: Partial<AppSettings>) => void
   onUpdateProvider: (p: AppSettings['defaultProvider'], m: string) => void
-  agentConfig?: AgentConfig
-  onUpdateAgentConfig?: (u: Partial<AgentConfig>) => void
 }) {
   const providerDef = PROVIDERS.find(p => p.id === settings.defaultProvider)
 
   return (
     <div className="space-y-5">
       {/* Section: Provider & Model */}
-              <Section title="Proveedor & Modelo" color="#00E5C9">
+      <Section title="Proveedor & Modelo" color="#00E5C9">
         <div className="p-3 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] space-y-4">
           <div>
             <label className="block text-[0.625rem] font-medium text-[#999999] mb-2">Proveedor por defecto</label>
             <div className="space-y-2">
               <div className="text-[0.55rem] text-[#666666] uppercase tracking-wider font-medium">Local</div>
               <div className="grid grid-cols-3 gap-1.5">
-                    {PROVIDERS.filter(p => p.isLocal).map(p => (
+                {PROVIDERS.filter(p => p.isLocal).map(p => (
                   <button
                     key={p.id}
                     onClick={() => onUpdateProvider(p.id, settings.defaultProvider === p.id ? settings.defaultModel : p.models[0])}
@@ -207,7 +209,6 @@ function GeneralTab({
                         : 'bg-[#222] border border-[rgba(255,255,255,0.04)] text-[#999999] hover:border-[rgba(255,255,255,0.1)] hover:text-[#E5E5E5]'
                     }`}
                   >
-                    
                     {p.label}
                   </button>
                 ))}
@@ -281,13 +282,6 @@ function GeneralTab({
         </div>
       </Section>
 
-      {/* Section: Ollama Model Manager */}
-      {settings.defaultProvider === 'ollama' && (
-        <Section title="Gestión de modelos" color="#00E5C9">
-          <ModelManager />
-        </Section>
-      )}
-
       {/* Section: Language */}
       <Section title="Idioma" color="#00E5C9">
         <div className="flex gap-2">
@@ -306,180 +300,35 @@ function GeneralTab({
           ))}
         </div>
       </Section>
-
-      {/* Section: Workspace Mode */}
-      <Section title="Área de trabajo" color="#DCB263">
-        <div className="flex flex-col gap-2">
-          <p className="text-[0.6rem] text-[#999999] leading-relaxed">
-            Selecciona el modo de workspace según tu profesión. Cada área tiene herramientas específicas para gestionar casos, clientes y documentos.
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            {WORKSPACE_MODES.map(m => (
-              <button
-                key={m.value}
-                onClick={() => onUpdate({ workspaceMode: m.value })}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-[0.65rem] font-medium transition-all ${
-                  settings.workspaceMode === m.value
-                    ? 'bg-[rgba(0,229,201,0.1)] border border-[rgba(0,229,201,0.25)] text-[#00E5C9]'
-                    : 'bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] text-[#999999] hover:border-[rgba(255,255,255,0.12)] hover:text-[#E5E5E5]'
-                }`}
-              >
-                <span className="text-[0.9rem]">{m.icon}</span>
-                <span>{m.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </Section>
-
-      {/* Section: Storage */}
-      <Section title="Almacenamiento" color="#DCB263">
-        <div className="p-3 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] space-y-3">
-          <p className="text-[0.6rem] text-[#999999] leading-relaxed">
-            Las conversaciones se guardan en localStorage. Puedes exportarlas o importarlas desde un archivo JSON.
-          </p>
-          <div className="flex gap-2 flex-wrap">
-            <ActionButton variant="danger" onClick={() => { localStorage.removeItem('solaria-conversations'); window.location.reload() }}>
-              <TrashIcon />
-              Limpiar historial
-            </ActionButton>
-            <ActionButton variant="secondary" onClick={() => {
-              const data = localStorage.getItem('solaria-conversations')
-              if (!data) return
-              const blob = new Blob([data], { type: 'application/json' })
-              const url = URL.createObjectURL(blob)
-              const a = document.createElement('a')
-              a.href = url
-              a.download = `solaria-chats-${Date.now()}.json`
-              a.click()
-              URL.revokeObjectURL(url)
-            }}>
-              <ExportIcon />
-              Exportar
-            </ActionButton>
-            <ActionButton variant="secondary" onClick={() => {
-              const input = document.createElement('input')
-              input.type = 'file'
-              input.accept = '.json'
-              input.onchange = async (e) => {
-                const file = (e.target as HTMLInputElement).files?.[0]
-                if (!file) return
-                try {
-                  const text = await file.text()
-                  const parsed = JSON.parse(text)
-                  if (!Array.isArray(parsed)) throw new Error('Formato inválido')
-                  const existing = localStorage.getItem('solaria-conversations')
-                  const existingArr = existing ? JSON.parse(existing) : []
-                  localStorage.setItem('solaria-conversations', JSON.stringify([...parsed, ...existingArr]))
-                  window.location.reload()
-                } catch {
-                  alert('Error: archivo JSON inválido')
-                }
-              }
-              input.click()
-            }}>
-              <ImportIcon />
-              Importar
-            </ActionButton>
-          </div>
-        </div>
-      </Section>
-
-      {/* Section: Agent Mode */}
-      {agentConfig && onUpdateAgentConfig && (
-        <Section title="Modo Agente" color="#00E5C9">
-          <div className="p-3 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-[0.7rem] font-medium text-white">Activar agente</div>
-                <div className="text-[0.55rem] text-[#999999]">Permite al agente usar herramientas de investigación</div>
-              </div>
-              <Switch checked={agentConfig.enabled} onChange={v => onUpdateAgentConfig({ enabled: v })} />
-            </div>
-
-            <div className="pt-2 border-t border-[rgba(255,255,255,0.04)]">
-              <SliderControl
-                label="Máximo de iteraciones"
-                value={agentConfig.maxIterations}
-                min={3} max={25} step={1}
-                onChange={v => onUpdateAgentConfig({ maxIterations: v })}
-                descLeft="3" descRight="25"
-                color="#00E5C9"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[0.625rem] font-medium text-[#999999] mb-1.5">Directorio de trabajo</label>
-              <div className="flex gap-1.5">
-                <input
-                  value={agentConfig.workingDirectory}
-                  onChange={e => onUpdateAgentConfig({ workingDirectory: e.target.value })}
-                  placeholder="Ej: /home/user/documentos"
-                  className="flex-1 px-3 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors"
-                />
-                <ActionButton variant="ghost" small onClick={async () => {
-                  try { const { invoke } = await import('@tauri-apps/api/core'); const cwd = await invoke<string>('get_cwd'); onUpdateAgentConfig({ workingDirectory: cwd }) } catch {}
-                }}>
-                  <FolderIcon />
-                </ActionButton>
-                <ActionButton variant="ghost" small onClick={async () => {
-                  try { const { open } = await import('@tauri-apps/plugin-dialog'); const selected = await open({ directory: true, multiple: false, title: 'Seleccionar directorio' }); if (selected) onUpdateAgentConfig({ workingDirectory: selected as string }) } catch {}
-                }}>
-                  <SearchFolderIcon />
-                </ActionButton>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-[0.7rem] font-medium text-white">Confirmar escrituras</div>
-                <div className="text-[0.55rem] text-[#999999]">Pedir confirmación antes de escribir archivos</div>
-              </div>
-              <Switch checked={agentConfig.confirmWrite} onChange={v => onUpdateAgentConfig({ confirmWrite: v })} />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-[0.7rem] font-medium text-white">Auto-activar skills</div>
-                <div className="text-[0.55rem] text-[#999999]">Solo inyecta skills relevantes (ahorra tokens)</div>
-              </div>
-              <Switch checked={agentConfig.autoActivateSkills} onChange={v => onUpdateAgentConfig({ autoActivateSkills: v })} />
-            </div>
-          </div>
-        </Section>
-      )}
-
-      {/* Section: Comparador ciego */}
-      <Section title="Comparador ciego de modelos" color="#DCB263">
-        <div className="p-3 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-[0.7rem] font-medium text-white">Activar comparador</div>
-              <div className="text-[0.55rem] text-[#999999]">Permite comparar respuestas de modelos lado a lado sin saber cuál es cuál</div>
-            </div>
-            <Switch checked={settings.comparisonEnabled} onChange={v => onUpdate({ comparisonEnabled: v })} />
-          </div>
-          {settings.comparisonEnabled && (
-            <div className="p-2.5 rounded-lg bg-[rgba(0,229,201,0.04)] border border-[rgba(0,229,201,0.08)]">
-              <p className="text-[0.58rem] text-[#999999] leading-relaxed">
-                Al activarlo, aparecerá un botón "Comparar" en la barra de herramientas del chat. Podrás seleccionar 2-4 modelos, enviar la misma pregunta a todos, ver las respuestas lado a lado y votar por la mejor sin saber qué modelo la generó.
-              </p>
-            </div>
-          )}
-        </div>
-      </Section>
     </div>
   )
 }
 
-function ProvidersTab({ settings, onUpdateApiKey, selectedProvider, setSelectedProvider }: {
+const AI_PROVIDER_DATA: { id: keyof ApiKeys; label: string; placeholder: string }[] = [
+  { id: 'openai', label: 'OpenAI', placeholder: 'sk-...' },
+  { id: 'anthropic', label: 'Anthropic (Claude)', placeholder: 'sk-ant-...' },
+  { id: 'deepseek', label: 'DeepSeek', placeholder: 'sk-...' },
+  { id: 'groq', label: 'Groq', placeholder: 'gsk_...' },
+  { id: 'google', label: 'Google (Gemini)', placeholder: 'AIza...' },
+  { id: 'cohere', label: 'Cohere', placeholder: '...' },
+  { id: 'kimi', label: 'Kimi (Moonshot)', placeholder: 'sk-...' },
+  { id: 'glm', label: 'GLM (Z.AI)', placeholder: '...' },
+]
+
+const TAVILY_DATA = { id: 'tavily' as const, label: 'Tavily Search', placeholder: 'tvly-...' }
+
+function ProvidersTab({ settings, onUpdateApiKey, onUpdateTavilyKey, selectedProvider, setSelectedProvider }: {
   settings: AppSettings
   onUpdateApiKey: (provider: keyof ApiKeys, key: string) => void
-  selectedProvider: AppSettings['defaultProvider']
-  setSelectedProvider: (p: AppSettings['defaultProvider']) => void
+  onUpdateTavilyKey: (key: string) => void
+  selectedProvider: keyof ApiKeys | 'tavily'
+  setSelectedProvider: (p: keyof ApiKeys | 'tavily') => void
 }) {
-  const active = PROVIDER_DATA.find(p => p.id === selectedProvider) || PROVIDER_DATA[0]
-  const isConfigured = selectedProvider !== 'ollama' && settings.apiKeys[selectedProvider as keyof ApiKeys]?.length > 0
+  const isTavily = selectedProvider === 'tavily'
+  const activeAi = AI_PROVIDER_DATA.find(p => p.id === selectedProvider)
+  const isConfigured = isTavily
+    ? settings.tavilyKey.length > 0
+    : settings.apiKeys[selectedProvider].length > 0
 
   return (
     <div className="space-y-5">
@@ -487,7 +336,7 @@ function ProvidersTab({ settings, onUpdateApiKey, selectedProvider, setSelectedP
 
       <div className="flex gap-3 h-full min-h-0">
         <div className="w-[140px] shrink-0 space-y-0.5">
-          {PROVIDER_DATA.map(p => (
+          {AI_PROVIDER_DATA.map(p => (
             <button
               key={p.id}
               onClick={() => setSelectedProvider(p.id)}
@@ -501,17 +350,34 @@ function ProvidersTab({ settings, onUpdateApiKey, selectedProvider, setSelectedP
               <span className="truncate">{p.label}</span>
             </button>
           ))}
+          <button
+            onClick={() => setSelectedProvider('tavily')}
+            className={`flex items-center gap-2 w-full px-2.5 py-2 rounded-lg text-[0.65rem] transition-all ${
+              selectedProvider === 'tavily'
+                ? 'bg-[rgba(0,229,201,0.07)] border border-[rgba(0,229,201,0.15)] text-[#00E5C9]'
+                : 'text-[#999999] hover:bg-[rgba(255,255,255,0.03)] hover:text-[#E5E5E5] border border-transparent'
+            }`}
+          >
+            <ProviderStatusDot configured={settings.tavilyKey.length > 0} active={selectedProvider === 'tavily'} />
+            <span className="truncate">{TAVILY_DATA.label}</span>
+          </button>
         </div>
 
         <div className="flex-1 min-w-0 p-4 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)]">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-8 h-8 rounded-lg bg-[rgba(0,229,201,0.08)] border border-[rgba(0,229,201,0.15)] flex items-center justify-center">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00E5C9" strokeWidth="1.5">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-              </svg>
+              {isTavily ? (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00E5C9" strokeWidth="1.5">
+                  <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00E5C9" strokeWidth="1.5">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+              )}
             </div>
             <div>
-              <div className="text-[0.75rem] font-semibold text-white">{active.label}</div>
+              <div className="text-[0.75rem] font-semibold text-white">{isTavily ? TAVILY_DATA.label : activeAi?.label}</div>
               <div className="flex items-center gap-1.5">
                 {isConfigured ? (
                   <>
@@ -531,16 +397,25 @@ function ProvidersTab({ settings, onUpdateApiKey, selectedProvider, setSelectedP
           <label className="block text-[0.625rem] font-medium text-[#999999] mb-1.5">API Key</label>
           <input
             type="password"
-            value={settings.apiKeys[active.id]}
-            onChange={e => onUpdateApiKey(active.id, e.target.value)}
-            placeholder={active.placeholder}
+            value={isTavily ? settings.tavilyKey : (activeAi ? settings.apiKeys[activeAi.id] : '')}
+            onChange={e => isTavily ? onUpdateTavilyKey(e.target.value) : activeAi && onUpdateApiKey(activeAi.id, e.target.value)}
+            placeholder={isTavily ? TAVILY_DATA.placeholder : activeAi?.placeholder}
             className="w-full px-3 py-2.5 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors"
           />
 
           <div className="mt-3 p-2.5 rounded-lg bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.04)]">
             <p className="text-[0.55rem] text-[#999999] leading-relaxed">
-              Tu API key se almacena en el keyring del sistema operativo y solo se envía a la API de {active.label}.
-              Nunca se comparte con otros servicios.
+              {isTavily ? (
+                <>
+                  Motor de búsqueda web optimizado para IA. Obtén tu API key en{' '}
+                  <a href="https://app.tavily.com" target="_blank" className="text-[#00E5C9] hover:underline">app.tavily.com</a>
+                </>
+              ) : (
+                <>
+                  Tu API key se almacena en el keyring del sistema operativo y solo se envía a la API de {activeAi?.label}.
+                  Nunca se comparte con otros servicios.
+                </>
+              )}
             </p>
           </div>
         </div>
@@ -549,56 +424,287 @@ function ProvidersTab({ settings, onUpdateApiKey, selectedProvider, setSelectedP
   )
 }
 
-function SearchTab({ settings, onUpdateTavilyKey }: { settings: AppSettings; onUpdateTavilyKey: (key: string) => void }) {
-  const configured = settings.tavilyKey.length > 0
+function AgentTab({ settings, onUpdate, agentConfig, onUpdateAgentConfig }: {
+  settings: AppSettings
+  onUpdate: (u: Partial<AppSettings>) => void
+  agentConfig?: AgentConfig
+  onUpdateAgentConfig?: (u: Partial<AgentConfig>) => void
+}) {
+  const [paramsOpen, setParamsOpen] = useState(false)
+
+  const agentTools = [
+    { id: 'read_file', label: 'read_file', desc: 'Lee archivos del sistema', kind: 'read' as const },
+    { id: 'glob', label: 'glob', desc: 'Busca archivos por patrón glob', kind: 'read' as const },
+    { id: 'grep', label: 'grep', desc: 'Busca texto con regex en archivos', kind: 'read' as const },
+    { id: 'web_search', label: 'web_search', desc: 'Búsqueda web con Tavily', kind: 'read' as const },
+    { id: 'fetch_url', label: 'fetch_url', desc: 'Obtiene contenido de URLs', kind: 'read' as const },
+    { id: 'write_file', label: 'write_file', desc: 'Escribe o sobreescribe archivos', kind: 'write' as const },
+  ]
+
+  function toggleTool(toolId: string) {
+    if (!agentConfig || !onUpdateAgentConfig) return
+    const allowed = new Set(agentConfig.allowedTools)
+    if (allowed.has(toolId)) allowed.delete(toolId)
+    else allowed.add(toolId)
+    onUpdateAgentConfig({ allowedTools: Array.from(allowed) })
+  }
 
   return (
     <div className="space-y-5">
-      <SectionHeader title="Búsqueda web" desc="Configura Tavily para que el agente busque información actualizada en internet." />
+      <SectionHeader title="Agente" desc="Configura el comportamiento del agente de IA y las herramientas que puede usar." />
 
-      <div className="p-3 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] space-y-4">
-        <div className="flex items-start gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-[rgba(0,229,201,0.08)] border border-[rgba(0,229,201,0.15)] flex items-center justify-center shrink-0">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00E5C9" strokeWidth="1.5">
-              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      {agentConfig && onUpdateAgentConfig && (
+        <>
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.04)] text-[0.55rem]">
+            <span className="flex items-center gap-1 text-[#DCB263]"><BulletIcon size={8} color="#DCB263" /> {agentConfig.allowedTools.length} herramienta{agentConfig.allowedTools.length !== 1 ? 's' : ''}</span>
+            <span className="text-[#4a4a4a]">·</span>
+            <span className="text-[#00E5C9]">{agentConfig.maxIterations} iteraciones</span>
+            <span className="text-[#4a4a4a]">·</span>
+            <span className="truncate text-[#666666]">{agentConfig.workingDirectory || 'Sin directorio de trabajo'}</span>
+          </div>
+
+          <div className="p-3 rounded-lg bg-[#1C1B1B] border border-[rgba(255,255,255,0.06)] border-l-2 border-l-[rgba(220,178,99,0.5)]">
+            <div className="flex items-center gap-2.5">
+              <div className="shrink-0">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#DCB263" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <path d="M12 6v6l4 2"/>
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[0.6875rem] text-[#E5E5E5] font-medium">Activar agente</div>
+                <div className="text-[0.55rem] text-[#666666]">Permite al agente usar herramientas de investigación</div>
+              </div>
+              <Switch checked={agentConfig.enabled} onChange={v => onUpdateAgentConfig({ enabled: v })} />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="w-1 h-3.5 rounded-full bg-[#00E5C9]" />
+              <h4 className="text-[0.65rem] font-semibold text-[#E5E5E5] uppercase tracking-[0.06em]">Herramientas permitidas</h4>
+            </div>
+            <div className="space-y-1.5">
+              {agentTools.map(tool => {
+                const enabled = agentConfig.allowedTools.includes(tool.id)
+                const borderAccent = enabled
+                  ? tool.kind === 'write'
+                    ? 'border-l-[rgba(220,178,99,0.5)]'
+                    : 'border-l-[rgba(0,229,201,0.5)]'
+                  : 'border-l-transparent'
+                const color = tool.kind === 'write' ? '#DCB263' : '#00E5C9'
+                return (
+                  <div
+                    key={tool.id}
+                    className={`p-3 rounded-lg bg-[#1C1B1B] border border-[rgba(255,255,255,0.06)] border-l-2 ${borderAccent} ${enabled ? 'opacity-100' : 'opacity-50'} transition-opacity`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="shrink-0">
+                        <ToolIcon name={tool.id} color={color} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[0.6875rem] text-[#E5E5E5] font-medium">{tool.label}</div>
+                        <div className="text-[0.55rem] text-[#666666]">{tool.desc}</div>
+                      </div>
+                      <Switch checked={enabled} onChange={() => toggleTool(tool.id)} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="p-3 rounded-lg bg-[#1C1B1B] border border-[rgba(255,255,255,0.06)] border-l-2 border-l-[rgba(220,178,99,0.5)]">
+            <button
+              onClick={() => setParamsOpen(!paramsOpen)}
+              className="flex items-center gap-2.5 w-full text-left"
+            >
+              <div className="shrink-0">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#DCB263" strokeWidth="2">
+                  <circle cx="12" cy="12" r="3"/>
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[0.6875rem] text-[#E5E5E5] font-medium">Parámetros de ejecución</div>
+                <div className="text-[0.55rem] text-[#666666]">{agentConfig.maxIterations} iteraciones · {agentConfig.workingDirectory || 'Sin directorio de trabajo'}</div>
+              </div>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#666666" strokeWidth="2" className={`transition-transform shrink-0 ${paramsOpen ? 'rotate-180' : ''}`}>
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </button>
+
+            {paramsOpen && (
+              <div className="mt-2 pt-2 border-t border-[rgba(255,255,255,0.04)] space-y-3">
+                <SliderControl
+                  label="Máximo de iteraciones"
+                  value={agentConfig.maxIterations}
+                  min={3} max={25} step={1}
+                  onChange={v => onUpdateAgentConfig({ maxIterations: v })}
+                  descLeft="3" descRight="25"
+                  color="#DCB263"
+                />
+
+                <div>
+                  <label className="block text-[0.625rem] font-medium text-[#999999] mb-1.5">Directorio de trabajo</label>
+                  <div className="flex gap-1.5">
+                    <input
+                      value={agentConfig.workingDirectory}
+                      onChange={e => onUpdateAgentConfig({ workingDirectory: e.target.value })}
+                      placeholder="Ej: /home/user/documentos"
+                      className="flex-1 px-3 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors"
+                    />
+                    <ActionButton variant="ghost" small onClick={async () => {
+                      try { const { invoke } = await import('@tauri-apps/api/core'); const cwd = await invoke<string>('get_cwd'); onUpdateAgentConfig({ workingDirectory: cwd }) } catch {}
+                    }}>
+                      <FolderIcon />
+                    </ActionButton>
+                    <ActionButton variant="ghost" small onClick={async () => {
+                      try { const { open } = await import('@tauri-apps/plugin-dialog'); const selected = await open({ directory: true, multiple: false, title: 'Seleccionar directorio' }); if (selected) onUpdateAgentConfig({ workingDirectory: selected as string }) } catch {}
+                    }}>
+                      <SearchFolderIcon />
+                    </ActionButton>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-[0.6875rem] text-[#E5E5E5] font-medium">Confirmar escrituras</div>
+                    <div className="text-[0.55rem] text-[#666666]">Pedir confirmación antes de escribir archivos</div>
+                  </div>
+                  <Switch checked={agentConfig.confirmWrite} onChange={v => onUpdateAgentConfig({ confirmWrite: v })} />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-[0.6875rem] text-[#E5E5E5] font-medium">Auto-activar skills</div>
+                    <div className="text-[0.55rem] text-[#666666]">Solo inyecta skills relevantes (ahorra tokens)</div>
+                  </div>
+                  <Switch checked={agentConfig.autoActivateSkills} onChange={v => onUpdateAgentConfig({ autoActivateSkills: v })} />
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      <div className="p-3 rounded-lg bg-[#1C1B1B] border border-[rgba(255,255,255,0.06)] border-l-2 border-l-[rgba(220,178,99,0.5)]">
+        <div className="flex items-center gap-2.5">
+          <div className="shrink-0">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#DCB263" strokeWidth="2">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
             </svg>
           </div>
-          <div className="flex-1">
-            <div className="flex items-center gap-2">
-              <h3 className="text-[0.75rem] font-semibold text-white">Tavily</h3>
-              <span className={`text-[0.5rem] px-1.5 py-0.5 rounded-full border font-medium uppercase tracking-wide ${
-                configured
-                  ? 'bg-[rgba(0,229,201,0.08)] text-[#00E5C9] border-[rgba(0,229,201,0.25)]'
-                  : 'bg-[rgba(255,255,255,0.04)] text-[#999999] border-[rgba(255,255,255,0.08)]'
-              }`}>
-                {configured ? 'Activo' : 'Inactivo'}
-              </span>
-            </div>
-            <p className="text-[0.6rem] text-[#999999] mt-0.5">
-              Motor de búsqueda optimizado para IA. Obtén tu API key en{' '}
-              <a href="https://app.tavily.com" target="_blank" className="text-[#00E5C9] hover:underline">app.tavily.com</a>
+          <div className="flex-1 min-w-0">
+            <div className="text-[0.6875rem] text-[#E5E5E5] font-medium">Comparador ciego de modelos</div>
+            <div className="text-[0.55rem] text-[#666666]">Compara respuestas sin saber cuál modelo las generó</div>
+          </div>
+          <Switch checked={settings.comparisonEnabled} onChange={v => onUpdate({ comparisonEnabled: v })} />
+        </div>
+        {settings.comparisonEnabled && (
+          <div className="mt-2 pt-2 border-t border-[rgba(255,255,255,0.04)]">
+            <p className="text-[0.58rem] text-[#999999] leading-relaxed">
+              Al activarlo, aparecerá un botón "Comparar" en la barra de herramientas del chat. Podrás seleccionar 2-4 modelos, enviar la misma pregunta a todos, ver las respuestas lado a lado y votar por la mejor sin saber qué modelo la generó.
             </p>
           </div>
-        </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
-        <div>
-          <label className="block text-[0.625rem] font-medium text-[#999999] mb-1.5">API Key</label>
-          <input
-            type="password"
-            value={settings.tavilyKey}
-            onChange={e => onUpdateTavilyKey(e.target.value)}
-            placeholder="tvly-..."
-            className="w-full px-3 py-2.5 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors"
-          />
-          {configured && (
-            <div className="flex items-center gap-1.5 mt-2 text-[0.55rem] text-[#00E5C9]">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
-              </svg>
-              Key configurada correctamente
-            </div>
-          )}
-        </div>
+function AdvancedTab({ advancedTab, setAdvancedTab, lang }: {
+  advancedTab: AdvancedSubTab
+  setAdvancedTab: (t: AdvancedSubTab) => void
+  lang: Lang
+}) {
+  return (
+    <div className="space-y-5">
+      <div className="flex p-1.5 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] gap-1">
+        {ADVANCED_TABS.map(tabItem => {
+          const label = t(tabItem.labelKey, lang)
+          return (
+            <button
+              key={tabItem.id}
+              onClick={() => setAdvancedTab(tabItem.id)}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-[0.6rem] font-medium transition-all ${
+                advancedTab === tabItem.id
+                  ? 'bg-[rgba(0,229,201,0.08)] border border-[rgba(0,229,201,0.15)] text-[#00E5C9]'
+                  : 'text-[#999999] hover:bg-[rgba(255,255,255,0.03)] hover:text-[#E5E5E5] border border-transparent'
+              }`}
+            >
+              <TabIcon name={tabItem.icon} active={advancedTab === tabItem.id} />
+              <span>{label}</span>
+            </button>
+          )
+        })}
+      </div>
+
+      {advancedTab === 'memory' && <MemoryTab />}
+      {advancedTab === 'mcp' && <McpTab />}
+      {advancedTab === 'cookbook' && <CookbookTab lang={lang} />}
+      {advancedTab === 'audit' && <AuditTab />}
+
+      <Section title="Almacenamiento & Datos" color="#DCB263">
+        <DataManagementSection />
+      </Section>
+
+      <Section title="Modelos Ollama" color="#00E5C9">
+        <ModelManager />
+      </Section>
+    </div>
+  )
+}
+
+function DataManagementSection() {
+  return (
+    <div className="p-3 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] space-y-3">
+      <p className="text-[0.6rem] text-[#999999] leading-relaxed">
+        Las conversaciones se guardan en localStorage. Puedes exportarlas, importarlas o limpiar el historial.
+      </p>
+      <div className="flex gap-2 flex-wrap">
+        <ActionButton variant="danger" onClick={() => { localStorage.removeItem('solaria-conversations'); window.location.reload() }}>
+          <TrashIcon />
+          Limpiar historial
+        </ActionButton>
+        <ActionButton variant="secondary" onClick={() => {
+          const data = localStorage.getItem('solaria-conversations')
+          if (!data) return
+          const blob = new Blob([data], { type: 'application/json' })
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = `solaria-chats-${Date.now()}.json`
+          a.click()
+          URL.revokeObjectURL(url)
+        }}>
+          <ExportIcon />
+          Exportar
+        </ActionButton>
+        <ActionButton variant="secondary" onClick={() => {
+          const input = document.createElement('input')
+          input.type = 'file'
+          input.accept = '.json'
+          input.onchange = async (e) => {
+            const file = (e.target as HTMLInputElement).files?.[0]
+            if (!file) return
+            try {
+              const text = await file.text()
+              const parsed = JSON.parse(text)
+              if (!Array.isArray(parsed)) throw new Error('Formato inválido')
+              const existing = localStorage.getItem('solaria-conversations')
+              const existingArr = existing ? JSON.parse(existing) : []
+              localStorage.setItem('solaria-conversations', JSON.stringify([...parsed, ...existingArr]))
+              window.location.reload()
+            } catch {
+              alert('Error: archivo JSON inválido')
+            }
+          }
+          input.click()
+        }}>
+          <ImportIcon />
+          Importar
+        </ActionButton>
       </div>
     </div>
   )
@@ -706,20 +812,23 @@ function AuditTab() {
    SKILLS TAB (refactored)
    ════════════════════════════════ */
 
-function SkillsTab({ workingDirectory }: { workingDirectory?: string }) {
+function SkillsTab({ workingDirectory, autoActivateSkills }: { workingDirectory?: string; autoActivateSkills?: boolean }) {
   const [skills, setSkills] = useState<Array<{ name: string; description: string; enabled: boolean; path: string; source: string }>>([])
   const [loading, setLoading] = useState(true)
 
   const loadSkills = async () => {
     try {
       const { invoke } = await import('@tauri-apps/api/core')
-      const list = await invoke<Array<{ name: string; description: string; enabled: boolean; path: string; source: string }>>('list_skills', { workingDir: workingDirectory || null })
+      const list = await invoke<Array<{ name: string; description: string; enabled: boolean; path: string; source: string }>>('list_skills', {
+        workingDir: workingDirectory || null,
+        autoActivate: autoActivateSkills ?? false,
+      })
       setSkills(list)
     } catch {}
     setLoading(false)
   }
 
-  useEffect(() => { loadSkills() }, [workingDirectory])
+  useEffect(() => { loadSkills() }, [workingDirectory, autoActivateSkills])
 
   const toggleSkill = async (name: string, enabled: boolean) => {
     try {
@@ -1387,9 +1496,11 @@ function Section({ title, color, children }: { title: string; color: string; chi
 function SectionHeader({ icon, title, desc, badge, badgeColor }: { icon?: React.ReactNode; title: string; desc: string; badge?: string; badgeColor?: string }) {
   return (
     <div className="flex items-start gap-2.5">
-      <div className="w-8 h-8 rounded-lg bg-[#00E5C9]/10 border border-[#00E5C9]/15 flex items-center justify-center shrink-0">
-        {icon}
-      </div>
+      {icon && (
+        <div className="w-8 h-8 rounded-lg bg-[#00E5C9]/10 border border-[#00E5C9]/15 flex items-center justify-center shrink-0">
+          {icon}
+        </div>
+      )}
       <div className="flex-1">
         <div className="flex items-center gap-2">
           <h3 className="text-[0.8rem] font-semibold text-[#E5E5E5]">{title}</h3>
@@ -1935,7 +2046,7 @@ function CookbookTab({ lang }: { lang: Lang }) {
                           <span className="text-[0.7rem] font-semibold text-white">{m.name}</span>
                           <span className="text-[0.5rem] px-1.5 py-0.5 rounded-full bg-[rgba(255,255,255,0.04)] text-[#999999] border border-[rgba(255,255,255,0.06)]">{m.quantization}</span>
                           {m.tags.includes('recommended') && (
-                            <span className="text-[0.5rem] px-1.5 py-0.5 rounded-full bg-[rgba(0,229,201,0.08)] text-[#00E5C9] border border-[rgba(0,229,201,0.15)]">★ {t('cookbook.recommended', lang)}</span>
+                            <span className="flex items-center gap-1 text-[0.5rem] px-1.5 py-0.5 rounded-full bg-[rgba(0,229,201,0.08)] text-[#00E5C9] border border-[rgba(0,229,201,0.15)]"><StarIcon size={10} color="#00E5C9" />{t('cookbook.recommended', lang)}</span>
                           )}
                           {m.vramRequiredGb <= 0.5 && (
                             <span className="text-[0.5rem] px-1.5 py-0.5 rounded-full bg-[rgba(220,178,99,0.08)] text-[#DCB263] border border-[rgba(220,178,99,0.15)]">CPU</span>
@@ -2001,17 +2112,6 @@ function CookbookTab({ lang }: { lang: Lang }) {
    UTILITIES
    ════════════════════════════════ */
 
-const PROVIDER_DATA: { id: keyof ApiKeys; label: string; placeholder: string }[] = [
-  { id: 'openai', label: 'OpenAI', placeholder: 'sk-...' },
-  { id: 'anthropic', label: 'Anthropic (Claude)', placeholder: 'sk-ant-...' },
-  { id: 'deepseek', label: 'DeepSeek', placeholder: 'sk-...' },
-  { id: 'groq', label: 'Groq', placeholder: 'gsk_...' },
-  { id: 'google', label: 'Google (Gemini)', placeholder: 'AIza...' },
-  { id: 'cohere', label: 'Cohere', placeholder: '...' },
-  { id: 'kimi', label: 'Kimi (Moonshot)', placeholder: 'sk-...' },
-  { id: 'glm', label: 'GLM (Z.AI)', placeholder: '...' },
-]
-
 function formatAuditArgs(_tool: string, args: string): string {
   try {
     const parsed = JSON.parse(args)
@@ -2029,13 +2129,26 @@ function formatAuditArgs(_tool: string, args: string): string {
    ICONS (inline SVG)
    ════════════════════════════════ */
 
+function ToolIcon({ name, color }: { name: string; color: string }) {
+  const icons: Record<string, React.ReactNode> = {
+    read_file: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>,
+    glob: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a14 14 0 0 1 0 20"/><path d="M12 2a14 14 0 0 0 0 20"/></svg>,
+    grep: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><path d="M4 6h16"/><path d="M4 10h16"/><path d="M4 14h8"/><path d="M15 17l4 4"/><circle cx="17" cy="17" r="3"/></svg>,
+    web_search: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a14 14 0 0 1 4 16"/><path d="M12 2a14 14 0 0 0-4 16"/><line x1="17" y1="17" x2="22" y2="22"/></svg>,
+    fetch_url: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><path d="M9 12h6"/><path d="M12 15V9"/><path d="M12 2a10 10 0 0 0-7 17"/><path d="M12 22a10 10 0 0 0 7-17"/><path d="M19 12v8"/><path d="M19 20h-8"/></svg>,
+    write_file: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>,
+  }
+  return <span className="shrink-0">{icons[name]}</span>
+}
+
 function TabIcon({ name, active }: { name: string; active: boolean }) {
   const c = active ? '#00E5C9' : '#999999'
   const icons: Record<string, React.ReactNode> = {
     general: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
     providers: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>,
-    search: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
+    agent: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5"><path d="M12 2a3 3 0 0 0-3 3v14a3 3 0 0 0 3 3 3 3 0 0 0 3-3V5a3 3 0 0 0-3-3Z"/><path d="M12 12h.01"/><path d="M8 9h.01"/><path d="M16 9h.01"/></svg>,
     skills: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>,
+    advanced: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5"><path d="M4 21v-7a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v7"/><path d="M8 21v-9a3 3 0 0 1 3-3h2a3 3 0 0 1 3 3v9"/><path d="M12 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg>,
     memory: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/><path d="M3 12h18M12 3a14.5 14.5 0 0 1 0 18M12 3a14.5 14.5 0 0 0 0 18"/></svg>,
     mcp: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>,
     cookbook: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>,

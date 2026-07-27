@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
-import type { Message, Conversation } from '../hooks/useChat'
+import type { Message, Conversation, MessageAttachment } from '../hooks/useChat'
 import type { AppSettings } from '../hooks/useSettings'
 import type { AgentConfig } from '../hooks/useAgent'
 import type { Template } from '../lib/templates'
@@ -10,11 +10,12 @@ import TemplateSelector from './TemplateSelector'
 import Markdown from '../lib/Markdown'
 import ArtifactCard from './ArtifactCard'
 import ModelPicker from './ModelPicker'
+import { WarningIcon, DocumentIcon, BulletIcon } from './Icons'
 
 interface ChatProps {
   messages: Message[]
   isStreaming: boolean
-  onSend: (content: string) => void
+  onSend: (content: string, attachments?: MessageAttachment[]) => void
   onStop: () => void
   onClear: () => void
   onRegenerate?: () => void
@@ -105,6 +106,138 @@ function looksLikeReport(content: string): boolean {
   if (content.length < 400) return false
   const headingLines = content.split('\n').filter(l => /^#{1,3}\s+/.test(l)).length
   return headingLines >= 2 || (content.length > 800 && headingLines >= 1)
+}
+
+function getDisplayContent(content: string): string {
+  const idx = content.indexOf('\n\n--- Archivo:')
+  return idx >= 0 ? content.slice(0, idx) : content
+}
+
+function truncateContent(content: string, maxLines = 4): string {
+  const lines = content.split('\n')
+  if (lines.length <= maxLines) return content
+  return lines.slice(0, maxLines).join('\n') + '\n...'
+}
+
+function CollapseToggle({ expanded, onClick }: { expanded: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-1 text-[0.6rem] text-[#999999] hover:text-[#00E5C9] transition-colors mt-1"
+    >
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`transition-transform ${expanded ? 'rotate-180' : ''}`}>
+        <polyline points="6 9 12 15 18 9"/>
+      </svg>
+      {expanded ? 'Mostrar menos' : 'Mostrar más'}
+    </button>
+  )
+}
+
+function AssistantMessage({
+  msg,
+  isLast,
+  isStreaming,
+  isRunning,
+  collapsed,
+  onToggleCollapse,
+  onCopy,
+  onRegenerate,
+  copyLabel,
+  regenerateLabel,
+}: {
+  msg: Message
+  isLast: boolean
+  isStreaming: boolean
+  isRunning: boolean
+  collapsed: boolean
+  onToggleCollapse: () => void
+  onCopy: () => void
+  onRegenerate?: () => void
+  copyLabel: string
+  regenerateLabel: string
+}) {
+  const isLong = msg.content.split('\n').length > 8 || msg.content.length > 800
+  const showCollapse = !isStreaming && !looksLikeReport(msg.content) && isLong && msg.content.length > 0
+  const displayContent = collapsed && showCollapse ? truncateContent(msg.content) : msg.content
+
+  return (
+    <div className="group pt-2 pb-1">
+      <div className="flex items-start gap-3">
+        <img src="/solaria-logo.svg" alt="Solaria" className="w-4 h-4 mt-1 shrink-0 opacity-80" />
+        <div className="flex-1 min-w-0">
+          {msg.content === '' && isStreaming ? (
+            <div className="flex gap-[4px] px-[0.875rem] py-[0.625rem] bg-[#1C1B1B] border border-[rgba(255,255,255,0.04)] rounded-[12px] w-fit">
+              {[0, 0.2, 0.4].map((delay, index) => (
+                <div key={index} className="w-[6px] h-[6px] bg-[#DCB263] rounded-full animate-[typingDot_1.4s_ease-in-out_infinite]" style={{ animationDelay: delay + 's' }} />
+              ))}
+            </div>
+          ) : looksLikeReport(msg.content) ? (
+            <ArtifactCard
+              title={msg.content.slice(0, 40).replace(/^#+\s*/, '').trim() || 'Reporte'}
+              content={msg.content}
+              date={new Date(msg.timestamp).toLocaleDateString()}
+            />
+          ) : (
+            <div className={`relative ${isStreaming && isLast ? 'streaming-message' : ''}`}>
+              <div className={isStreaming && isLast ? 'streaming-cursor' : ''}>
+                <Markdown content={displayContent} isRunning={isRunning && isLast} />
+              </div>
+              {collapsed && showCollapse && (
+                <div className="absolute bottom-0 left-0 right-0 h-16 bg-[linear-gradient(to_top,#131313,transparent)] pointer-events-none rounded-b" />
+              )}
+              {showCollapse && <CollapseToggle expanded={!collapsed} onClick={onToggleCollapse} />}
+            </div>
+          )}
+          {isStreaming && isLast && (
+            <div className="flex items-center gap-2 mt-2 text-[0.55rem] text-[#999999]">
+              <span className="w-1 h-1 rounded-full bg-[#DCB263] animate-pulse" />
+              <span>Escribiendo...</span>
+              <span className="text-[#4a4a4a]">·</span>
+              <span>{(msg.content.length / 1024).toFixed(1)} KB recibidos</span>
+            </div>
+          )}
+          {isLast && !isStreaming && msg.content.length > 0 && (
+            <div className="flex gap-1.5 mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+              <button onClick={onCopy} className="flex items-center justify-center w-6 h-6 rounded bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[#999999] hover:bg-[rgba(255,255,255,0.08)] hover:border-[rgba(255,255,255,0.15)] hover:text-white transition-colors" title={copyLabel}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V5a2 2 0 012-2h8a2 2 0 012 2v1"/></svg>
+              </button>
+              {onRegenerate && (
+                <button onClick={onRegenerate} className="flex items-center justify-center w-6 h-6 rounded bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[#999999] hover:bg-[rgba(220,178,99,0.1)] hover:border-[rgba(220,178,99,0.3)] hover:text-[#DCB263] transition-colors" title={regenerateLabel}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AttachmentCard({ name, size }: { name: string; size: number }) {
+  const [expanded, setExpanded] = useState(false)
+  return (
+    <div className="flex flex-col items-end">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#1C1B1B] border border-[rgba(0,229,201,0.15)] hover:border-[rgba(0,229,201,0.3)] transition-colors text-left group"
+      >
+        <DocumentIcon size={12} color="#00E5C9" />
+        <div className="flex flex-col min-w-0">
+          <span className="text-[0.65rem] text-[#E5E5E5] truncate max-w-[180px] font-medium">{name}</span>
+          <span className="text-[0.55rem] text-[#666666]">{(size / 1024).toFixed(1)} KB</span>
+        </div>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#666666" strokeWidth="2" className={`transition-transform ${expanded ? 'rotate-180' : ''}`}>
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+      {expanded && (
+        <div className="mt-1 p-2 rounded-lg bg-[#1C1B1B] border border-[rgba(255,255,255,0.06)] text-[0.55rem] text-[#999999] max-w-[260px]">
+          Archivo adjuntado al mensaje. El contenido completo fue enviado a la IA.
+        </div>
+      )}
+    </div>
+  )
 }
 
 function MoreMenu({ messages, conversationTitle, onClear }: {
@@ -234,6 +367,7 @@ export default function Chat({
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
   const [userScrolledUp, setUserScrolledUp] = useState(false)
+  const [collapsedResponses, setCollapsedResponses] = useState<Set<string>>(new Set())
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesTopRef = useRef<HTMLDivElement>(null)
@@ -292,14 +426,14 @@ export default function Chat({
     const newFiles: AttachedFile[] = []
     for (const file of Array.from(files)) {
       if (file.size > 1024 * 1024) {
-        alert('Archivo demasiado grande: ${file.name} (> 1MB)')
+        alert(`Archivo demasiado grande: ${file.name} (> 1MB)`)
         continue
       }
       try {
         const content = await readFileAsText(file)
         newFiles.push({ name: file.name, content, size: file.size })
       } catch {
-        alert('No se pudo leer: ${file.name}')
+        alert(`No se pudo leer: ${file.name}`)
       }
     }
     setAttachedFiles(prev => [...prev, ...newFiles])
@@ -337,6 +471,10 @@ export default function Chat({
       return
     }
 
+    const attachments: MessageAttachment[] | undefined = attachedFiles.length > 0
+      ? attachedFiles.map(f => ({ name: f.name, size: f.size }))
+      : undefined
+
     if (attachedFiles.length > 0) {
       const filesSection = attachedFiles.map(f =>
         `--- Archivo: ${f.name} (${f.size} bytes) ---\n${f.content}`
@@ -364,11 +502,11 @@ export default function Chat({
     setUserScrolledUp(false)
     setShowQuickActions(false)
     if (activePrompt) {
-      content = '${activePrompt}\n\n${content}'
+      content = `${activePrompt}\n\n${content}`
       setActivePrompt(null)
       setActiveAction(null)
     }
-    onSend(content)
+    onSend(content, attachments)
   }
 
   const handleQuickAction = (action: QuickAction) => {
@@ -381,6 +519,7 @@ export default function Chat({
   const handleTemplateSelect = (template: Template) => {
     setActivePrompt(template.prompt)
     setActiveAction(template.title)
+    setShowTemplates(false)
     inputRef.current?.focus()
   }
 
@@ -440,7 +579,7 @@ export default function Chat({
                 {agentConfig?.workingDirectory || 'Seleccionar directorio...'}
               </span>
               {!agentConfig?.workingDirectory && (
-                <span className="text-[#DCB263] animate-pulse">⚠</span>
+                <WarningIcon size={10} color="#DCB263" className="animate-pulse" />
               )}
             </div>
           )}
@@ -494,46 +633,38 @@ export default function Chat({
               {displayMessages.map((msg, i) => (
                 <div key={msg.id} className="mb-6 animate-[msgFadeIn_0.3s_ease-out]" style={{ animationDelay: i * 50 + 'ms' }}>
                   {msg.role === 'user' ? (
-                    <div className="flex flex-col items-end">
+                    <div className="flex flex-col items-end gap-2">
+                      {msg.attachments && msg.attachments.length > 0 && (
+                        <div className="flex flex-wrap justify-end gap-1.5 max-w-[70%]">
+                          {msg.attachments.map((att, idx) => (
+                            <AttachmentCard key={idx} name={att.name} size={att.size} />
+                          ))}
+                        </div>
+                      )}
                       <div className="max-w-[70%] px-4 py-2.5 rounded-2xl bg-[#1C1B1B] text-[#E5E5E5] text-[0.8125rem] leading-[1.35] border border-[rgba(255,255,255,0.08)]">
-                        <Markdown content={msg.content} compact />
+                        <Markdown content={getDisplayContent(msg.content)} compact />
                       </div>
                     </div>
                   ) : (
-                    <div className="group pt-2 pb-1">
-                      <div className="flex items-start gap-3">
-                        <img src="/solaria-logo.svg" alt="Solaria" className="w-4 h-4 mt-1 shrink-0 opacity-80" />
-                        <div className="flex-1 min-w-0">
-                          {msg.content === '' && isStreaming ? (
-                            <div className="flex gap-[4px] px-[0.875rem] py-[0.625rem] bg-[#1C1B1B] border border-[rgba(255,255,255,0.04)] rounded-[12px] w-fit">
-                              {[0, 0.2, 0.4].map((delay, index) => (
-                                <div key={index} className="w-[6px] h-[6px] bg-[#DCB263] rounded-full animate-[typingDot_1.4s_ease-in-out_infinite]" style={{ animationDelay: delay + 's' }} />
-                              ))}
-                            </div>
-                          ) : looksLikeReport(msg.content) ? (
-                            <ArtifactCard
-                              title={conversationTitle || 'Reporte'}
-                              content={msg.content}
-                              date={new Date().toLocaleDateString()}
-                            />
-                          ) : (
-                            <Markdown content={msg.content} isRunning={agentIsRunning && i === displayMessages.length - 1} />
-                          )}
-                          {i === displayMessages.length - 1 && !isStreaming && (
-                            <div className="flex gap-1.5 mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                              <button onClick={async () => await navigator.clipboard.writeText(msg.content)} className="flex items-center justify-center w-6 h-6 rounded bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[#999999] hover:bg-[rgba(255,255,255,0.08)] hover:border-[rgba(255,255,255,0.15)] hover:text-white transition-colors" title={t('chat.copy', lang)}>
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V5a2 2 0 012-2h8a2 2 0 012 2v1"/></svg>
-                              </button>
-                              {onRegenerate && msg.role === 'assistant' && msg.content && (
-                                <button onClick={onRegenerate} className="flex items-center justify-center w-6 h-6 rounded bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[#999999] hover:bg-[rgba(220,178,99,0.1)] hover:border-[rgba(220,178,99,0.3)] hover:text-[#DCB263] transition-colors" title={t('chat.regenerate', lang)}>
-                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-                                </button>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
+                    <AssistantMessage
+                      msg={msg}
+                      isLast={i === displayMessages.length - 1}
+                      isStreaming={isStreaming}
+                      isRunning={!!agentIsRunning}
+                      collapsed={collapsedResponses.has(msg.id)}
+                      onToggleCollapse={() => {
+                        setCollapsedResponses(prev => {
+                          const next = new Set(prev)
+                          if (next.has(msg.id)) next.delete(msg.id)
+                          else next.add(msg.id)
+                          return next
+                        })
+                      }}
+                      onCopy={async () => { await navigator.clipboard.writeText(msg.content) }}
+                      onRegenerate={onRegenerate}
+                      copyLabel={t('chat.copy', lang)}
+                      regenerateLabel={t('chat.regenerate', lang)}
+                    />
                   )}
                 </div>
               ))}
@@ -570,7 +701,7 @@ export default function Chat({
         <div className="w-full max-w-[880px] mx-auto px-8">
           <div className="flex items-center gap-2 px-3 py-1.5 mb-2 rounded-lg bg-[#1C1B1B] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-[#DCB263]">
             <span className="w-1.5 h-1.5 rounded-full bg-[#DCB263] animate-pulse" />
-            <span>⏺ Ejecutando {runningToolCount} herramienta{runningToolCount !== 1 ? 's' : ''}...</span>
+            <span className="flex items-center gap-1.5"><BulletIcon size={8} color="#DCB263" /> Ejecutando {runningToolCount} herramienta{runningToolCount !== 1 ? 's' : ''}...</span>
           </div>
         </div>
       )}
@@ -586,7 +717,8 @@ export default function Chat({
             )}
             {isAgentEnabled && !agentConfig?.workingDirectory && (
               <div className="flex items-center gap-1 px-2 text-[0.5rem] text-[#DCB263] font-mono">
-                ⚠ Sin directorio de trabajo — configurar en Settings
+                <WarningIcon size={10} color="#DCB263" />
+                <span>Sin directorio de trabajo — configurar en Settings</span>
               </div>
             )}
             <div className="flex items-center gap-2">

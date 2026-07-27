@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import type { Conversation } from '../../hooks/useChat'
 import ProjectModal from '../ProjectModal'
 import type { WorkspaceAsideProps, Project } from './types'
@@ -42,19 +43,77 @@ function ConvDropdown({ conv, showArchived, onPin, onArchive, onRestore, onRenam
   onDelete: (id: string) => void
 }) {
   const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({})
 
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    if (!open) return
+    const update = () => {
+      const rect = buttonRef.current?.getBoundingClientRect()
+      if (!rect) return
+      const width = 176
+      let left = rect.right - width
+      if (left < 8) left = rect.left
+      setMenuStyle({ position: 'fixed', top: rect.bottom + 4, left, width, zIndex: 9999 })
     }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
+    update()
+    const outside = (e: MouseEvent) => {
+      if (!buttonRef.current?.contains(e.target as Node) && !menuRef.current?.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    const close = () => setOpen(false)
+    document.addEventListener('mousedown', outside)
+    window.addEventListener('resize', close)
+    window.addEventListener('scroll', close, true)
+    return () => {
+      document.removeEventListener('mousedown', outside)
+      window.removeEventListener('resize', close)
+      window.removeEventListener('scroll', close, true)
+    }
+  }, [open])
+
+  const menu = (
+    <div ref={menuRef} style={menuStyle} className="bg-[#1A1A1A] border border-[rgba(255,255,255,0.08)] rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.4)] overflow-hidden animate-[fadeIn_0.1s_ease]">
+      {showArchived ? (
+        <button onClick={e => { e.stopPropagation(); onRestore(conv.id); setOpen(false) }}
+          className="flex items-center gap-2.5 w-full px-3.5 py-2.5 text-[0.7rem] text-[#E5E5E5] hover:bg-[rgba(0,229,201,0.08)] hover:text-[#00E5C9] transition-colors">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+          Restaurar
+        </button>
+      ) : (
+        <>
+          <button onClick={e => { e.stopPropagation(); const newTitle = prompt('Renombrar:', conv.title); if (newTitle?.trim()) onRename(conv.id, newTitle.trim()); setOpen(false) }}
+            className="flex items-center gap-2.5 w-full px-3.5 py-2.5 text-[0.7rem] text-[#E5E5E5] hover:bg-[rgba(255,255,255,0.06)] hover:text-white transition-colors">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.828 2.828 0 1 1 4 4L7 21l-4 1 1-4L17 3z"/></svg>
+            Editar titulo
+          </button>
+          <button onClick={e => { e.stopPropagation(); onPin(conv.id); setOpen(false) }}
+            className="flex items-center gap-2.5 w-full px-3.5 py-2.5 text-[0.7rem] text-[#E5E5E5] hover:bg-[rgba(220,178,99,0.08)] hover:text-[#DCB263] transition-colors">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill={conv.pinned ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            {conv.pinned ? 'Desanclar' : 'Anclar'}
+          </button>
+          <button onClick={e => { e.stopPropagation(); onArchive(conv.id); setOpen(false) }}
+            className="flex items-center gap-2.5 w-full px-3.5 py-2.5 text-[0.7rem] text-[#E5E5E5] hover:bg-[rgba(255,255,255,0.06)] hover:text-white transition-colors">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/></svg>
+            Archivar
+          </button>
+        </>
+      )}
+      <div className="border-t border-[rgba(255,255,255,0.04)]" />
+      <button onClick={e => { e.stopPropagation(); onDelete(conv.id); setOpen(false) }}
+        className="flex items-center gap-2.5 w-full px-3.5 py-2.5 text-[0.7rem] text-[#ef4444] hover:bg-[rgba(239,68,68,0.08)] transition-colors">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        Eliminar
+      </button>
+    </div>
+  )
 
   return (
-    <div ref={ref} className="relative">
+    <div className="relative">
       <button
+        ref={buttonRef}
         onClick={e => { e.stopPropagation(); setOpen(!open) }}
         className={`flex items-center justify-center w-6 h-6 rounded-lg transition-all ${
           open ? 'text-white bg-[rgba(255,255,255,0.08)]' : 'text-[#666666] opacity-0 group-hover:opacity-100 hover:text-white hover:bg-[rgba(255,255,255,0.06)]'
@@ -64,41 +123,7 @@ function ConvDropdown({ conv, showArchived, onPin, onArchive, onRestore, onRenam
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
       </button>
-      {open && (
-        <div className="absolute right-0 top-7 w-44 bg-[#1A1A1A] border border-[rgba(255,255,255,0.08)] rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.4)] overflow-hidden z-50 animate-[fadeIn_0.1s_ease]">
-          {showArchived ? (
-            <button onClick={e => { e.stopPropagation(); onRestore(conv.id); setOpen(false) }}
-              className="flex items-center gap-2.5 w-full px-3.5 py-2.5 text-[0.7rem] text-[#E5E5E5] hover:bg-[rgba(0,229,201,0.08)] hover:text-[#00E5C9] transition-colors">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
-              Restaurar
-            </button>
-          ) : (
-            <>
-              <button onClick={e => { e.stopPropagation(); const newTitle = prompt('Renombrar:', conv.title); if (newTitle?.trim()) onRename(conv.id, newTitle.trim()); setOpen(false) }}
-                className="flex items-center gap-2.5 w-full px-3.5 py-2.5 text-[0.7rem] text-[#E5E5E5] hover:bg-[rgba(255,255,255,0.06)] hover:text-white transition-colors">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.828 2.828 0 1 1 4 4L7 21l-4 1 1-4L17 3z"/></svg>
-                Editar titulo
-              </button>
-              <button onClick={e => { e.stopPropagation(); onPin(conv.id); setOpen(false) }}
-                className="flex items-center gap-2.5 w-full px-3.5 py-2.5 text-[0.7rem] text-[#E5E5E5] hover:bg-[rgba(220,178,99,0.08)] hover:text-[#DCB263] transition-colors">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill={conv.pinned ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-                {conv.pinned ? 'Desanclar' : 'Anclar'}
-              </button>
-              <button onClick={e => { e.stopPropagation(); onArchive(conv.id); setOpen(false) }}
-                className="flex items-center gap-2.5 w-full px-3.5 py-2.5 text-[0.7rem] text-[#E5E5E5] hover:bg-[rgba(255,255,255,0.06)] hover:text-white transition-colors">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/></svg>
-                Archivar
-              </button>
-            </>
-          )}
-          <div className="border-t border-[rgba(255,255,255,0.04)]" />
-          <button onClick={e => { e.stopPropagation(); onDelete(conv.id); setOpen(false) }}
-            className="flex items-center gap-2.5 w-full px-3.5 py-2.5 text-[0.7rem] text-[#ef4444] hover:bg-[rgba(239,68,68,0.08)] transition-colors">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-            Eliminar
-          </button>
-        </div>
-      )}
+      {open && createPortal(menu, document.body)}
     </div>
   )
 }
@@ -161,6 +186,19 @@ function ConvRow({ conv, activeConvId, editingId, editTitle, setEditTitle, setEd
         )}
       </div>
       <ConvDropdown conv={conv} showArchived={showArchived} onPin={onPin} onArchive={onArchive} onRestore={onRestore} onRename={onRename} onDelete={onDelete} />
+    </div>
+  )
+}
+
+/* ════════════════════════════════
+   COLLAPSIBLE
+   ════════════════════════════════ */
+function Collapsible({ expanded, children }: { expanded: boolean; children: React.ReactNode }) {
+  return (
+    <div className={`grid transition-[grid-template-rows] duration-300 ease-out ${expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+      <div className={`overflow-hidden min-h-0 transition-opacity duration-300 ease-out ${expanded ? 'opacity-100' : 'opacity-0'}`}>
+        {children}
+      </div>
     </div>
   )
 }
@@ -261,7 +299,7 @@ export default function GeneralWorkspace({
     <>
       {/* EXPANDED */}
       {!isCollapsed && (
-        <div className="flex flex-col bg-[#1A1A1A] border-r border-[rgba(255,255,255,0.04)] overflow-hidden transition-all duration-250 w-[320px] shrink-0">
+        <div className="flex flex-col bg-[#1A1A1A] border-r border-[rgba(255,255,255,0.04)] overflow-visible transition-all duration-250 w-[320px] shrink-0">
 
           {/* Header */}
           <div className="flex items-center gap-3 px-4 py-3.5 min-h-[52px] border-b border-[rgba(255,255,255,0.04)]">
@@ -312,31 +350,29 @@ export default function GeneralWorkspace({
             {/* Conversations */}
             <SectionHeader title={showArchived ? 'Archivados' : 'Conversaciones'} expanded={convsExpanded} onToggle={() => setConvsExpanded(!convsExpanded)} badge={showArchived ? undefined : unpinnedConvs.length > 0 ? unpinnedConvs.length.toString() : undefined} />
 
-            {convsExpanded && (
-              <>
-                {(pinnedConvs.length === 0 && unpinnedConvs.length === 0) ? (
-                  <div className="flex flex-col items-center justify-center py-8 px-4 gap-2">
-                    <div className="w-8 h-8 rounded-full bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.06)] flex items-center justify-center">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#666666" strokeWidth="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                    </div>
-                    <p className="text-[0.65rem] text-[#666666]">{searchQuery ? 'Sin resultados' : showArchived ? 'Sin archivadas' : 'Sin conversaciones'}</p>
+            <Collapsible expanded={convsExpanded}>
+              {(pinnedConvs.length === 0 && unpinnedConvs.length === 0) ? (
+                <div className="flex flex-col items-center justify-center py-8 px-4 gap-2">
+                  <div className="w-8 h-8 rounded-full bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.06)] flex items-center justify-center">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#666666" strokeWidth="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                   </div>
-                ) : (
-                  <div className="space-y-0.5 px-1">
-                    {pinnedConvs.length > 0 && (
-                      <div className="mb-1">
-                        <div className="flex items-center gap-2 px-3 py-1">
-                          <span className="w-1 h-1 rounded-full bg-[#DCB263]" />
-                          <span className="text-[0.55rem] font-semibold uppercase tracking-[0.08em] text-[#999999]">Anclados</span>
-                        </div>
-                        {pinnedConvs.map(conv => <ConvRow key={conv.id} conv={conv} activeConvId={activeConvId} editingId={editingId} editTitle={editTitle} setEditTitle={setEditTitle} setEditingId={setEditingId} showArchived={showArchived} onSelect={onSelect} onRename={onRename} onPin={onPin} onArchive={onArchive} onRestore={onRestore} onDelete={onDelete} />)}
+                  <p className="text-[0.65rem] text-[#666666]">{searchQuery ? 'Sin resultados' : showArchived ? 'Sin archivadas' : 'Sin conversaciones'}</p>
+                </div>
+              ) : (
+                <div className="space-y-0.5 px-1">
+                  {pinnedConvs.length > 0 && (
+                    <div className="mb-1">
+                      <div className="flex items-center gap-2 px-3 py-1">
+                        <span className="w-1 h-1 rounded-full bg-[#DCB263]" />
+                        <span className="text-[0.55rem] font-semibold uppercase tracking-[0.08em] text-[#999999]">Anclados</span>
                       </div>
-                    )}
-                    {unpinnedConvs.map(conv => <ConvRow key={conv.id} conv={conv} activeConvId={activeConvId} editingId={editingId} editTitle={editTitle} setEditTitle={setEditTitle} setEditingId={setEditingId} showArchived={showArchived} onSelect={onSelect} onRename={onRename} onPin={onPin} onArchive={onArchive} onRestore={onRestore} onDelete={onDelete} />)}
-                  </div>
-                )}
-              </>
-            )}
+                      {pinnedConvs.map(conv => <ConvRow key={conv.id} conv={conv} activeConvId={activeConvId} editingId={editingId} editTitle={editTitle} setEditTitle={setEditTitle} setEditingId={setEditingId} showArchived={showArchived} onSelect={onSelect} onRename={onRename} onPin={onPin} onArchive={onArchive} onRestore={onRestore} onDelete={onDelete} />)}
+                    </div>
+                  )}
+                  {unpinnedConvs.map(conv => <ConvRow key={conv.id} conv={conv} activeConvId={activeConvId} editingId={editingId} editTitle={editTitle} setEditTitle={setEditTitle} setEditingId={setEditingId} showArchived={showArchived} onSelect={onSelect} onRename={onRename} onPin={onPin} onArchive={onArchive} onRestore={onRestore} onDelete={onDelete} />)}
+                </div>
+              )}
+            </Collapsible>
 
             {/* Projects */}
             <SectionHeader title="Proyectos" expanded={projectsExpanded} onToggle={() => setProjectsExpanded(!projectsExpanded)} badge={projects.length > 0 ? projects.length.toString() : undefined} action={
@@ -345,7 +381,7 @@ export default function GeneralWorkspace({
               </button>
             } />
 
-            {projectsExpanded && (
+            <Collapsible expanded={projectsExpanded}>
               <div className="px-1 space-y-0.5">
                 {projects.map(proj => (
                   <div key={proj.id}>
@@ -364,7 +400,7 @@ export default function GeneralWorkspace({
                       </div>
                     </div>
 
-                    {activeProjectId === proj.id && (
+                    <Collapsible expanded={activeProjectId === proj.id}>
                       <div className="ml-3 mt-0.5 mb-1 space-y-0.5 px-1">
                         {projectFilesLoading ? (
                           <div className="flex items-center gap-2 px-3 py-2 mx-1.5 text-[0.65rem] text-[#666666]"><svg className="animate-spin" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>Cargando...</div>
@@ -398,11 +434,11 @@ export default function GeneralWorkspace({
                           />
                         ))}
                       </div>
-                    )}
+                    </Collapsible>
                   </div>
                 ))}
               </div>
-            )}
+            </Collapsible>
           </div>
 
           {/* Footer */}

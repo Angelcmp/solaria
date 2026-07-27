@@ -13,6 +13,7 @@ import css from 'highlight.js/lib/languages/css'
 import sql from 'highlight.js/lib/languages/sql'
 import yaml from 'highlight.js/lib/languages/yaml'
 import markdown from 'highlight.js/lib/languages/markdown'
+import { CheckIcon } from '../components/Icons'
 import java from 'highlight.js/lib/languages/java'
 import cpp from 'highlight.js/lib/languages/cpp'
 import go from 'highlight.js/lib/languages/go'
@@ -115,9 +116,10 @@ function CopyButton({ code }: { code: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="px-2 py-0.5 rounded text-[0.55rem] text-[#999999] bg-[#2A2A2A] hover:bg-[#353535] hover:text-white border border-[rgba(255,255,255,0.08)] transition-all opacity-0 group-hover:opacity-100"
+      className="px-2 py-0.5 rounded text-[0.55rem] text-[#999999] bg-[#2A2A2A] hover:bg-[#353535] hover:text-white border border-[rgba(255,255,255,0.08)] transition-all opacity-0 group-hover:opacity-100 flex items-center gap-1"
     >
-      {copied ? '✓' : 'Copiar'}
+      {copied ? <CheckIcon size={10} color="#00E5C9" /> : null}
+      {copied ? 'Listo' : 'Copiar'}
     </button>
   )
 }

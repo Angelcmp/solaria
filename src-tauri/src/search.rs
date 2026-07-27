@@ -16,6 +16,7 @@ pub struct TavilyResult {
     pub title: String,
     pub url: String,
     pub content: String,
+    pub score: f64,
 }
 
 #[derive(Deserialize)]
@@ -29,6 +30,8 @@ struct TavilyResultResponse {
     title: String,
     url: String,
     content: String,
+    #[serde(default)]
+    score: f64,
 }
 
 #[derive(Serialize)]
@@ -72,6 +75,7 @@ pub async fn search_tavily(api_key: String, query: String) -> SearchResponse {
                             title: r.title,
                             url: r.url,
                             content: r.content,
+                            score: r.score,
                         })
                         .collect();
 

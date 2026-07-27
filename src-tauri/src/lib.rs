@@ -296,11 +296,11 @@ fn resolve_project_root() -> Option<String> {
 }
 
 #[tauri::command]
-fn list_skills(working_dir: Option<String>) -> Vec<skills::SkillDefinition> {
+fn list_skills(working_dir: Option<String>, auto_activate: Option<bool>) -> Vec<skills::SkillDefinition> {
     let wd = working_dir
         .filter(|d| !d.is_empty() && std::path::PathBuf::from(d).join(".solaria").join("skills").exists())
         .or_else(resolve_project_root);
-    skills::discover_all_skills(wd.as_deref())
+    skills::discover_all_skills(wd.as_deref(), auto_activate.unwrap_or(false))
 }
 
 #[tauri::command]
@@ -309,11 +309,11 @@ fn toggle_skill(name: String, enabled: bool) {
 }
 
 #[tauri::command]
-fn get_skills_prompt(working_dir: Option<String>, query: Option<String>) -> String {
+fn get_skills_prompt(working_dir: Option<String>, query: Option<String>, auto_activate: Option<bool>) -> String {
     let wd = working_dir
         .filter(|d| !d.is_empty() && std::path::PathBuf::from(d).join(".solaria").join("skills").exists())
         .or_else(resolve_project_root);
-    skills::get_enabled_skills_prompt(wd.as_deref(), query.as_deref())
+    skills::get_enabled_skills_prompt(wd.as_deref(), query.as_deref(), auto_activate.unwrap_or(false))
 }
 
 #[tauri::command]

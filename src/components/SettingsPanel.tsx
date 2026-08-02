@@ -90,8 +90,8 @@ export default function SettingsPanel({
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[rgba(255,255,255,0.06)] shrink-0 bg-[#1A1A1A]">
           <div className="flex items-center gap-3">
-            <div className="w-7 h-7 rounded-lg bg-[#00E5C9]/10 border border-[#00E5C9]/15 flex items-center justify-center">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00E5C9" strokeWidth="2">
+            <div className="w-7 h-7 rounded-lg bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] flex items-center justify-center">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#E5E5E5" strokeWidth="2">
                 <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
               </svg>
             </div>
@@ -113,7 +113,7 @@ export default function SettingsPanel({
                   onClick={() => setTab(tabKey.id)}
                   className={`flex items-center gap-2.5 w-full px-3 py-2.5 rounded-lg text-[0.7rem] font-medium transition-all duration-150 ${
                     tab === tabKey.id
-                      ? 'bg-[rgba(0,229,201,0.07)] text-[#00E5C9] border border-[rgba(0,229,201,0.15)]'
+                      ? 'bg-[rgba(0,229,201,0.07)] text-white border border-[rgba(255,255,255,0.08)]'
                       : 'text-[#999999] hover:bg-[rgba(255,255,255,0.03)] hover:text-[#E5E5E5] border border-transparent'
                   }`}
                 >
@@ -124,7 +124,7 @@ export default function SettingsPanel({
             </div>
             <div className="px-4 pt-3 mt-2 border-t border-[rgba(255,255,255,0.04)]">
               <div className="flex items-center gap-1.5 text-[0.5rem] text-[#555555]">
-                <div className="w-1.5 h-1.5 rounded-full bg-[#00E5C9]/40" />
+                <div className="w-1.5 h-1.5 rounded-full bg-[#666666]" />
                 Solaria v0.9.0
               </div>
             </div>
@@ -176,7 +176,7 @@ function GeneralTab({
   return (
     <div className="space-y-5">
       {/* Section: Provider & Model */}
-      <Section title="Proveedor & Modelo" color="#00E5C9">
+      <Section title="Proveedor & Modelo">
         <div className="p-3 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] space-y-4">
           <div>
             <label className="block text-[0.625rem] font-medium text-[#999999] mb-2">Proveedor por defecto</label>
@@ -189,7 +189,7 @@ function GeneralTab({
                     onClick={() => onUpdateProvider(p.id, settings.defaultProvider === p.id ? settings.defaultModel : p.models[0])}
                     className={`flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-[0.6rem] font-medium transition-all ${
                       settings.defaultProvider === p.id
-                        ? 'bg-[rgba(0,229,201,0.1)] border border-[rgba(0,229,201,0.25)] text-[#00E5C9] shadow-[0_0_12px_rgba(0,229,201,0.06)]'
+                        ? 'bg-[rgba(0,229,201,0.1)] border border-[rgba(255,255,255,0.08)] text-white shadow-[0_0_12px_rgba(255,255,255,0.05)]'
                         : 'bg-[#222] border border-[rgba(255,255,255,0.04)] text-[#999999] hover:border-[rgba(255,255,255,0.1)] hover:text-[#E5E5E5]'
                     }`}
                   >
@@ -205,7 +205,7 @@ function GeneralTab({
                     onClick={() => onUpdateProvider(p.id, settings.defaultProvider === p.id ? settings.defaultModel : p.models[0])}
                     className={`flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-[0.6rem] font-medium transition-all ${
                       settings.defaultProvider === p.id
-                        ? 'bg-[rgba(0,229,201,0.1)] border border-[rgba(0,229,201,0.25)] text-[#00E5C9] shadow-[0_0_12px_rgba(0,229,201,0.06)]'
+                        ? 'bg-[rgba(0,229,201,0.1)] border border-[rgba(255,255,255,0.08)] text-white shadow-[0_0_12px_rgba(255,255,255,0.05)]'
                         : 'bg-[#222] border border-[rgba(255,255,255,0.04)] text-[#999999] hover:border-[rgba(255,255,255,0.1)] hover:text-[#E5E5E5]'
                     }`}
                   >
@@ -225,7 +225,7 @@ function GeneralTab({
                   onClick={() => onUpdate({ defaultModel: m })}
                   className={`px-2.5 py-1 rounded-md text-[0.6rem] font-mono transition-all ${
                     settings.defaultModel === m
-                      ? 'bg-[rgba(0,229,201,0.1)] border border-[rgba(0,229,201,0.25)] text-[#00E5C9]'
+                      ? 'bg-[rgba(0,229,201,0.1)] border border-[rgba(255,255,255,0.08)] text-white'
                       : 'bg-[#222] border border-[rgba(255,255,255,0.04)] text-[#999999] hover:border-[rgba(255,255,255,0.1)] hover:text-[#E5E5E5]'
                   }`}
                 >
@@ -245,7 +245,7 @@ function GeneralTab({
                 value={settings.ollamaHost}
                 onChange={e => onUpdate({ ollamaHost: e.target.value })}
                 placeholder="http://localhost:11434"
-                className="w-full px-3 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors"
+                className="w-full px-3 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[rgba(255,255,255,0.2)] transition-colors"
               />
             </div>
           )}
@@ -253,7 +253,7 @@ function GeneralTab({
       </Section>
 
       {/* Section: Model Parameters */}
-      <Section title="Parámetros del modelo" color="#DCB263">
+      <Section title="Parámetros del modelo">
         <div className="p-3 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] space-y-4">
           <SliderControl
             label="Temperatura"
@@ -261,7 +261,6 @@ function GeneralTab({
             min={0} max={2} step={0.1}
             onChange={v => onUpdate({ temperature: v })}
             descLeft="Preciso" descRight="Creativo"
-            color="#DCB263"
           />
           <SliderControl
             label="Top P"
@@ -269,7 +268,6 @@ function GeneralTab({
             min={0} max={1} step={0.05}
             onChange={v => onUpdate({ topP: v })}
             descLeft="Estricto" descRight="Flexible"
-            color="#DCB263"
           />
           <SliderControl
             label="Max tokens"
@@ -277,13 +275,12 @@ function GeneralTab({
             min={64} max={8192} step={64}
             onChange={v => onUpdate({ maxTokens: v })}
             descLeft="64" descRight="8192"
-            color="#DCB263"
           />
         </div>
       </Section>
 
       {/* Section: Language */}
-      <Section title="Idioma" color="#00E5C9">
+      <Section title="Idioma">
         <div className="flex gap-2">
           {([['es', 'Español'], ['en', 'English']] as const).map(([value, label]) => (
             <button
@@ -291,7 +288,7 @@ function GeneralTab({
               onClick={() => onUpdate({ language: value })}
               className={`px-4 py-2 rounded-lg text-[0.7rem] font-medium transition-all ${
                 settings.language === value
-                  ? 'bg-[rgba(0,229,201,0.1)] border border-[rgba(0,229,201,0.25)] text-[#00E5C9]'
+                  ? 'bg-[rgba(0,229,201,0.1)] border border-[rgba(255,255,255,0.08)] text-white'
                   : 'bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] text-[#999999] hover:border-[rgba(255,255,255,0.12)] hover:text-[#E5E5E5]'
               }`}
             >
@@ -342,7 +339,7 @@ function ProvidersTab({ settings, onUpdateApiKey, onUpdateTavilyKey, selectedPro
               onClick={() => setSelectedProvider(p.id)}
               className={`flex items-center gap-2 w-full px-2.5 py-2 rounded-lg text-[0.65rem] transition-all ${
                 selectedProvider === p.id
-                  ? 'bg-[rgba(0,229,201,0.07)] border border-[rgba(0,229,201,0.15)] text-[#00E5C9]'
+                      ? 'bg-[rgba(0,229,201,0.07)] border border-[rgba(255,255,255,0.08)] text-white'
                   : 'text-[#999999] hover:bg-[rgba(255,255,255,0.03)] hover:text-[#E5E5E5] border border-transparent'
               }`}
             >
@@ -354,7 +351,7 @@ function ProvidersTab({ settings, onUpdateApiKey, onUpdateTavilyKey, selectedPro
             onClick={() => setSelectedProvider('tavily')}
             className={`flex items-center gap-2 w-full px-2.5 py-2 rounded-lg text-[0.65rem] transition-all ${
               selectedProvider === 'tavily'
-                ? 'bg-[rgba(0,229,201,0.07)] border border-[rgba(0,229,201,0.15)] text-[#00E5C9]'
+                ? 'bg-[rgba(0,229,201,0.07)] border border-[rgba(255,255,255,0.08)] text-white'
                 : 'text-[#999999] hover:bg-[rgba(255,255,255,0.03)] hover:text-[#E5E5E5] border border-transparent'
             }`}
           >
@@ -365,13 +362,13 @@ function ProvidersTab({ settings, onUpdateApiKey, onUpdateTavilyKey, selectedPro
 
         <div className="flex-1 min-w-0 p-4 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)]">
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-8 h-8 rounded-lg bg-[rgba(0,229,201,0.08)] border border-[rgba(0,229,201,0.15)] flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] flex items-center justify-center">
               {isTavily ? (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00E5C9" strokeWidth="1.5">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E5E5E5" strokeWidth="1.5">
                   <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
                 </svg>
               ) : (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00E5C9" strokeWidth="1.5">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E5E5E5" strokeWidth="1.5">
                   <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                 </svg>
               )}
@@ -381,8 +378,8 @@ function ProvidersTab({ settings, onUpdateApiKey, onUpdateTavilyKey, selectedPro
               <div className="flex items-center gap-1.5">
                 {isConfigured ? (
                   <>
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#00E5C9]" />
-                    <span className="text-[0.55rem] text-[#00E5C9]">Configurada</span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#999999]" />
+                    <span className="text-[0.55rem] text-[#E5E5E5]">Configurada</span>
                   </>
                 ) : (
                   <>
@@ -400,7 +397,7 @@ function ProvidersTab({ settings, onUpdateApiKey, onUpdateTavilyKey, selectedPro
             value={isTavily ? settings.tavilyKey : (activeAi ? settings.apiKeys[activeAi.id] : '')}
             onChange={e => isTavily ? onUpdateTavilyKey(e.target.value) : activeAi && onUpdateApiKey(activeAi.id, e.target.value)}
             placeholder={isTavily ? TAVILY_DATA.placeholder : activeAi?.placeholder}
-            className="w-full px-3 py-2.5 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors"
+            className="w-full px-3 py-2.5 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[rgba(255,255,255,0.2)] transition-colors"
           />
 
           <div className="mt-3 p-2.5 rounded-lg bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.04)]">
@@ -408,7 +405,7 @@ function ProvidersTab({ settings, onUpdateApiKey, onUpdateTavilyKey, selectedPro
               {isTavily ? (
                 <>
                   Motor de búsqueda web optimizado para IA. Obtén tu API key en{' '}
-                  <a href="https://app.tavily.com" target="_blank" className="text-[#00E5C9] hover:underline">app.tavily.com</a>
+                  <a href="https://app.tavily.com" target="_blank" className="text-[#999999] hover:text-white hover:underline">app.tavily.com</a>
                 </>
               ) : (
                 <>
@@ -456,17 +453,17 @@ function AgentTab({ settings, onUpdate, agentConfig, onUpdateAgentConfig }: {
       {agentConfig && onUpdateAgentConfig && (
         <>
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.04)] text-[0.55rem]">
-            <span className="flex items-center gap-1 text-[#DCB263]"><BulletIcon size={8} color="#DCB263" /> {agentConfig.allowedTools.length} herramienta{agentConfig.allowedTools.length !== 1 ? 's' : ''}</span>
+            <span className="flex items-center gap-1 text-[#999999]"><BulletIcon size={8} color="#999999" /> {agentConfig.allowedTools.length} herramienta{agentConfig.allowedTools.length !== 1 ? 's' : ''}</span>
             <span className="text-[#4a4a4a]">·</span>
-            <span className="text-[#00E5C9]">{agentConfig.maxIterations} iteraciones</span>
+            <span className="text-[#E5E5E5]">{agentConfig.maxIterations} iteraciones</span>
             <span className="text-[#4a4a4a]">·</span>
             <span className="truncate text-[#666666]">{agentConfig.workingDirectory || 'Sin directorio de trabajo'}</span>
           </div>
 
-          <div className="p-3 rounded-lg bg-[#1C1B1B] border border-[rgba(255,255,255,0.06)] border-l-2 border-l-[rgba(220,178,99,0.5)]">
+          <div className="p-3 rounded-lg bg-[#1C1B1B] border border-[rgba(255,255,255,0.06)] border-l-2 border-l-[rgba(255,255,255,0.08)]">
             <div className="flex items-center gap-2.5">
               <div className="shrink-0">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#DCB263" strokeWidth="2">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#999999" strokeWidth="2">
                   <circle cx="12" cy="12" r="10"/>
                   <path d="M12 6v6l4 2"/>
                 </svg>
@@ -481,7 +478,7 @@ function AgentTab({ settings, onUpdate, agentConfig, onUpdateAgentConfig }: {
 
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <span className="w-1 h-3.5 rounded-full bg-[#00E5C9]" />
+              <span className="w-1 h-3.5 rounded-full bg-[#666666]" />
               <h4 className="text-[0.65rem] font-semibold text-[#E5E5E5] uppercase tracking-[0.06em]">Herramientas permitidas</h4>
             </div>
             <div className="space-y-1.5">
@@ -489,10 +486,10 @@ function AgentTab({ settings, onUpdate, agentConfig, onUpdateAgentConfig }: {
                 const enabled = agentConfig.allowedTools.includes(tool.id)
                 const borderAccent = enabled
                   ? tool.kind === 'write'
-                    ? 'border-l-[rgba(220,178,99,0.5)]'
-                    : 'border-l-[rgba(0,229,201,0.5)]'
+                    ? 'border-l-[rgba(255,255,255,0.08)]'
+                    : 'border-l-[rgba(255,255,255,0.08)]'
                   : 'border-l-transparent'
-                const color = tool.kind === 'write' ? '#DCB263' : '#00E5C9'
+                const color = '#999999'
                 return (
                   <div
                     key={tool.id}
@@ -514,13 +511,13 @@ function AgentTab({ settings, onUpdate, agentConfig, onUpdateAgentConfig }: {
             </div>
           </div>
 
-          <div className="p-3 rounded-lg bg-[#1C1B1B] border border-[rgba(255,255,255,0.06)] border-l-2 border-l-[rgba(220,178,99,0.5)]">
+          <div className="p-3 rounded-lg bg-[#1C1B1B] border border-[rgba(255,255,255,0.06)] border-l-2 border-l-[rgba(255,255,255,0.08)]">
             <button
               onClick={() => setParamsOpen(!paramsOpen)}
               className="flex items-center gap-2.5 w-full text-left"
             >
               <div className="shrink-0">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#DCB263" strokeWidth="2">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#999999" strokeWidth="2">
                   <circle cx="12" cy="12" r="3"/>
                   <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
                 </svg>
@@ -542,7 +539,6 @@ function AgentTab({ settings, onUpdate, agentConfig, onUpdateAgentConfig }: {
                   min={3} max={25} step={1}
                   onChange={v => onUpdateAgentConfig({ maxIterations: v })}
                   descLeft="3" descRight="25"
-                  color="#DCB263"
                 />
 
                 <div>
@@ -552,7 +548,7 @@ function AgentTab({ settings, onUpdate, agentConfig, onUpdateAgentConfig }: {
                       value={agentConfig.workingDirectory}
                       onChange={e => onUpdateAgentConfig({ workingDirectory: e.target.value })}
                       placeholder="Ej: /home/user/documentos"
-                      className="flex-1 px-3 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors"
+                      className="flex-1 px-3 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[rgba(255,255,255,0.2)] transition-colors"
                     />
                     <ActionButton variant="ghost" small onClick={async () => {
                       try { const { invoke } = await import('@tauri-apps/api/core'); const cwd = await invoke<string>('get_cwd'); onUpdateAgentConfig({ workingDirectory: cwd }) } catch {}
@@ -588,10 +584,10 @@ function AgentTab({ settings, onUpdate, agentConfig, onUpdateAgentConfig }: {
         </>
       )}
 
-      <div className="p-3 rounded-lg bg-[#1C1B1B] border border-[rgba(255,255,255,0.06)] border-l-2 border-l-[rgba(220,178,99,0.5)]">
+      <div className="p-3 rounded-lg bg-[#1C1B1B] border border-[rgba(255,255,255,0.06)] border-l-2 border-l-[rgba(255,255,255,0.08)]">
         <div className="flex items-center gap-2.5">
           <div className="shrink-0">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#DCB263" strokeWidth="2">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#999999" strokeWidth="2">
               <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
             </svg>
           </div>
@@ -629,7 +625,7 @@ function AdvancedTab({ advancedTab, setAdvancedTab, lang }: {
               onClick={() => setAdvancedTab(tabItem.id)}
               className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-[0.6rem] font-medium transition-all ${
                 advancedTab === tabItem.id
-                  ? 'bg-[rgba(0,229,201,0.08)] border border-[rgba(0,229,201,0.15)] text-[#00E5C9]'
+                  ? 'bg-[rgba(0,229,201,0.08)] border border-[rgba(255,255,255,0.08)] text-white'
                   : 'text-[#999999] hover:bg-[rgba(255,255,255,0.03)] hover:text-[#E5E5E5] border border-transparent'
               }`}
             >
@@ -645,11 +641,11 @@ function AdvancedTab({ advancedTab, setAdvancedTab, lang }: {
       {advancedTab === 'cookbook' && <CookbookTab lang={lang} />}
       {advancedTab === 'audit' && <AuditTab />}
 
-      <Section title="Almacenamiento & Datos" color="#DCB263">
+      <Section title="Almacenamiento & Datos">
         <DataManagementSection />
       </Section>
 
-      <Section title="Modelos Ollama" color="#00E5C9">
+      <Section title="Modelos Ollama">
         <ModelManager />
       </Section>
     </div>
@@ -734,7 +730,7 @@ function AuditTab() {
 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#00E5C9]" />
+          <span className="w-1.5 h-1.5 rounded-full bg-[#999999]" />
           <span className="text-[0.6rem] text-[#999999]">
             {totalLines > 0 ? `${totalLines} entradas totales` : 'Sin actividad'}
           </span>
@@ -779,8 +775,8 @@ function AuditTab() {
                 <div className="flex items-start gap-2.5">
                   <div className="mt-0.5 shrink-0">
                     {e.success ? (
-                      <span className="w-5 h-5 rounded-full bg-[rgba(0,229,201,0.08)] border border-[rgba(0,229,201,0.15)] flex items-center justify-center">
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#00E5C9" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+                      <span className="w-5 h-5 rounded-full bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] flex items-center justify-center">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#999999" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
                       </span>
                     ) : (
                       <span className="w-5 h-5 rounded-full bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.15)] flex items-center justify-center">
@@ -790,7 +786,7 @@ function AuditTab() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className={`text-[0.65rem] font-semibold ${e.success ? 'text-[#00E5C9]' : 'text-[#ef4444]'}`}>{e.tool}</span>
+                      <span className={`text-[0.65rem] font-semibold ${e.success ? 'text-[#E5E5E5]' : 'text-[#ef4444]'}`}>{e.tool}</span>
                       <span className="text-[0.5rem] text-[#666666] font-mono">{e.timestamp}</span>
                     </div>
                     <div className="text-[0.6rem] text-[#999999] truncate mt-0.5 leading-relaxed" title={formatted}>{formatted}</div>
@@ -860,16 +856,16 @@ function SkillsTab({ workingDirectory, autoActivateSkills }: { workingDirectory?
           Instalación
         </div>
         <p className="text-[0.6rem] text-[#999999] leading-relaxed">
-          Globales: <code className="text-[#DCB263] px-1 py-0.5 rounded bg-[rgba(220,178,99,0.08)]">npx skills add &lt;repo&gt;@&lt;skill&gt; -g</code>
+          Globales: <code className="text-[#E5E5E5] px-1 py-0.5 rounded bg-[rgba(255,255,255,0.04)]">npx skills add &lt;repo&gt;@&lt;skill&gt; -g</code>
           <br />
-          Proyecto: crea en <code className="text-[#DCB263] px-1 py-0.5 rounded bg-[rgba(220,178,99,0.08)]">.solaria/skills/</code>
+          Proyecto: crea en <code className="text-[#E5E5E5] px-1 py-0.5 rounded bg-[rgba(255,255,255,0.04)]">.solaria/skills/</code>
         </p>
       </div>
 
       {projectSkills.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center gap-2">
-            <span className="w-1 h-3.5 rounded-full bg-[#DCB263]" />
+            <span className="w-1 h-3.5 rounded-full bg-[#666666]" />
             <h4 className="text-[0.65rem] font-semibold text-[#E5E5E5] uppercase tracking-[0.06em]">Skills del Proyecto</h4>
           </div>
           <div className="space-y-1.5">
@@ -883,7 +879,7 @@ function SkillsTab({ workingDirectory, autoActivateSkills }: { workingDirectory?
       {globalSkills.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center gap-2">
-            <span className="w-1 h-3.5 rounded-full bg-[#00E5C9]" />
+            <span className="w-1 h-3.5 rounded-full bg-[#666666]" />
             <h4 className="text-[0.65rem] font-semibold text-[#E5E5E5] uppercase tracking-[0.06em]">Skills Globales</h4>
           </div>
           <div className="space-y-1.5">
@@ -958,7 +954,7 @@ function MemoryTab() {
         <div className="flex items-center justify-between">
           <div>
             <div className="text-[0.7rem] font-medium text-white">Activar memoria</div>
-            <div className="text-[0.55rem] text-[#999999] mt-0.5">SQLite + sqlite-vec · <code className="text-[#DCB263]">~/.solaria/memory.db</code></div>
+            <div className="text-[0.55rem] text-[#999999] mt-0.5">SQLite + sqlite-vec · <code className="text-[#E5E5E5]">~/.solaria/memory.db</code></div>
           </div>
           <Switch checked={memory.config.enabled} onChange={v => memory.updateConfig({ enabled: v })} />
         </div>
@@ -966,7 +962,7 @@ function MemoryTab() {
 
       {memory.config.enabled && (
         <>
-          <Section title="Proveedor" color="#00E5C9">
+          <Section title="Proveedor">
             <div className="p-3 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] space-y-3">
               <div>
                 <label className="block text-[0.625rem] font-medium text-[#999999] mb-1">Provider</label>
@@ -977,7 +973,7 @@ function MemoryTab() {
                     const def = PROVIDERS.find(x => x.id === p)
                     memory.updateConfig({ provider: p, model: def?.models[0] || '' })
                   }}
-                  className="w-full px-2.5 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white outline-none focus:border-[#DCB263] transition-colors appearance-none cursor-pointer"
+                  className="w-full px-2.5 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white outline-none focus:border-[rgba(255,255,255,0.2)] transition-colors appearance-none cursor-pointer"
                 >
                   {PROVIDERS.map(p => <option key={p.id} value={p.id} className="bg-[#222]">{p.label}</option>)}
                 </select>
@@ -988,7 +984,7 @@ function MemoryTab() {
                   type="text" value={memory.config.model}
                   onChange={e => memory.updateConfig({ model: e.target.value })}
                   placeholder={currentProviderDef.models[0]}
-                  className="w-full px-2.5 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors"
+                  className="w-full px-2.5 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[rgba(255,255,255,0.2)] transition-colors"
                 />
                 <div className="flex flex-wrap gap-1 mt-1.5">
                   {currentProviderDef.models.map(m => (
@@ -997,7 +993,7 @@ function MemoryTab() {
                       onClick={() => memory.updateConfig({ model: m })}
                       className={`px-1.5 py-0.5 rounded text-[0.5rem] border transition-colors ${
                         memory.config.model === m
-                          ? 'bg-[rgba(0,229,201,0.1)] text-[#00E5C9] border-[rgba(0,229,201,0.25)]'
+                          ? 'bg-[rgba(0,229,201,0.1)] text-white border-[rgba(255,255,255,0.08)]'
                           : 'bg-[rgba(255,255,255,0.03)] text-[#999999] border-[rgba(255,255,255,0.06)] hover:border-[rgba(255,255,255,0.12)]'
                       }`}
                     >{m}</button>
@@ -1007,51 +1003,51 @@ function MemoryTab() {
               {memory.config.provider === 'ollama' && (
                 <div>
                   <label className="block text-[0.625rem] font-medium text-[#999999] mb-1">Ollama host</label>
-                  <input type="text" value={memory.config.ollamaHost} onChange={e => memory.updateConfig({ ollamaHost: e.target.value })} placeholder="http://localhost:11434" className="w-full px-2.5 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors" />
+                  <input type="text" value={memory.config.ollamaHost} onChange={e => memory.updateConfig({ ollamaHost: e.target.value })} placeholder="http://localhost:11434" className="w-full px-2.5 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[rgba(255,255,255,0.2)] transition-colors" />
                 </div>
               )}
               {memory.config.provider === 'openai' && (
                 <div>
                   <label className="block text-[0.625rem] font-medium text-[#999999] mb-1">OpenAI API key</label>
-                  <input type="password" value={memory.config.apiKey} onChange={e => memory.updateConfig({ apiKey: e.target.value })} placeholder="sk-..." className="w-full px-2.5 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors" />
+                  <input type="password" value={memory.config.apiKey} onChange={e => memory.updateConfig({ apiKey: e.target.value })} placeholder="sk-..." className="w-full px-2.5 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[rgba(255,255,255,0.2)] transition-colors" />
                 </div>
               )}
               {memory.config.provider === 'custom' && (
                 <>
                   <div>
                     <label className="block text-[0.625rem] font-medium text-[#999999] mb-1">API URL</label>
-                    <input type="text" value={memory.config.apiUrl} onChange={e => memory.updateConfig({ apiUrl: e.target.value })} placeholder="https://api.example.com/v1/embeddings" className="w-full px-2.5 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors" />
+                    <input type="text" value={memory.config.apiUrl} onChange={e => memory.updateConfig({ apiUrl: e.target.value })} placeholder="https://api.example.com/v1/embeddings" className="w-full px-2.5 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[rgba(255,255,255,0.2)] transition-colors" />
                   </div>
                   <div>
                     <label className="block text-[0.625rem] font-medium text-[#999999] mb-1">API key (opcional)</label>
-                    <input type="password" value={memory.config.apiKey} onChange={e => memory.updateConfig({ apiKey: e.target.value })} className="w-full px-2.5 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors" />
+                    <input type="password" value={memory.config.apiKey} onChange={e => memory.updateConfig({ apiKey: e.target.value })} className="w-full px-2.5 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[rgba(255,255,255,0.2)] transition-colors" />
                   </div>
                 </>
               )}
             </div>
           </Section>
 
-          <Section title="Parámetros" color="#DCB263">
+          <Section title="Parámetros">
             <div className="grid grid-cols-2 gap-2.5">
               <div className="p-2.5 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)]">
                 <label className="block text-[0.55rem] text-[#999999] mb-1">Top K</label>
-                <input type="number" min="1" max="20" value={memory.config.topK} onChange={e => memory.updateConfig({ topK: parseInt(e.target.value) || 5 })} className="w-full px-2 py-1 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.7rem] text-white font-mono outline-none focus:border-[#DCB263] transition-colors" />
+                <input type="number" min="1" max="20" value={memory.config.topK} onChange={e => memory.updateConfig({ topK: parseInt(e.target.value) || 5 })} className="w-full px-2 py-1 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.7rem] text-white font-mono outline-none focus:border-[rgba(255,255,255,0.2)] transition-colors" />
                 <p className="text-[0.5rem] text-[#666666] mt-1">Chunks inyectados</p>
               </div>
               <div className="p-2.5 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)]">
                 <label className="block text-[0.55rem] text-[#999999] mb-1">Score mínimo</label>
-                <input type="number" min="0" max="1" step="0.05" value={memory.config.minScore} onChange={e => memory.updateConfig({ minScore: parseFloat(e.target.value) || 0.7 })} className="w-full px-2 py-1 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.7rem] text-white font-mono outline-none focus:border-[#DCB263] transition-colors" />
+                <input type="number" min="0" max="1" step="0.05" value={memory.config.minScore} onChange={e => memory.updateConfig({ minScore: parseFloat(e.target.value) || 0.7 })} className="w-full px-2 py-1 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.7rem] text-white font-mono outline-none focus:border-[rgba(255,255,255,0.2)] transition-colors" />
                 <p className="text-[0.5rem] text-[#666666] mt-1">Umbral de relevancia</p>
               </div>
               <div className="p-2.5 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)]">
                 <label className="block text-[0.55rem] text-[#999999] mb-1">Peso recencia</label>
-                <input type="number" min="0" max="1" step="0.05" value={memory.config.recencyWeight} onChange={e => memory.updateConfig({ recencyWeight: parseFloat(e.target.value) || 0.3 })} className="w-full px-2 py-1 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.7rem] text-white font-mono outline-none focus:border-[#DCB263] transition-colors" />
+                <input type="number" min="0" max="1" step="0.05" value={memory.config.recencyWeight} onChange={e => memory.updateConfig({ recencyWeight: parseFloat(e.target.value) || 0.3 })} className="w-full px-2 py-1 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.7rem] text-white font-mono outline-none focus:border-[rgba(255,255,255,0.2)] transition-colors" />
                 <p className="text-[0.5rem] text-[#666666] mt-1">0 = solo similitud, 1 = solo recencia</p>
               </div>
             </div>
           </Section>
 
-          <Section title="Comportamiento" color="#00E5C9">
+          <Section title="Comportamiento">
             <div className="space-y-1.5">
               <ToggleRow label="Inyección automática" desc="Buscar e inyectar contexto en cada mensaje" checked={memory.config.autoInject} onChange={v => memory.updateConfig({ autoInject: v })} />
               <ToggleRow label="Indexar conversaciones" desc="Guardar mensajes de chat al finalizar" checked={memory.config.indexConversations} onChange={v => memory.updateConfig({ indexConversations: v })} />
@@ -1060,23 +1056,23 @@ function MemoryTab() {
           </Section>
 
           {memory.stats && (
-            <Section title="Estadísticas" color="#DCB263">
+            <Section title="Estadísticas">
               <div className="grid grid-cols-3 gap-2">
                 <StatCard value={memory.stats.total_chunks} label="chunks" />
                 <StatCard value={memory.stats.total_conversations} label="conversaciones" />
                 <StatCard value={memory.stats.total_project_files} label="archivos" />
               </div>
-              <div className="px-3 py-2 rounded-lg bg-[rgba(0,229,201,0.04)] border border-[rgba(0,229,201,0.1)] flex items-center gap-1.5">
+              <div className="px-3 py-2 rounded-lg bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.08)] flex items-center gap-1.5">
                 <FileIcon />
-                <span className="text-[0.55rem] text-[#00E5C9] font-mono truncate">{memory.stats.db_path}</span>
+                <span className="text-[0.55rem] text-[#E5E5E5] font-mono truncate">{memory.stats.db_path}</span>
               </div>
             </Section>
           )}
 
-          <Section title="Probar búsqueda" color="#DCB263">
+          <Section title="Probar búsqueda">
             <div className="p-3 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] space-y-3">
               <div className="flex gap-2">
-                <input value={testQuery} onChange={e => setTestQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleTest()} placeholder="Escribe una consulta para buscar en memoria..." className="flex-1 px-3 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors" />
+                <input value={testQuery} onChange={e => setTestQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleTest()} placeholder="Escribe una consulta para buscar en memoria..." className="flex-1 px-3 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[rgba(255,255,255,0.2)] transition-colors" />
                 <ActionButton variant="primary" onClick={handleTest} disabled={testing || !testQuery.trim()}>
                   {testing && <Spinner />}
                   {testing ? 'Buscando...' : 'Buscar'}
@@ -1091,7 +1087,7 @@ function MemoryTab() {
                         <div className="flex items-center justify-between mb-1.5">
                           <div className="flex items-center gap-2">
                             <span className="text-[0.55rem] font-mono px-1.5 py-0.5 rounded bg-[rgba(255,255,255,0.04)] text-white border border-[rgba(255,255,255,0.06)]">{(1 - r.distance).toFixed(3)}</span>
-                            <span className={`text-[0.5rem] px-1.5 py-0.5 rounded-full border ${r.chunk.source === 'conversation' ? 'bg-[rgba(220,178,99,0.08)] text-[#DCB263] border-[rgba(220,178,99,0.2)]' : 'bg-[rgba(0,229,201,0.08)] text-[#00E5C9] border-[rgba(0,229,201,0.2)]'}`}>{r.chunk.source}</span>
+                            <span className={`text-[0.5rem] px-1.5 py-0.5 rounded-full border bg-[rgba(255,255,255,0.04)] text-[#E5E5E5] border-[rgba(255,255,255,0.08)]`}>{r.chunk.source}</span>
                           </div>
                           <span className="text-[0.5rem] text-[#666666] truncate max-w-[40%] font-mono">{r.chunk.source_id.split('/').pop()}</span>
                         </div>
@@ -1105,7 +1101,7 @@ function MemoryTab() {
             </div>
           </Section>
 
-          <Section title="Indexar proyecto" color="#00E5C9">
+          <Section title="Indexar proyecto">
             <div className="p-3 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] space-y-3">
               <p className="text-[0.6rem] text-[#999999] leading-relaxed">Escanea el directorio de trabajo del agente e indexa archivos compatibles en la memoria vectorial. Extensiones por defecto: .md, .txt, .ts, .tsx, .rs, .py, .json, .yaml, .toml</p>
               <ActionButton variant="primary" onClick={handleIndexProject} disabled={indexingProject || (memory.indexProgress?.phase === 'indexing')}>
@@ -1119,20 +1115,20 @@ function MemoryTab() {
                     <span>{memory.indexProgress.current} / {memory.indexProgress.total}</span>
                   </div>
                   <div className="w-full h-1 rounded-full bg-[rgba(255,255,255,0.06)] overflow-hidden">
-                    <div className="h-full rounded-full bg-[#00E5C9] transition-all duration-200" style={{ width: `${(memory.indexProgress.current / memory.indexProgress.total) * 100}%` }} />
+                    <div className="h-full rounded-full bg-[#999999] transition-all duration-200" style={{ width: `${(memory.indexProgress.current / memory.indexProgress.total) * 100}%` }} />
                   </div>
                 </div>
               )}
               {lastIndexedCount !== null && memory.indexProgress?.phase !== 'indexing' && (
-                <div className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg bg-[rgba(0,229,201,0.06)] border border-[rgba(0,229,201,0.12)]">
+                <div className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.08)]">
                   <CheckIcon />
-                  <span className="text-[0.6rem] text-[#00E5C9]">{lastIndexedCount} chunk{lastIndexedCount !== 1 ? 's' : ''} indexado{lastIndexedCount !== 1 ? 's' : ''}</span>
+                  <span className="text-[0.6rem] text-[#E5E5E5]">{lastIndexedCount} chunk{lastIndexedCount !== 1 ? 's' : ''} indexado{lastIndexedCount !== 1 ? 's' : ''}</span>
                 </div>
               )}
             </div>
           </Section>
 
-          <Section title="Zona de peligro" color="#ef4444">
+          <Section title="Zona de peligro">
             <div className="p-3 rounded-xl bg-[rgba(239,68,68,0.04)] border border-[rgba(239,68,68,0.12)] space-y-3">
               <div className="flex items-start gap-2.5">
                 <div className="w-7 h-7 rounded-lg bg-[rgba(239,68,68,0.1)] border border-[rgba(239,68,68,0.2)] flex items-center justify-center shrink-0">
@@ -1317,7 +1313,7 @@ function McpTab() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3 text-[0.6rem] text-[#999999]">
           <span className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#00E5C9]" />
+            <span className="w-1.5 h-1.5 rounded-full bg-[#999999]" />
             {runningCount}/{servers.length} conectado(s)
           </span>
           <span className="text-[#555555]">·</span>
@@ -1340,7 +1336,7 @@ function McpTab() {
       ) : (
         <div className="space-y-2">
           {editingIdx !== null && (
-            <div className="p-3 rounded-xl bg-[#2A2A2A] border border-[rgba(0,229,201,0.2)] space-y-3">
+            <div className="p-3 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.08)] space-y-3">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-[0.65rem] font-semibold text-white uppercase tracking-wider">
                   {editingIdx < 0 ? 'Nuevo servidor MCP' : 'Editar servidor MCP'}
@@ -1353,7 +1349,7 @@ function McpTab() {
                   value={editName}
                   onChange={e => setEditName(e.target.value)}
                   placeholder="filesystem, github, postgres..."
-                  className="w-full px-3 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors"
+                  className="w-full px-3 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[rgba(255,255,255,0.2)] transition-colors"
                 />
               </div>
               <div>
@@ -1362,7 +1358,7 @@ function McpTab() {
                   value={editCommand}
                   onChange={e => setEditCommand(e.target.value)}
                   placeholder="npx · python · /ruta/al/server"
-                  className="w-full px-3 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors font-mono"
+                  className="w-full px-3 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[rgba(255,255,255,0.2)] transition-colors font-mono"
                 />
               </div>
               <div>
@@ -1371,7 +1367,7 @@ function McpTab() {
                   value={editArgs}
                   onChange={e => setEditArgs(e.target.value)}
                   placeholder="-y @modelcontextprotocol/server-filesystem /path"
-                  className="w-full px-3 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors font-mono"
+                  className="w-full px-3 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[rgba(255,255,255,0.2)] transition-colors font-mono"
                 />
               </div>
               <div className="flex items-center justify-between p-2.5 rounded-lg bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.04)]">
@@ -1411,10 +1407,10 @@ function McpTab() {
                 <div className="flex items-start gap-3">
                   <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
                     running
-                      ? 'bg-[rgba(0,229,201,0.08)] border border-[rgba(0,229,201,0.2)]'
+                      ? 'bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)]'
                       : 'bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.06)]'
                   }`}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={running ? '#00E5C9' : '#666666'} strokeWidth="1.5">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={running ? '#999999' : '#666666'} strokeWidth="1.5">
                       <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
                     </svg>
                   </div>
@@ -1423,7 +1419,7 @@ function McpTab() {
                       <span className="text-[0.7rem] font-semibold text-white">{s.name}</span>
                       <span className={`text-[0.5rem] px-1.5 py-0.5 rounded-full border font-medium uppercase tracking-wide ${
                         running
-                          ? 'bg-[rgba(0,229,201,0.08)] text-[#00E5C9] border-[rgba(0,229,201,0.25)]'
+                          ? 'bg-[rgba(255,255,255,0.06)] text-[#E5E5E5] border-[rgba(255,255,255,0.08)]'
                           : s.enabled
                             ? 'bg-[rgba(255,255,255,0.04)] text-[#999999] border-[rgba(255,255,255,0.08)]'
                             : 'bg-[rgba(255,255,255,0.02)] text-[#666666] border-[rgba(255,255,255,0.04)]'
@@ -1437,7 +1433,7 @@ function McpTab() {
                     {serverTools.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-1">
                         {serverTools.map(t => (
-                          <span key={t.name} className="text-[0.5rem] px-1.5 py-0.5 rounded-md bg-[rgba(0,229,201,0.06)] text-[#00E5C9] border border-[rgba(0,229,201,0.15)] font-mono" title={t.description}>
+                          <span key={t.name} className="text-[0.5rem] px-1.5 py-0.5 rounded-md bg-[rgba(255,255,255,0.04)] text-[#E5E5E5] border border-[rgba(255,255,255,0.08)] font-mono" title={t.description}>
                             {t.name}
                           </span>
                         ))}
@@ -1475,17 +1471,17 @@ function McpTab() {
 function Switch({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
     <button type="button" onClick={() => onChange(!checked)}
-      className={`relative w-10 h-5 rounded-full shrink-0 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#00E5C9]/30 ${checked ? 'bg-[#00E5C9]' : 'bg-[#666666]/40'}`}>
+      className={`relative w-10 h-5 rounded-full shrink-0 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[rgba(255,255,255,0.15)] ${checked ? 'bg-[#666666]' : 'bg-[#666666]/40'}`}>
       <div className={`absolute top-[2px] w-4 h-4 rounded-full bg-white shadow transition-all ${checked ? 'left-[18px]' : 'left-[2px]'}`} />
     </button>
   )
 }
 
-function Section({ title, color, children }: { title: string; color: string; children: React.ReactNode }) {
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <span className="w-1 h-3.5 rounded-full" style={{ backgroundColor: color }} />
+        <span className="w-1 h-3.5 rounded-full bg-[#666666]" />
         <h4 className="text-[0.65rem] font-semibold text-[#E5E5E5] uppercase tracking-[0.06em]">{title}</h4>
       </div>
       {children}
@@ -1497,7 +1493,7 @@ function SectionHeader({ icon, title, desc, badge, badgeColor }: { icon?: React.
   return (
     <div className="flex items-start gap-2.5">
       {icon && (
-        <div className="w-8 h-8 rounded-lg bg-[#00E5C9]/10 border border-[#00E5C9]/15 flex items-center justify-center shrink-0">
+        <div className="w-8 h-8 rounded-lg bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] flex items-center justify-center shrink-0">
           {icon}
         </div>
       )}
@@ -1507,7 +1503,7 @@ function SectionHeader({ icon, title, desc, badge, badgeColor }: { icon?: React.
           {badge && (
             <span className={`text-[0.5rem] px-1.5 py-0.5 rounded-full border font-medium uppercase tracking-wide ${
               badgeColor === '#00E5C9'
-                ? 'bg-[rgba(0,229,201,0.08)] text-[#00E5C9] border-[rgba(0,229,201,0.25)]'
+                ? 'bg-[rgba(255,255,255,0.06)] text-[#E5E5E5] border-[rgba(255,255,255,0.08)]'
                 : 'bg-[rgba(255,255,255,0.04)] text-[#999999] border-[rgba(255,255,255,0.08)]'
             }`}>{badge}</span>
           )}
@@ -1533,22 +1529,22 @@ function ToggleRow({ label, desc, checked, onChange }: { label: string; desc: st
 function StatCard({ value, label }: { value: number; label: string }) {
   return (
     <div className="p-2.5 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] text-center">
-      <div className="text-[0.9rem] text-[#00E5C9] font-mono font-bold">{value}</div>
+      <div className="text-[0.9rem] text-[#E5E5E5] font-mono font-bold">{value}</div>
       <div className="text-[0.55rem] text-[#999999] mt-0.5">{label}</div>
     </div>
   )
 }
 
-function SliderControl({ label, value, min, max, step, onChange, descLeft, descRight, color }: {
+function SliderControl({ label, value, min, max, step, onChange, descLeft, descRight }: {
   label: string; value: number; min: number; max: number; step: number; onChange: (v: number) => void;
-  descLeft: string; descRight: string; color: string
+  descLeft: string; descRight: string
 }) {
   const pct = ((value - min) / (max - min)) * 100
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
         <label className="text-[0.625rem] font-medium text-[#999999]">{label}</label>
-        <span className="text-[0.65rem] font-mono font-bold" style={{ color }}>{value}</span>
+        <span className="text-[0.65rem] font-mono font-bold text-[#E5E5E5]">{value}</span>
       </div>
       <div className="relative">
         <input
@@ -1556,7 +1552,7 @@ function SliderControl({ label, value, min, max, step, onChange, descLeft, descR
           onChange={e => onChange(Number(e.target.value))}
           className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
           style={{
-            background: `linear-gradient(to right, ${color} ${pct}%, rgba(255,255,255,0.06) ${pct}%)`
+            background: `linear-gradient(to right, rgba(255,255,255,0.35) ${pct}%, rgba(255,255,255,0.06) ${pct}%)`
           }}
         />
       </div>
@@ -1576,7 +1572,7 @@ function ActionButton({ variant, small, onClick, disabled, children }: {
   children: React.ReactNode
 }) {
   const styles = {
-    primary: 'bg-[#00E5C9]/10 border-[#00E5C9]/25 text-[#00E5C9] hover:bg-[#00E5C9]/20 hover:border-[#00E5C9]/40',
+    primary: 'bg-[#2A2A2A] border-[rgba(255,255,255,0.08)] text-[#E5E5E5] hover:border-[rgba(255,255,255,0.15)] hover:bg-[#333]',
     secondary: 'bg-[#2A2A2A] border-[rgba(255,255,255,0.08)] text-[#E5E5E5] hover:border-[rgba(255,255,255,0.15)] hover:bg-[#333]',
     danger: 'bg-[rgba(239,68,68,0.1)] border-[rgba(239,68,68,0.3)] text-[#ef4444] hover:bg-[rgba(239,68,68,0.18)] hover:border-[rgba(239,68,68,0.5)]',
     ghost: 'bg-transparent border-[rgba(255,255,255,0.06)] text-[#999999] hover:text-white hover:border-[rgba(255,255,255,0.12)]'
@@ -1599,7 +1595,7 @@ function ErrorToast({ msg }: { msg: string }) {
 }
 
 function ProviderStatusDot({ configured, active }: { configured: boolean; active: boolean }) {
-  return <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${configured ? 'bg-[#00E5C9]' : active ? 'bg-[#666666]' : 'bg-[#444]'}`} />
+  return <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${configured ? 'bg-[#999999]' : active ? 'bg-[#666666]' : 'bg-[#444]'}`} />
 }
 
 function SkillRow({ skill, onToggle, alwaysEnabled }: { skill: { name: string; description: string; enabled: boolean; path: string; source: string }; onToggle?: (name: string, enabled: boolean) => void; alwaysEnabled?: boolean }) {
@@ -1607,9 +1603,9 @@ function SkillRow({ skill, onToggle, alwaysEnabled }: { skill: { name: string; d
     <div className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] hover:border-[rgba(255,255,255,0.1)] transition-colors">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className={`w-1.5 h-1.5 rounded-full ${skill.enabled ? 'bg-[#00E5C9]' : 'bg-[#666666]'}`} />
+          <span className={`w-1.5 h-1.5 rounded-full ${skill.enabled ? 'bg-[#999999]' : 'bg-[#666666]'}`} />
           <span className="text-[0.75rem] font-medium text-white truncate">{skill.name}</span>
-          {alwaysEnabled && <span className="text-[0.45rem] px-1 py-0.5 rounded bg-[rgba(220,178,99,0.1)] text-[#DCB263] uppercase tracking-[0.05em]">Proyecto</span>}
+          {alwaysEnabled && <span className="text-[0.45rem] px-1 py-0.5 rounded bg-[rgba(255,255,255,0.06)] text-[#E5E5E5] uppercase tracking-[0.05em]">Proyecto</span>}
         </div>
         {skill.description && <div className="text-[0.6rem] text-[#999999] mt-0.5 line-clamp-2">{skill.description}</div>}
       </div>
@@ -1675,13 +1671,13 @@ function ModelManager() {
       </div>
       <div className="flex gap-2">
         <input value={pullName} onChange={e => setPullName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handlePull()} placeholder="Ej: qwen3.5, llama3.2..." disabled={pulling}
-          className="flex-1 px-3 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors disabled:opacity-50" />
+          className="flex-1 px-3 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[rgba(255,255,255,0.2)] transition-colors disabled:opacity-50" />
         <ActionButton variant="primary" onClick={handlePull} disabled={pulling || !pullName.trim()}>
           {pulling && <Spinner />}
           {pulling ? 'Descargando...' : 'Descargar'}
         </ActionButton>
       </div>
-      {message && <div className={`text-[0.6rem] ${message.startsWith('Error') ? 'text-[#ef4444]' : 'text-[#00E5C9]'}`}>{message}</div>}
+      {message && <div className={`text-[0.6rem] ${message.startsWith('Error') ? 'text-[#ef4444]' : 'text-[#E5E5E5]'}`}>{message}</div>}
     </div>
   )
 }
@@ -1868,7 +1864,7 @@ function CookbookTab({ lang }: { lang: Lang }) {
   return (
     <div className="space-y-5">
       <SectionHeader
-        icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00E5C9" strokeWidth="1.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>}
+        icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#E5E5E5" strokeWidth="1.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>}
         title={t('cookbook.title', lang)}
         desc={lang === 'es' 
           ? 'Descubre, descarga y sirve modelos GGUF optimizados para tu hardware. Integración directa con Ollama.'
@@ -1878,13 +1874,13 @@ function CookbookTab({ lang }: { lang: Lang }) {
       {actionMessage && (
         <div className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg border ${
           actionMessage.type === 'success' 
-            ? 'bg-[rgba(0,229,201,0.06)] border-[rgba(0,229,201,0.15)]' 
+            ? 'bg-[rgba(255,255,255,0.02)] border-[rgba(255,255,255,0.08)]' 
             : 'bg-[rgba(239,68,68,0.06)] border-[rgba(239,68,68,0.15)]'
         }`}>
           {actionMessage.type === 'success' ? <CheckIcon /> : (
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
           )}
-          <span className={`text-[0.6rem] ${actionMessage.type === 'success' ? 'text-[#00E5C9]' : 'text-[#ef4444]'}`}>
+          <span className={`text-[0.6rem] ${actionMessage.type === 'success' ? 'text-[#E5E5E5]' : 'text-[#ef4444]'}`}>
             {actionMessage.text}
           </span>
         </div>
@@ -1914,7 +1910,7 @@ function CookbookTab({ lang }: { lang: Lang }) {
               <div className="text-[0.5rem] text-[#999999]">{t('cookbook.gpu', lang)}</div>
               {hw.gpus.length > 0 ? (
                 <>
-                  <div className="text-[0.65rem] text-[#00E5C9] font-mono mt-0.5">{hw.gpus[0].vramGb > 0 ? `${hw.gpus[0].vramGb.toFixed(1)} GB` : 'N/A'}</div>
+                  <div className="text-[0.65rem] text-[#E5E5E5] font-mono mt-0.5">{hw.gpus[0].vramGb > 0 ? `${hw.gpus[0].vramGb.toFixed(1)} GB` : 'N/A'}</div>
                   <div className="text-[0.45rem] text-[#666666] truncate">{hw.gpus[0].name.slice(0, 18)}</div>
                 </>
               ) : (
@@ -1938,9 +1934,9 @@ function CookbookTab({ lang }: { lang: Lang }) {
 
       {/* Download progress */}
       {downloadingId && downloadProgress && (
-        <div className="p-3 rounded-xl bg-[rgba(0,229,201,0.04)] border border-[rgba(0,229,201,0.12)] space-y-2">
+        <div className="p-3 rounded-xl bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.08)] space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-[0.6rem] text-[#00E5C9] font-medium">
+            <span className="text-[0.6rem] text-[#E5E5E5] font-medium">
               {t('cookbook.downloading', lang)}: {catalog.find(m => m.id === downloadingId)?.name || downloadingId}
             </span>
             <button onClick={handleCancelDownload} className="text-[0.55rem] text-[#999999] hover:text-white transition-colors">
@@ -1949,7 +1945,7 @@ function CookbookTab({ lang }: { lang: Lang }) {
           </div>
           <div className="w-full h-1.5 rounded-full bg-[rgba(255,255,255,0.06)] overflow-hidden">
             <div
-              className="h-full rounded-full bg-[#00E5C9] transition-all duration-300"
+              className="h-full rounded-full bg-[#999999] transition-all duration-300"
               style={{ width: `${downloadProgress.total > 0 ? (downloadProgress.downloaded / downloadProgress.total) * 100 : 0}%` }}
             />
           </div>
@@ -1967,18 +1963,18 @@ function CookbookTab({ lang }: { lang: Lang }) {
 
       {/* Downloaded models */}
       {downloaded.length > 0 && (
-        <Section title={t('cookbook.downloaded_models', lang)} color="#DCB263">
+        <Section title={t('cookbook.downloaded_models', lang)}>
           <div className="space-y-1.5">
             {downloaded.map(m => (
               <div key={m.id} className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)]">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className={`w-1.5 h-1.5 rounded-full ${m.status === 'serving' ? 'bg-[#00E5C9]' : 'bg-[#DCB263]'}`} />
+                    <span className={`w-1.5 h-1.5 rounded-full ${m.status === 'serving' ? 'bg-[#999999]' : 'bg-[#666666]'}`} />
                     <span className="text-[0.7rem] font-medium text-white truncate">{m.name}</span>
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
                     <span className="text-[0.5rem] text-[#999999]">{formatBytes(m.sizeBytes)}</span>
-                    {m.ollamaModel && <span className="text-[0.5rem] text-[#00E5C9] font-mono">ollama:{m.ollamaModel}</span>}
+                    {m.ollamaModel && <span className="text-[0.5rem] text-[#E5E5E5] font-mono">ollama:{m.ollamaModel}</span>}
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5">
@@ -1999,7 +1995,7 @@ function CookbookTab({ lang }: { lang: Lang }) {
       )}
 
       {/* Model catalog filters */}
-      <Section title={t('cookbook.catalog', lang)} color="#00E5C9">
+      <Section title={t('cookbook.catalog', lang)}>
         <div className="space-y-3">
           <div className="flex gap-2">
             <div className="flex-1 relative">
@@ -2007,7 +2003,7 @@ function CookbookTab({ lang }: { lang: Lang }) {
                 value={filter}
                 onChange={e => setFilter(e.target.value)}
                 placeholder={t('cookbook.search_models', lang)}
-                className="w-full pl-8 pr-3 py-2 rounded-lg bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors"
+                className="w-full pl-8 pr-3 py-2 rounded-lg bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[rgba(255,255,255,0.2)] transition-colors"
               />
               <svg className="absolute left-2.5 top-1/2 -translate-y-1/2" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#666666" strokeWidth="2">
                 <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -2016,7 +2012,7 @@ function CookbookTab({ lang }: { lang: Lang }) {
             <select
               value={categoryFilter || ''}
               onChange={e => setCategoryFilter(e.target.value || null)}
-              className="px-2.5 py-2 rounded-lg bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] text-[0.6rem] text-white outline-none focus:border-[#DCB263] transition-colors appearance-none cursor-pointer"
+              className="px-2.5 py-2 rounded-lg bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] text-[0.6rem] text-white outline-none focus:border-[rgba(255,255,255,0.2)] transition-colors appearance-none cursor-pointer"
             >
               <option value="">Todos</option>
               <option value="chat">Chat</option>
@@ -2046,13 +2042,13 @@ function CookbookTab({ lang }: { lang: Lang }) {
                           <span className="text-[0.7rem] font-semibold text-white">{m.name}</span>
                           <span className="text-[0.5rem] px-1.5 py-0.5 rounded-full bg-[rgba(255,255,255,0.04)] text-[#999999] border border-[rgba(255,255,255,0.06)]">{m.quantization}</span>
                           {m.tags.includes('recommended') && (
-                            <span className="flex items-center gap-1 text-[0.5rem] px-1.5 py-0.5 rounded-full bg-[rgba(0,229,201,0.08)] text-[#00E5C9] border border-[rgba(0,229,201,0.15)]"><StarIcon size={10} color="#00E5C9" />{t('cookbook.recommended', lang)}</span>
+                            <span className="flex items-center gap-1 text-[0.5rem] px-1.5 py-0.5 rounded-full bg-[rgba(255,255,255,0.06)] text-[#E5E5E5] border border-[rgba(255,255,255,0.08)]"><StarIcon size={10} color="#999999" />{t('cookbook.recommended', lang)}</span>
                           )}
                           {m.vramRequiredGb <= 0.5 && (
-                            <span className="text-[0.5rem] px-1.5 py-0.5 rounded-full bg-[rgba(220,178,99,0.08)] text-[#DCB263] border border-[rgba(220,178,99,0.15)]">CPU</span>
+                            <span className="text-[0.5rem] px-1.5 py-0.5 rounded-full bg-[rgba(255,255,255,0.04)] text-[#999999] border border-[rgba(255,255,255,0.08)]">CPU</span>
                           )}
                           {dledStatus === 'serving' && (
-                            <span className="text-[0.5rem] px-1.5 py-0.5 rounded-full bg-[rgba(0,229,201,0.08)] text-[#00E5C9] border border-[rgba(0,229,201,0.25)] uppercase tracking-wide">{t('cookbook.serving', lang)}</span>
+                            <span className="text-[0.5rem] px-1.5 py-0.5 rounded-full bg-[rgba(255,255,255,0.06)] text-[#E5E5E5] border border-[rgba(255,255,255,0.08)] uppercase tracking-wide">{t('cookbook.serving', lang)}</span>
                           )}
                         </div>
                         <div className="text-[0.6rem] text-[#999999] mt-1 leading-relaxed line-clamp-2">
@@ -2061,7 +2057,7 @@ function CookbookTab({ lang }: { lang: Lang }) {
                         <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                           <span className="text-[0.5rem] text-[#666666]">{formatSize(m.sizeGb)}</span>
                           <span className="text-[#444]">·</span>
-                          <span className={`text-[0.5rem] ${willRun ? 'text-[#00E5C9]' : 'text-[rgba(239,68,68,0.6)]'}`}>{t('cookbook.vram_req', lang)}: {formatSize(m.vramRequiredGb)}</span>
+                          <span className={`text-[0.5rem] ${willRun ? 'text-[#E5E5E5]' : 'text-[rgba(239,68,68,0.6)]'}`}>{t('cookbook.vram_req', lang)}: {formatSize(m.vramRequiredGb)}</span>
                           <span className="text-[#444]">·</span>
                           <span className="text-[0.5rem] text-[#666666]">{((m.contextWindow / 1024) as number).toFixed(0)}K {t('cookbook.ctx', lang)}</span>
                           {m.hfRepo && <><span className="text-[#444]">·</span><span className="text-[0.5rem] text-[#666666]">{m.license}</span></>}
@@ -2076,7 +2072,7 @@ function CookbookTab({ lang }: { lang: Lang }) {
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
                         {dledStatus === 'serving' ? (
-                          <span className="px-2 py-1.5 rounded-lg bg-[rgba(0,229,201,0.08)] border border-[rgba(0,229,201,0.15)] text-[#00E5C9] text-[0.55rem] font-medium">{t('cookbook.serving', lang)}</span>
+                          <span className="px-2 py-1.5 rounded-lg bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.08)] text-[#E5E5E5] text-[0.55rem] font-medium">{t('cookbook.serving', lang)}</span>
                         ) : dled ? (
                           <ActionButton variant="ghost" small onClick={() => handleServe(m.id)} disabled={loadingOllama === m.id}>
                             {loadingOllama === m.id ? <Spinner /> : null}
@@ -2142,7 +2138,7 @@ function ToolIcon({ name, color }: { name: string; color: string }) {
 }
 
 function TabIcon({ name, active }: { name: string; active: boolean }) {
-  const c = active ? '#00E5C9' : '#999999'
+  const c = active ? '#E5E5E5' : '#999999'
   const icons: Record<string, React.ReactNode> = {
     general: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
     providers: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>,
@@ -2163,7 +2159,7 @@ function TrashIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fi
 function ExportIcon() { return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> }
 function ImportIcon() { return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> }
 function RefreshIcon() { return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> }
-function CheckIcon() { return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#00E5C9" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg> }
+function CheckIcon() { return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#999999" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg> }
 function SearchSmallIcon() { return <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#999999" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> }
-function FileIcon() { return <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#00E5C9" strokeWidth="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg> }
+function FileIcon() { return <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#999999" strokeWidth="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg> }
 function Spinner() { return <svg className="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> }

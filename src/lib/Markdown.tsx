@@ -189,7 +189,7 @@ function Pre({ children }: any) {
 function Blockquote({ children, ...props }: any) {
   return (
     <blockquote
-      className="relative pl-8 pr-3 py-2 my-3 text-[0.8125rem] text-[#b0b0b0] border-l-2 border-[#00E5C9] bg-[rgba(0,229,201,0.03)] rounded-r-lg"
+      className="relative pl-8 pr-3 py-2 my-3 text-[0.8125rem] text-[#b0b0b0] border-l-2 border-[rgba(255,255,255,0.08)] bg-[rgba(0,229,201,0.03)] rounded-r-lg"
       style={{ fontWeight: 300 }}
       {...props}
     >
@@ -236,7 +236,7 @@ function Input({ checked }: { checked?: boolean }) {
     <span
       className={`inline-flex items-center justify-center w-3.5 h-3.5 rounded border mr-2 align-middle ${
         checked
-          ? 'bg-[#00E5C9] border-[#00E5C9]'
+          ? 'bg-[#00E5C9] border-[rgba(255,255,255,0.08)]'
           : 'bg-transparent border-[rgba(255,255,255,0.25)]'
       }`}
     >
@@ -255,7 +255,7 @@ function Input({ checked }: { checked?: boolean }) {
 function H1({ children, ...props }: any) {
   return (
     <h1
-      className="text-[1.25rem] font-medium text-[#DCB263] mt-6 mb-3 pb-1 border-b border-[rgba(220,178,99,0.15)]"
+      className="text-[1.25rem] font-medium text-[#DCB263] mt-6 mb-3 pb-1 border-b border-[rgba(255,255,255,0.08)]"
       style={{ letterSpacing: '0.01em', lineHeight: '1.3' }}
       {...props}
     >
@@ -351,7 +351,7 @@ function Em({ children, ...props }: any) {
     }
     const clean = text.slice(2)
     const isFetch = clean.startsWith('fetch_url')
-    const borderColor = isFetch ? 'rgba(0,229,201,0.15)' : 'rgba(220,178,99,0.2)'
+    const borderColor = isFetch ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.06)'
     const bgColor = isFetch ? 'rgba(0,229,201,0.03)' : 'rgba(220,178,99,0.03)'
     const textColor = isFetch ? '#00E5C9' : '#DCB263'
     return (

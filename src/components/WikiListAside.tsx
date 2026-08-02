@@ -12,6 +12,7 @@ interface WikiListAsideProps {
   activePath?: string | null
   onSelectFile: (file: WikiFile) => void
   onClose?: () => void
+  open?: boolean
 }
 
 function formatSize(bytes: number): string {
@@ -50,7 +51,7 @@ function WikiFileRow({ file, active, onClick }: { file: WikiFile; active: boolea
       onClick={onClick}
       className={`flex items-center justify-between gap-2 px-2.5 py-1.5 mx-1 rounded-lg cursor-pointer transition-all text-[0.7rem] ${
         active
-          ? 'bg-[rgba(0,229,201,0.08)] text-white border border-[rgba(0,229,201,0.15)]'
+          ? 'bg-[rgba(0,229,201,0.08)] text-white border border-[rgba(255,255,255,0.08)]'
           : 'text-[#999999] hover:bg-[rgba(255,255,255,0.04)] hover:text-white border border-transparent'
       }`}
       title={file.path}
@@ -64,7 +65,7 @@ function WikiFileRow({ file, active, onClick }: { file: WikiFile; active: boolea
   )
 }
 
-export default function WikiListAside({ workingDirectory, activePath, onSelectFile, onClose }: WikiListAsideProps) {
+export default function WikiListAside({ workingDirectory, activePath, onSelectFile, onClose, open = true }: WikiListAsideProps) {
   const [files, setFiles] = useState<WikiFile[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -93,7 +94,12 @@ export default function WikiListAside({ workingDirectory, activePath, onSelectFi
   const dirName = workingDirectory ? workingDirectory.split('/').filter(Boolean).pop() || workingDirectory : ''
 
   return (
-    <div className="flex flex-col bg-[#1A1A1A] border-r border-[rgba(255,255,255,0.04)] w-[320px] shrink-0 overflow-hidden">
+    <div
+      className="flex bg-[#1A1A1A] border-r border-[rgba(255,255,255,0.04)] shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out"
+      style={{ width: open ? 320 : 0 }}
+      aria-hidden={!open}
+    >
+      <div className="flex flex-col w-[320px] shrink-0 min-h-0 h-full">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3.5 min-h-[52px] border-b border-[rgba(255,255,255,0.04)]">
         {onClose && (
@@ -107,7 +113,7 @@ export default function WikiListAside({ workingDirectory, activePath, onSelectFi
             </svg>
           </button>
         )}
-        <div className="w-8 h-8 rounded-lg bg-[#00E5C9]/10 border border-[#00E5C9]/20 flex items-center justify-center">
+        <div className="w-8 h-8 rounded-lg bg-[rgba(0,229,201,0.08)] border border-[rgba(255,255,255,0.08)] flex items-center justify-center">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00E5C9" strokeWidth="1.5">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
             <polyline points="14 2 14 8 20 8"/>
@@ -123,7 +129,7 @@ export default function WikiListAside({ workingDirectory, activePath, onSelectFi
         </div>
         <button
           onClick={load}
-          className="flex items-center justify-center w-8 h-8 rounded-lg bg-[rgba(0,229,201,0.08)] border border-[rgba(0,229,201,0.15)] text-[#00E5C9] hover:bg-[rgba(0,229,201,0.15)] hover:text-white transition-all"
+          className="flex items-center justify-center w-8 h-8 rounded-lg bg-[rgba(0,229,201,0.08)] border border-[rgba(255,255,255,0.08)] text-[#00E5C9] hover:bg-[rgba(0,229,201,0.15)] hover:text-white transition-all"
           title="Recargar"
         >
           {loading ? <Spinner /> : (
@@ -137,7 +143,7 @@ export default function WikiListAside({ workingDirectory, activePath, onSelectFi
 
       {/* Search */}
       <div className="px-3 py-2.5 border-b border-[rgba(255,255,255,0.04)]">
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#1C1B1B] border border-[rgba(255,255,255,0.06)] focus-within:border-[rgba(0,229,201,0.2)] transition-colors">
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#1C1B1B] border border-[rgba(255,255,255,0.06)] focus-within:border-[rgba(255,255,255,0.08)] transition-colors">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#666666" strokeWidth="2">
             <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
@@ -196,6 +202,7 @@ export default function WikiListAside({ workingDirectory, activePath, onSelectFi
             ))}
           </div>
         )}
+      </div>
       </div>
     </div>
   )

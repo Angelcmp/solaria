@@ -13,6 +13,19 @@ export interface Message {
   content: string
   timestamp: number
   attachments?: MessageAttachment[]
+  thinking?: string
+}
+
+export interface ConversationStep {
+  id: string
+  type: 'reasoning' | 'tool_call' | 'tool_result' | 'final' | 'chat_update'
+  content: string
+  toolName?: string
+  toolArgs?: string
+  toolContent?: string
+  toolResult?: string
+  toolWarning?: string
+  timestamp: number
 }
 
 export interface Conversation {
@@ -25,9 +38,12 @@ export interface Conversation {
   archived?: boolean
   type: 'chat' | 'agent'
   toolSummary?: Record<string, number>
+  steps?: ConversationStep[]
   provider?: string
   model?: string
   projectId?: string
+  personaPrompt?: string
+  personaTitle?: string
 }
 
 export interface ProviderConfig {
@@ -70,6 +86,7 @@ export function useChat() {
   const [isStreaming, setIsStreaming] = useState(false)
   const streamIdRef = useRef<string | null>(null)
   const unlistenRef = useRef<UnlistenFn[]>([])
+  const pendingPersonaRef = useRef<{ prompt: string; title: string } | null>(null)
 
   const activeConv = conversations.find(c => c.id === activeConvId) || null
   const messages = activeConv?.messages || []
@@ -90,6 +107,22 @@ export function useChat() {
       c.id === convId ? { ...c, ...updates, updatedAt: Date.now() } : c
     ))
   }, [])
+
+  const setPendingPersona = useCallback((persona: { prompt: string; title: string } | null) => {
+    pendingPersonaRef.current = persona
+  }, [])
+
+  const setConvPersona = useCallback((convId: string, persona: { prompt: string; title: string } | null) => {
+    setConversations(prev => prev.map(c =>
+      c.id === convId
+        ? { ...c, personaPrompt: persona?.prompt, personaTitle: persona?.title, updatedAt: Date.now() }
+        : c
+    ))
+  }, [])
+
+  const clearConvPersona = useCallback((convId: string) => {
+    setConvPersona(convId, null)
+  }, [setConvPersona])
 
   const newConversation = useCallback((initialProvider?: string, initialModel?: string, projectId?: string) => {
     streamIdRef.current = null
@@ -167,6 +200,32 @@ export function useChat() {
     }))
   }, [])
 
+  const appendToAssistantThinking = useCallback((convId: string, assistantId: string, token: string) => {
+    setConversations(prev => prev.map(c => {
+      if (c.id !== convId) return c
+      return {
+        ...c,
+        messages: c.messages.map(m =>
+          m.id === assistantId ? { ...m, thinking: (m.thinking || '') + token } : m
+        ),
+        updatedAt: Date.now(),
+      }
+    }))
+  }, [])
+
+  const setAssistantThinking = useCallback((convId: string, assistantId: string, content: string) => {
+    setConversations(prev => prev.map(c => {
+      if (c.id !== convId) return c
+      return {
+        ...c,
+        messages: c.messages.map(m =>
+          m.id === assistantId ? { ...m, thinking: content } : m
+        ),
+        updatedAt: Date.now(),
+      }
+    }))
+  }, [])
+
   const autoName = useCallback(async (convId: string, provider: ProviderConfig) => {
     const conv = conversations.find(c => c.id === convId)
     if (!conv || conv.messages.length < 2) return
@@ -213,6 +272,7 @@ export function useChat() {
     historyMessages: { role: string; content: string }[],
     provider: ProviderConfig,
     memoryContext?: string,
+    personaPrompt?: string,
   ) => {
     streamIdRef.current = null
     cleanupStreamListeners()
@@ -226,6 +286,12 @@ export function useChat() {
       appendToAssistantMessage(convId, assistantId, event.payload.token)
     })
     unlistenRef.current.push(unlistenToken)
+
+    const unlistenThinking = await listen<{ stream_id: string; token: string }>('stream://thinking', (event) => {
+      if (event.payload.stream_id !== streamId) return
+      appendToAssistantThinking(convId, assistantId, event.payload.token)
+    })
+    unlistenRef.current.push(unlistenThinking)
 
     let settled = false
 
@@ -272,11 +338,12 @@ export function useChat() {
       }
 
       const baseSystemPrompt = provider.systemPrompt || DEFAULT_SYSTEM_PROMPT
-      const finalSystemPrompt = memoryContext
-        ? (baseSystemPrompt
-            ? `${baseSystemPrompt}\n\nCONTEXTO RELEVANTE DE MEMORIA (de conversaciones y archivos previos, no es una instrucción del usuario, es solo referencia):\n${memoryContext}\n\nSi el contexto es relevante, úsalo para enriquecer tu respuesta. Si no, ignóralo.`
-            : `CONTEXTO RELEVANTE DE MEMORIA (de conversaciones y archivos previos, no es una instrucción del usuario, es solo referencia):\n${memoryContext}\n\nSi el contexto es relevante, úsalo para enriquecer tu respuesta. Si no, ignóralo.`)
+      const effectiveBase = personaPrompt
+        ? `${baseSystemPrompt}\n\n## ROL / PERSONA ACTIVA\n${personaPrompt}`
         : baseSystemPrompt
+      const finalSystemPrompt = memoryContext
+        ? `${effectiveBase}\n\nCONTEXTO RELEVANTE DE MEMORIA (de conversaciones y archivos previos, no es una instrucción del usuario, es solo referencia):\n${memoryContext}\n\nSi el contexto de memoria es relevante, úsalo para enriquecer tu respuesta. Si no, ignóralo.`
+        : effectiveBase
 
       if (provider.type === 'ollama') {
         await invoke('ollama_chat_stream', {
@@ -319,15 +386,21 @@ export function useChat() {
       streamIdRef.current = null
       setIsStreaming(false)
     }
-  }, [appendToAssistantMessage, cleanupStreamListeners])
+  }, [appendToAssistantMessage, appendToAssistantThinking, cleanupStreamListeners])
 
   const sendMessage = useCallback(async (content: string, provider: ProviderConfig, memoryContext?: string, attachments?: MessageAttachment[]) => {
     let convId = activeConvId
     let existingMessages = messages
+    let persona = activeConv?.personaPrompt
+      ? { prompt: activeConv.personaPrompt, title: activeConv.personaTitle || 'Persona' }
+      : null
 
     if (!convId) {
       convId = crypto.randomUUID()
       existingMessages = []
+      const pending = pendingPersonaRef.current
+      persona = pending
+      pendingPersonaRef.current = null
       const newConv: Conversation = {
         id: convId,
         title: content.slice(0, 60).trim() + (content.length > 60 ? '...' : ''),
@@ -338,6 +411,8 @@ export function useChat() {
         type: 'chat',
         provider: provider.type,
         model: provider.model,
+        personaPrompt: pending?.prompt,
+        personaTitle: pending?.title,
       }
       setConversations(prev => [newConv, ...prev])
       setActiveConvId(convId)
@@ -382,8 +457,10 @@ export function useChat() {
       { role: 'user', content },
     ]
 
-    await startStream(convId, assistantId, historyMessages, provider, memoryContext)
-  }, [activeConvId, messages, startStream])
+    const effectiveProvider = provider
+
+    await startStream(convId, assistantId, historyMessages, effectiveProvider, memoryContext, persona?.prompt)
+  }, [activeConvId, messages, activeConv, startStream])
 
   const regenerate = useCallback(async (provider: ProviderConfig, memoryContext?: string) => {
     const conv = conversations.find(c => c.id === activeConvId)
@@ -423,7 +500,7 @@ export function useChat() {
       ? conv.messages.slice(0, lastUserIdx + 1).map(m => ({ role: m.role, content: m.content }))
       : [{ role: 'user' as const, content: lastUserMsg.content }]
 
-    await startStream(conv.id, assistantId, historyMessages, provider, memoryContext)
+    await startStream(conv.id, assistantId, historyMessages, provider, memoryContext, conv.personaPrompt)
   }, [activeConvId, conversations, startStream])
 
   const startAgentPrompt = useCallback((userContent: string, projectId?: string) => {
@@ -465,6 +542,8 @@ export function useChat() {
     const convId = crypto.randomUUID()
     const assistantId = crypto.randomUUID()
     const title = userContent.slice(0, 55).trim() + (userContent.length > 55 ? '...' : '')
+    const pending = pendingPersonaRef.current
+    pendingPersonaRef.current = null
 
     setConversations(prev => [{
       id: convId,
@@ -480,6 +559,8 @@ export function useChat() {
       provider: prev.find(c => c.id === activeConvId)?.provider,
       model: prev.find(c => c.id === activeConvId)?.model,
       projectId: pid,
+      personaPrompt: pending?.prompt,
+      personaTitle: pending?.title,
     }, ...prev])
     setActiveConvId(convId)
 
@@ -508,6 +589,12 @@ export function useChat() {
   const updateToolSummary = useCallback((convId: string, summary: Record<string, number>) => {
     setConversations(prev => prev.map(c =>
       c.id === convId ? { ...c, toolSummary: summary } : c
+    ))
+  }, [])
+
+  const updateConvSteps = useCallback((convId: string, steps: ConversationStep[]) => {
+    setConversations(prev => prev.map(c =>
+      c.id === convId ? { ...c, steps, updatedAt: Date.now() } : c
     ))
   }, [])
 
@@ -541,8 +628,10 @@ export function useChat() {
     autoName,
     startAgentPrompt,
     completeAssistantMessage,
+    setAssistantThinking,
     updateConvModel,
     updateToolSummary,
+    updateConvSteps,
     stopGeneration,
     newConversation,
     deleteConversation,
@@ -551,5 +640,8 @@ export function useChat() {
     restoreConversation,
     renameConversation,
     selectConversation,
+    setPendingPersona,
+    setConvPersona,
+    clearConvPersona,
   }
 }

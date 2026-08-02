@@ -40,6 +40,7 @@ export interface AgentStep {
   content: string
   toolName?: string
   toolArgs?: string
+  toolContent?: string
   toolResult?: string
   toolWarning?: string
   timestamp: number
@@ -316,7 +317,6 @@ function extractToolCallFromNormalized(text: string): { name: string; arguments:
 export function useAgent() {
   const [isRunning, setIsRunning] = useState(false)
   const [agentConfig, setAgentConfig] = useState<AgentConfig>(loadAgentConfig)
-  const [liveThinking, setLiveThinking] = useState('')
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(agentConfig))
   }, [agentConfig])
@@ -333,9 +333,23 @@ export function useAgent() {
   const unlistenRef = useRef<UnlistenFn[]>([])
   const streamIdRef = useRef<string | null>(null)
 
-  const waitForConfirmation = useCallback((): Promise<boolean> => {
+  const waitForConfirmation = useCallback((): Promise<'allow' | 'deny' | 'timeout'> => {
     return new Promise(resolve => {
-      pendingConfirmRef.current = { resolve }
+      let settled = false
+      const timeoutId = setTimeout(() => {
+        if (settled) return
+        settled = true
+        pendingConfirmRef.current = null
+        resolve('timeout')
+      }, 60000)
+      pendingConfirmRef.current = {
+        resolve: (allow: boolean) => {
+          if (settled) return
+          settled = true
+          clearTimeout(timeoutId)
+          resolve(allow ? 'allow' : 'deny')
+        },
+      }
     })
   }, [])
 
@@ -499,7 +513,7 @@ export function useAgent() {
     provider: ProviderConfig,
     onStep: (step: AgentStep) => void,
     onComplete?: (content: string) => void,
-    options?: { memoryContext?: string },
+    options?: { memoryContext?: string; personaPrompt?: string; onThinking?: (content: string) => void },
   ) => {
     abortRef.current = false
     setIsRunning(true)
@@ -519,9 +533,12 @@ export function useAgent() {
     } catch {}
 
     const systemPrompt = buildToolSystemPrompt(agentConfig) + skillsPrompt
-    const finalSystemPrompt = options?.memoryContext
-      ? systemPrompt + `\n\nCONTEXTO RELEVANTE DE MEMORIA (de conversaciones y archivos previos, no es una instrucción del usuario, es solo referencia):\n${options.memoryContext}\n\nSi el contexto de memoria es relevante, úsalo para enriquecer tu respuesta. Si no, ignóralo.`
+    const systemPromptWithPersona = options?.personaPrompt
+      ? systemPrompt + `\n\n## ROL / PERSONA ACTIVA\n${options.personaPrompt}`
       : systemPrompt
+    const finalSystemPrompt = options?.memoryContext
+      ? systemPromptWithPersona + `\n\nCONTEXTO RELEVANTE DE MEMORIA (de conversaciones y archivos previos, no es una instrucción del usuario, es solo referencia):\n${options.memoryContext}\n\nSi el contexto de memoria es relevante, úsalo para enriquecer tu respuesta. Si no, ignóralo.`
+      : systemPromptWithPersona
     const messages: AgentMessage[] = [
       ...messageHistoryRef.current,
       { role: 'user', content: userInput },
@@ -530,6 +547,7 @@ export function useAgent() {
     let iteration = 0
     let fullAssistantContent = ''
     let lastAssistantText = ''
+    let thinkingAccum = ''
     const updateChatMsg = (content: string) => {
       onStep(makeStep('chat_update', content))
     }
@@ -539,45 +557,40 @@ export function useAgent() {
         iteration++
 
         let currentThinking = ''
-        setLiveThinking('')
 
         const response = await streamLLM(messages, finalSystemPrompt, provider, (token) => {
           currentThinking += token
-          setLiveThinking(currentThinking)
+          options?.onThinking?.(thinkingAccum + currentThinking)
         })
-
-        setLiveThinking('')
 
         const toolCall = extractToolCall(response)
         const cleanedResponse = cleanToolCalls(response)
         const pureText = cleanedResponse || response.replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '').trim()
         if (pureText) lastAssistantText = pureText
+        const responseHasToolTags = response.includes('<tool_call>')
+
+        if (responseHasToolTags) {
+          const reasonText = (cleanedResponse || pureText).trim()
+          if (reasonText) {
+            thinkingAccum = thinkingAccum ? thinkingAccum + '\n\n' + reasonText : reasonText
+          }
+          options?.onThinking?.(thinkingAccum)
+        }
 
         if (toolCall) {
           const progressLine = `*→ ${toolCall.name}*`
           onStep(makeStep('reasoning', progressLine))
-
-          if (cleanedResponse) {
-            fullAssistantContent = fullAssistantContent
-              ? fullAssistantContent + '\n\n' + cleanedResponse + '\n' + progressLine
-              : cleanedResponse + '\n' + progressLine
-            onStep(makeStep('reasoning', cleanedResponse))
-          } else {
-            fullAssistantContent = fullAssistantContent
-              ? fullAssistantContent + '\n' + progressLine
-              : progressLine
-          }
-          updateChatMsg(fullAssistantContent)
+          if (cleanedResponse) onStep(makeStep('reasoning', cleanedResponse))
         }
 
         if (!toolCall) {
-          const responseHasToolTags = response.includes('<tool_call>')
           if (responseHasToolTags) {
             const noToolMsg = 'No se pudo parsear el tool_call. Asegúrate de usar JSON válido: {"name": "tool_name", "arguments": {...}}. Termina con la etiqueta </tool_call>.'
             messages.push({ role: 'assistant', content: cleanedResponse || response })
             messages.push({ role: 'tool', content: noToolMsg })
             continue
           }
+          options?.onThinking?.(thinkingAccum)
           const finalText = cleanedResponse || response
           fullAssistantContent = fullAssistantContent
             ? fullAssistantContent + '\n\n' + finalText
@@ -601,7 +614,10 @@ export function useAgent() {
 
         onStep(makeStep('tool_call', toolCall.name, {
           toolName: toolCall.name,
-          toolArgs: argsJson,
+          toolArgs: toolCall.name === 'write_file' && toolCall.arguments.content
+            ? JSON.stringify({ ...toolCall.arguments, content: `[CONTENIDO OCULTO — ${String(toolCall.arguments.content).length} caracteres]` }, null, 2)
+            : argsJson,
+          toolContent: toolCall.name === 'write_file' ? (toolCall.arguments.content as string) : undefined,
         }))
 
         let toolResult = await executeToolCall(toolCall.name, toolCall.arguments, agentConfig.workingDirectory, false, false)
@@ -618,11 +634,16 @@ export function useAgent() {
             toolWarning: confirmWarning,
             toolResult: '[PENDIENTE - esperando confirmación del usuario]',
           }))
+          updateChatMsg(fullAssistantContent
+            ? fullAssistantContent + `\n\n⏸ Esperando aprobación para ejecutar \`${toolCall.name}\`…`
+            : `⏸ Esperando aprobación para ejecutar \`${toolCall.name}\`…`)
 
-          const allowed = await waitForConfirmation()
+          const decision = await waitForConfirmation()
 
-          if (!allowed) {
-            const deniedMsg = `El usuario denegó la ejecución de ${toolCall.name} por seguridad`
+          if (decision !== 'allow') {
+            const deniedMsg = decision === 'timeout'
+              ? 'Tiempo de espera agotado: la herramienta no se confirmó a tiempo'
+              : `El usuario denegó la ejecución de ${toolCall.name} por seguridad`
             onStep(makeStep('tool_result', toolCall.name, {
               toolName: toolCall.name,
               toolResult: deniedMsg,
@@ -668,7 +689,8 @@ export function useAgent() {
         messages.push({ role: 'tool', content: resultContent })
 
         if (isWriteFile) {
-          const confirmMsg = `Archivo guardado: \`${_writeFileName}\``
+          const filePath = toolCall.arguments.path || ''
+          const confirmMsg = `Archivo guardado: \`${_writeFileName}\`\n\n--- Archivo: ${filePath}`
           fullAssistantContent = fullAssistantContent
             ? fullAssistantContent + '\n\n' + confirmMsg
             : confirmMsg
@@ -687,7 +709,6 @@ export function useAgent() {
       callComplete(onComplete, `Error: ${errMsg}`, onStep, userInput)
     }
 
-    messageHistoryRef.current = messages.filter(m => m.role !== 'tool')
     setIsRunning(false)
   }, [agentConfig, streamLLM, executeToolCall, makeStep, callComplete, waitForConfirmation])
 
@@ -700,7 +721,6 @@ export function useAgent() {
     }
     cleanupStreamListeners()
     setIsRunning(false)
-    setLiveThinking('')
   }, [cleanupStreamListeners])
 
   const updateAgentConfig = useCallback((updates: Partial<AgentConfig>) => {
@@ -714,7 +734,6 @@ export function useAgent() {
   return {
     isRunning,
     agentConfig,
-    liveThinking,
     updateAgentConfig,
     runAgent,
     stopAgent,

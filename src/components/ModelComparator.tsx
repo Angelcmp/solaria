@@ -89,7 +89,7 @@ export default function ModelComparator({
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-3.5 border-b border-[rgba(255,255,255,0.06)] shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-7 h-7 rounded-lg bg-[rgba(0,229,201,0.08)] border border-[rgba(0,229,201,0.15)] flex items-center justify-center">
+            <div className="w-7 h-7 rounded-lg bg-[rgba(0,229,201,0.08)] border border-[rgba(255,255,255,0.08)] flex items-center justify-center">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00E5C9" strokeWidth="2">
                 <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><line x1="16" y1="5" x2="18" y2="7"/><line x1="17" y1="4" x2="18" y2="5"/>
               </svg>
@@ -105,7 +105,7 @@ export default function ModelComparator({
         <div className="flex-1 overflow-y-auto p-5 space-y-4" style={{ scrollbarWidth: 'thin', scrollbarColor: '#333 transparent' }}>
           {!started ? (
             <>
-              <div className="p-3 rounded-xl bg-[rgba(0,229,201,0.04)] border border-[rgba(0,229,201,0.1)]">
+              <div className="p-3 rounded-xl bg-[rgba(0,229,201,0.04)] border border-[rgba(255,255,255,0.08)]">
                 <p className="text-[0.6875rem] text-[#999999] leading-relaxed">
                   Las respuestas se etiquetan como "Modelo A" y "Modelo B" sin revelar cuál es cuál. Responde la misma pregunta a todos los modelos, compara los resultados y solo después descubre qué modelo generó cada respuesta.
                 </p>
@@ -132,7 +132,7 @@ export default function ModelComparator({
                               onClick={() => toggleModel(provider.id, model)}
                               className={`px-2.5 py-1 rounded-md text-[0.6rem] font-mono transition-all border ${
                                 sel
-                                  ? 'bg-[rgba(0,229,201,0.1)] border-[rgba(0,229,201,0.3)] text-[#00E5C9]'
+                                  ? 'bg-[rgba(0,229,201,0.1)] border-[rgba(255,255,255,0.08)] text-[#00E5C9]'
                                   : 'bg-[#222] border-[rgba(255,255,255,0.04)] text-[#999999] hover:border-[rgba(255,255,255,0.1)] hover:text-[#E5E5E5]'
                               }`}
                             >
@@ -156,7 +156,7 @@ export default function ModelComparator({
                   onKeyDown={handleKeyDown}
                   placeholder="Escribe la misma pregunta que se enviará a todos los modelos..."
                   rows={3}
-                  className="w-full px-3 py-2.5 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.75rem] text-white placeholder-[#666666] outline-none focus:border-[#DCB263] transition-colors resize-none"
+                  className="w-full px-3 py-2.5 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.75rem] text-white placeholder-[#666666] outline-none focus:border-[rgba(255,255,255,0.2)] transition-colors resize-none"
                   style={{ fontFamily: "'IBM Plex Sans', 'Inter', system-ui, sans-serif" }}
                   autoFocus
                 />
@@ -173,7 +173,7 @@ export default function ModelComparator({
           ) : (
             <div className="space-y-4">
               {/* Prompt display */}
-              <div className="p-3 rounded-xl bg-[rgba(220,178,99,0.06)] border border-[rgba(220,178,99,0.12)]">
+              <div className="p-3 rounded-xl bg-[rgba(220,178,99,0.06)] border border-[rgba(255,255,255,0.08)]">
                 <div className="text-[0.55rem] text-[#DCB263] uppercase tracking-[0.05em] font-medium mb-1">Pregunta</div>
                 <div className="text-[0.6875rem] text-[#E5E5E5]">{currentRound?.prompt}</div>
               </div>
@@ -231,7 +231,7 @@ export default function ModelComparator({
                         <button
                           key={resp.blindLabel}
                           onClick={() => onVote(resp.blindLabel)}
-                          className="px-3 py-1.5 rounded-lg text-[0.7rem] font-medium bg-[#222] border border-[rgba(255,255,255,0.08)] text-[#E5E5E5] hover:bg-[rgba(0,229,201,0.08)] hover:border-[rgba(0,229,201,0.25)] hover:text-[#00E5C9] transition-all"
+                          className="px-3 py-1.5 rounded-lg text-[0.7rem] font-medium bg-[#222] border border-[rgba(255,255,255,0.08)] text-[#E5E5E5] hover:bg-[rgba(0,229,201,0.08)] hover:border-[rgba(255,255,255,0.08)] hover:text-[#00E5C9] transition-all"
                         >
                           <ThumbsUpIcon size={12} color="#00E5C9" className="mr-1" />
                           {resp.blindLabel}
@@ -245,7 +245,7 @@ export default function ModelComparator({
                     <div className="flex items-center justify-center pt-1">
                       <button
                         onClick={onReveal}
-                        className="px-4 py-2 rounded-lg text-[0.7rem] font-medium bg-[rgba(0,229,201,0.08)] border border-[rgba(0,229,201,0.2)] text-[#00E5C9] hover:bg-[rgba(0,229,201,0.15)] transition-all"
+                        className="px-4 py-2 rounded-lg text-[0.7rem] font-medium bg-[rgba(0,229,201,0.08)] border border-[rgba(255,255,255,0.08)] text-[#00E5C9] hover:bg-[rgba(0,229,201,0.15)] transition-all"
                       >
                         <SearchIcon size={12} color="#00E5C9" className="mr-1" />
                         Revelar identidades
@@ -256,7 +256,7 @@ export default function ModelComparator({
                   {/* Revealed results */}
                   {currentRound.revealed && (
                     <div className="space-y-3">
-                      <div className="p-3 rounded-xl bg-[rgba(0,229,201,0.04)] border border-[rgba(0,229,201,0.1)]">
+                      <div className="p-3 rounded-xl bg-[rgba(0,229,201,0.04)] border border-[rgba(255,255,255,0.08)]">
                         <div className="text-[0.55rem] text-[#00E5C9] uppercase tracking-[0.05em] font-medium mb-2">Resultado</div>
                         <div className="overflow-x-auto">
                           <table className="w-full text-[0.65rem]">

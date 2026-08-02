@@ -156,7 +156,7 @@ Se muestra cuando el agente genera un reporte `.md` largo (detectar `write_file`
 
 ---
 
-### Fase 7 — Sidebar refinada (WorkspaceAside)
+### ✅ Fase 7 — Sidebar refinada (WorkspaceAside)
 
 | Elemento | Actual | Nuevo |
 |----------|--------|-------|
@@ -170,7 +170,7 @@ Se muestra cuando el agente genera un reporte `.md` largo (detectar `write_file`
 
 ---
 
-### Fase 8 — ResearchAside tabs restantes
+### ✅ Fase 8 — ResearchAside tabs restantes
 
 | Tab | Mejora |
 |-----|--------|

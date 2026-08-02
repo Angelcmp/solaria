@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react'
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import type { Conversation } from '../../hooks/useChat'
 import ProjectModal from '../ProjectModal'
@@ -150,7 +150,7 @@ function ConvRow({ conv, activeConvId, editingId, editTitle, setEditTitle, setEd
 
   return (
     <div
-      className={`group flex items-center gap-2 px-3 py-2 mx-1.5 rounded-lg cursor-pointer transition-all text-[0.75rem] ${
+      className={`group flex items-center gap-2 px-3 py-2 mx-1.5 rounded-xl cursor-pointer transition-all text-[0.75rem] ${
         isActive
           ? 'bg-[rgba(0,229,201,0.06)] text-white'
           : 'text-[#999999] hover:bg-[rgba(255,255,255,0.04)] hover:text-white'
@@ -167,7 +167,7 @@ function ConvRow({ conv, activeConvId, editingId, editTitle, setEditTitle, setEd
               if (e.key === 'Enter') { if (editTitle.trim()) onRename(conv.id, editTitle.trim()); setEditingId(null) }
               if (e.key === 'Escape') setEditingId(null)
             }}
-            className="w-full bg-[#1A1A1A] border border-[#DCB263] rounded-lg px-2 py-1 text-[0.75rem] text-white outline-none"
+            className="w-full bg-[#1A1A1A] border border-[rgba(255,255,255,0.15)] rounded-lg px-2 py-1 text-[0.75rem] text-white outline-none"
             autoFocus
             onClick={e => e.stopPropagation()}
           />
@@ -254,6 +254,16 @@ export default function GeneralWorkspace({
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    try {
+      const stored = parseInt(localStorage.getItem('solaria-sidebar-width') || '', 10)
+      return isNaN(stored) ? 260 : Math.min(400, Math.max(200, stored))
+    } catch {
+      return 260
+    }
+  })
+  const draggingRef = useRef(false)
+  const [dragging, setDragging] = useState(false)
   const [showArchived, setShowArchived] = useState(false)
   const [convsExpanded, setConvsExpanded] = useState(true)
   const [projectsExpanded, setProjectsExpanded] = useState(true)
@@ -272,6 +282,36 @@ export default function GeneralWorkspace({
         .then(setProjectFiles).catch(() => setProjectFiles([])).finally(() => setProjectFilesLoading(false))
     })
   }, [activeProjectId, activeProject?.path])
+
+  const startDrag = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    draggingRef.current = true
+    setDragging(true)
+    const startX = e.clientX
+    const startWidth = sidebarWidth
+    const onMove = (ev: MouseEvent) => {
+      if (!draggingRef.current) return
+      const delta = ev.clientX - startX
+      setSidebarWidth(Math.min(400, Math.max(200, startWidth + delta)))
+    }
+    const onUp = () => {
+      draggingRef.current = false
+      setDragging(false)
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+  }, [sidebarWidth])
+
+  useEffect(() => {
+    if (isCollapsed) return
+    try { localStorage.setItem('solaria-sidebar-width', String(sidebarWidth)) } catch {}
+  }, [sidebarWidth, isCollapsed])
 
   const filtered = useMemo(() => {
     if (!searchQuery.trim()) return conversations.filter(c => showArchived ? c.archived : !c.archived)
@@ -297,10 +337,21 @@ export default function GeneralWorkspace({
 
   return (
     <>
-      {/* EXPANDED */}
-      {!isCollapsed && (
-        <div className="flex flex-col bg-[#1A1A1A] border-r border-[rgba(255,255,255,0.04)] overflow-visible transition-all duration-250 w-[320px] shrink-0">
+      {/* Sidebar (expanded/collapsed) */}
+      <div
+        className="flex flex-col bg-[#1A1A1A] border-r border-[rgba(255,255,255,0.04)] shrink-0 relative overflow-hidden"
+        style={{ width: isCollapsed ? 52 : sidebarWidth, transition: dragging ? undefined : 'width 300ms cubic-bezier(0.4, 0, 0.2, 1)' }}
+      >
+        {!isCollapsed && (
+          <div
+            onMouseDown={startDrag}
+            className="absolute top-0 bottom-0 right-0 w-1 cursor-col-resize hover:bg-[rgba(255,255,255,0.08)] transition-colors z-10"
+            title="Redimensionar panel"
+          />
+        )}
 
+        {/* Expanded content */}
+        <div className={isCollapsed ? 'hidden' : 'flex flex-col min-h-0'} style={{ width: sidebarWidth }}>
           {/* Header */}
           <div className="flex items-center gap-3 px-4 py-3.5 min-h-[52px] border-b border-[rgba(255,255,255,0.04)]">
             <img src="/solaria-logo.svg" alt="Solaria" className="w-8 h-8 rounded-lg" />
@@ -308,11 +359,11 @@ export default function GeneralWorkspace({
               <div className="text-[0.8rem] font-semibold text-[#DCB263]">Solaria</div>
               <div className="text-[0.5rem] text-[#666666] uppercase tracking-wider">Workspace</div>
             </div>
-            <button onClick={onNew} className="flex items-center justify-center w-8 h-8 rounded-lg bg-[rgba(0,229,201,0.08)] border border-[rgba(0,229,201,0.15)] text-[#00E5C9] hover:bg-[rgba(0,229,201,0.15)] hover:text-white transition-all" title="Nueva conversacion (Ctrl+N)">
+            <button onClick={onNew} className="flex items-center justify-center w-8 h-8 rounded-lg bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[#999999] hover:bg-[rgba(255,255,255,0.08)] hover:text-white transition-all" title="Nueva conversacion (Ctrl+N)">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             </button>
             {onOpenWiki && (
-              <button onClick={onOpenWiki} className="flex items-center justify-center w-8 h-8 rounded-lg bg-[rgba(0,229,201,0.04)] border border-[rgba(0,229,201,0.1)] text-[#00E5C9]/70 hover:bg-[rgba(0,229,201,0.12)] hover:text-[#00E5C9] transition-all" title="Abrir Markdowns">
+              <button onClick={onOpenWiki} className="flex items-center justify-center w-8 h-8 rounded-lg bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[#999999] hover:bg-[rgba(255,255,255,0.08)] hover:text-white transition-all" title="Abrir Markdowns">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                   <polyline points="14 2 14 8 20 8"/>
@@ -325,7 +376,7 @@ export default function GeneralWorkspace({
 
           {/* Search */}
           <div className="px-3 py-2.5 border-b border-[rgba(255,255,255,0.04)]">
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#1C1B1B] border border-[rgba(255,255,255,0.06)] focus-within:border-[rgba(0,229,201,0.2)] transition-colors">
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#1C1B1B] border border-[rgba(255,255,255,0.06)] focus-within:border-[rgba(255,255,255,0.14)] transition-colors">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#666666" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Buscar conversaciones..." className="flex-1 bg-transparent border-none outline-none text-[0.75rem] text-white placeholder-[#555555]" />
               {searchQuery && (
@@ -340,9 +391,9 @@ export default function GeneralWorkspace({
           <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-2" style={{ scrollbarWidth: 'thin', scrollbarColor: '#333 transparent' }}>
 
             {/* Skills */}
-            <button onClick={() => onShowSettings?.('skills')} className="flex items-center gap-2.5 w-full px-4 py-2 mx-1.5 rounded-lg text-[0.75rem] text-[#DCB263] hover:bg-[rgba(220,178,99,0.06)] hover:border-[rgba(220,178,99,0.1)] border border-transparent transition-all mb-1">
-              <div className="w-6 h-6 rounded-md bg-[rgba(220,178,99,0.08)] border border-[rgba(220,178,99,0.15)] flex items-center justify-center">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#DCB263" strokeWidth="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <button onClick={() => onShowSettings?.('skills')} className="group flex items-center gap-2.5 w-full px-4 py-2 mx-1.5 rounded-xl text-[0.75rem] text-[#999999] hover:text-[#DCB263] hover:bg-[rgba(220,178,99,0.06)] transition-all mb-1">
+              <div className="w-6 h-6 rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] flex items-center justify-center group-hover:bg-[rgba(220,178,99,0.08)] group-hover:border-[rgba(220,178,99,0.2)] transition-all">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
               </div>
               <span className="font-medium">Skills</span>
             </button>
@@ -385,8 +436,8 @@ export default function GeneralWorkspace({
               <div className="px-1 space-y-0.5">
                 {projects.map(proj => (
                   <div key={proj.id}>
-                    <div className={`group flex items-center gap-2.5 px-3 py-2 mx-1 rounded-lg cursor-pointer transition-all text-[0.75rem] ${activeProjectId === proj.id ? 'bg-[rgba(0,229,201,0.06)] text-[#00E5C9]' : 'text-[#999999] hover:bg-[rgba(255,255,255,0.04)] hover:text-white'}`} onClick={() => onSelectProject?.(proj)}>
-                      <div className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 ${activeProjectId === proj.id ? 'bg-[rgba(0,229,201,0.1)] border border-[rgba(0,229,201,0.2)]' : 'bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.06)]'}`}>
+                    <div className={`group flex items-center gap-2.5 px-3 py-2 mx-1 rounded-xl cursor-pointer transition-all text-[0.75rem] ${activeProjectId === proj.id ? 'bg-[rgba(0,229,201,0.06)] text-[#00E5C9]' : 'text-[#999999] hover:bg-[rgba(255,255,255,0.04)] hover:text-white'}`} onClick={() => onSelectProject?.(proj)}>
+                      <div className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 ${activeProjectId === proj.id ? 'bg-[rgba(0,229,201,0.1)] border border-[rgba(255,255,255,0.08)]' : 'bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.06)]'}`}>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={activeProjectId === proj.id ? '#00E5C9' : '#666666'} strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
                       </div>
                       <span className="flex-1 truncate font-medium">{proj.name}</span>
@@ -464,13 +515,11 @@ export default function GeneralWorkspace({
             </button>
           </div>
         </div>
-      )}
 
-      {/* COLLAPSED */}
-      {isCollapsed && (
-        <div className="flex flex-col items-center gap-3 py-3 px-2 bg-[#1A1A1A] border-r border-[rgba(255,255,255,0.04)] w-[52px] shrink-0 transition-all duration-250">
+        {/* Collapsed rail */}
+        <div className={isCollapsed ? 'flex flex-col items-center gap-3 py-3 px-2 w-[52px] shrink-0' : 'hidden'}>
           <img src="/solaria-logo.svg" alt="Solaria" className="w-8 h-8 rounded-lg" />
-          <button onClick={onNew} className="flex items-center justify-center w-8 h-8 rounded-lg bg-[rgba(0,229,201,0.08)] border border-[rgba(0,229,201,0.15)] text-[#00E5C9] hover:bg-[rgba(0,229,201,0.15)] hover:text-white transition-all" title="Nueva conversacion (Ctrl+N)">
+          <button onClick={onNew} className="flex items-center justify-center w-8 h-8 rounded-lg bg-[rgba(0,229,201,0.08)] border border-[rgba(255,255,255,0.08)] text-[#00E5C9] hover:bg-[rgba(0,229,201,0.15)] hover:text-white transition-all" title="Nueva conversacion (Ctrl+N)">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </button>
           <button onClick={() => onShowSettings?.()} className="flex items-center justify-center w-8 h-8 rounded-lg border border-[rgba(255,255,255,0.08)] text-[#666666] hover:text-[#00E5C9] transition-colors" title="Configuracion (Ctrl+,)">
@@ -486,7 +535,7 @@ export default function GeneralWorkspace({
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
           </button>
         </div>
-      )}
+      </div>
 
       <ProjectModal
         isOpen={showProjectModal}

@@ -47,6 +47,24 @@ const translations: Translations = {
   'chat.scroll_up': { es: 'Ir al inicio', en: 'Scroll to top' },
   'chat.injection_warn': { es: 'Mensaje bloqueado: posible intento de inyección de prompt.', en: 'Message blocked: possible prompt injection attempt.' },
 
+  // Templates / Biblioteca de prompts
+  'templates.search': { es: 'Buscar plantillas...', en: 'Search templates...' },
+  'templates.all': { es: 'Todos', en: 'All' },
+  'templates.favorites': { es: 'Favoritos', en: 'Favorites' },
+  'templates.recent': { es: 'Recientes', en: 'Recent' },
+  'templates.no_results': { es: 'Sin resultados', en: 'No results' },
+  'templates.agent': { es: 'Agente', en: 'Agent' },
+  'templates.form': { es: 'Formulario', en: 'Form' },
+  'templates.use': { es: 'Usar plantilla', en: 'Use template' },
+  'templates.cancel': { es: 'Cancelar', en: 'Cancel' },
+  'templates.generate': { es: 'Generar documento', en: 'Generate document' },
+  'templates.required': { es: 'Campo requerido', en: 'Required field' },
+  'persona.active': { es: 'Persona', en: 'Persona' },
+  'persona.clear': { es: 'Quitar persona', en: 'Remove persona' },
+  'slash.commands': { es: 'Comandos', en: 'Commands' },
+  'slash.no_results': { es: 'Sin comandos que coincidan', en: 'No matching commands' },
+  'slash.placeholder': { es: 'Escribe "/" para ver comandos', en: 'Type "/" to see commands' },
+
   // Quick actions
   'action.learn': { es: 'Aprender', en: 'Learn' },
   'action.summarize': { es: 'Resumir', en: 'Summarize' },

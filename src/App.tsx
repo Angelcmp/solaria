@@ -13,7 +13,7 @@ import WikiListAside from './components/WikiListAside'
 import WikiViewerAside from './components/WikiViewerAside'
 import type { WikiFile } from './components/WikiListAside'
 import SettingsPanel, { type SettingsPanelProps } from './components/SettingsPanel'
-import ResearchAside from './components/ResearchAside'
+import ProgressPanel from './components/ProgressPanel'
 import ModelComparator from './components/ModelComparator'
 
 const PROVIDERS: { id: string; label: string; models: string[]; local: boolean }[] = [
@@ -37,7 +37,24 @@ function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [wikiOpen, setWikiOpen] = useState(false)
   const [wikiFile, setWikiFile] = useState<WikiFile | null>(null)
+  const [wikiAnimOpen, setWikiAnimOpen] = useState(false)
+  const wikiCloseTimerRef = useRef<number | null>(null)
   const agentIdsRef = useRef<{ convId: string; assistantId: string } | null>(null)
+
+  const openWikiViewer = useCallback((file: WikiFile) => {
+    if (wikiCloseTimerRef.current) {
+      clearTimeout(wikiCloseTimerRef.current)
+      wikiCloseTimerRef.current = null
+    }
+    setWikiFile(file)
+    requestAnimationFrame(() => setWikiAnimOpen(true))
+  }, [])
+
+  const closeWikiViewer = useCallback(() => {
+    setWikiAnimOpen(false)
+    if (wikiCloseTimerRef.current) clearTimeout(wikiCloseTimerRef.current)
+    wikiCloseTimerRef.current = window.setTimeout(() => setWikiFile(null), 300)
+  }, [])
 
   const {
     settings,
@@ -56,10 +73,13 @@ function App() {
     isStreaming,
     sendMessage,
     regenerate,
+    autoName,
     startAgentPrompt,
     completeAssistantMessage,
+    setAssistantThinking,
     updateConvModel,
     updateToolSummary,
+    updateConvSteps,
     stopGeneration,
     newConversation,
     deleteConversation,
@@ -68,13 +88,14 @@ function App() {
     restoreConversation,
     renameConversation,
     selectConversation,
-    autoName,
+    setPendingPersona,
+    setConvPersona,
+    clearConvPersona,
   } = useChat()
 
   const {
     isRunning: agentIsRunning,
     agentConfig,
-    liveThinking,
     updateAgentConfig,
     runAgent,
     stopAgent,
@@ -96,20 +117,29 @@ function App() {
   } = useComparison()
 
   const [agentSteps, setAgentSteps] = useState<AgentStep[]>([])
+  const [panelForcedOpen, setPanelForcedOpen] = useState(false)
+  const [panelDismissed, setPanelDismissed] = useState<Record<string, boolean>>(() => {
+    try { return JSON.parse(localStorage.getItem('solaria-panel-dismissed') || '{}') } catch { return {} }
+  })
   const [projects, setProjects] = useState<Project[]>(() => {
     try { return JSON.parse(localStorage.getItem('solaria-projects') || '[]') } catch { return [] }
   })
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
   const completeMsgRef = useRef(completeAssistantMessage)
   const updateToolSummaryRef = useRef(updateToolSummary)
+  const updateConvStepsRef = useRef(updateConvSteps)
   const agentStepsRef = useRef(agentSteps)
   const conversationsRef = useRef(conversations)
+  const setThinkingRef = useRef(setAssistantThinking)
 
   useEffect(() => { completeMsgRef.current = completeAssistantMessage }, [completeAssistantMessage])
   useEffect(() => { localStorage.setItem('solaria-projects', JSON.stringify(projects)) }, [projects])
   useEffect(() => { updateToolSummaryRef.current = updateToolSummary }, [updateToolSummary])
+  useEffect(() => { updateConvStepsRef.current = updateConvSteps }, [updateConvSteps])
   useEffect(() => { agentStepsRef.current = agentSteps }, [agentSteps])
   useEffect(() => { conversationsRef.current = conversations }, [conversations])
+  useEffect(() => { setThinkingRef.current = setAssistantThinking }, [setAssistantThinking])
+  useEffect(() => { localStorage.setItem('solaria-panel-dismissed', JSON.stringify(panelDismissed)) }, [panelDismissed])
 
   // Index completed conversations into memory (chat + agent)
   useEffect(() => {
@@ -170,15 +200,21 @@ function App() {
   const handleNewConversation = useCallback(() => {
     resetAgent()
     setAgentSteps([])
+    setPanelForcedOpen(false)
     newConversation(settings.defaultProvider, settings.defaultModel, activeProjectId || undefined)
   }, [resetAgent, newConversation, settings, activeProjectId])
 
   const handleAgentStep = useCallback((step: AgentStep) => {
     setAgentSteps(prev => [...prev, step])
-    // Chat updates progressivo durante la ejecución del agente
+    // Chat updates progresivo durante la ejecución del agente
     if (step.type === 'chat_update' && agentIdsRef.current) {
       completeMsgRef.current(agentIdsRef.current.convId, agentIdsRef.current.assistantId, step.content)
     }
+  }, [])
+
+  const handleAgentThinking = useCallback((content: string) => {
+    const ids = agentIdsRef.current
+    if (ids) setThinkingRef.current(ids.convId, ids.assistantId, content)
   }, [])
 
   const handleAgentComplete = useCallback((finalContent: string) => {
@@ -200,6 +236,9 @@ function App() {
       }
       if (Object.keys(stepSummary).length > 0) {
         updateToolSummaryRef.current(ids.convId, stepSummary)
+      }
+      if (agentStepsRef.current.length > 0) {
+        updateConvStepsRef.current(ids.convId, agentStepsRef.current)
       }
       agentIdsRef.current = null
     }
@@ -247,7 +286,7 @@ function App() {
     return () => window.removeEventListener('keydown', handler)
   }, [handleNewConversation, handleClear, handleToggleAgent])
 
-  const handleSend = useCallback(async (content: string, attachments?: { name: string; size: number }[]) => {
+  const handleSend = useCallback(async (content: string, attachments?: { name: string; size: number }[], options?: { forceAgent?: boolean; persona?: { prompt: string; title: string } | null }) => {
     const activeConv = conversations.find(c => c.id === activeConvId)
     const convProvider = activeConv?.provider || settings.defaultProvider
     const convModel = activeConv?.model || settings.defaultModel
@@ -266,16 +305,73 @@ function App() {
       memoryContext = ctx || undefined
     }
 
-    if (agentConfig.enabled) {
+    if (options?.persona !== undefined) {
+      if (activeConvId) {
+        if (options.persona) setConvPersona(activeConvId, options.persona)
+        else clearConvPersona(activeConvId)
+      } else {
+        setPendingPersona(options.persona)
+      }
+    }
+
+    const persona = options?.persona
+      ? options.persona
+      : activeConv?.personaPrompt
+        ? { prompt: activeConv.personaPrompt, title: activeConv.personaTitle || 'Persona' }
+        : null
+
+    const useAgent = options?.forceAgent ?? agentConfig.enabled
+
+    if (useAgent) {
       const ids = startAgentPrompt(content, activeProjectId || undefined)
       agentIdsRef.current = ids
-      runAgent(content, providerConfig, handleAgentStep, handleAgentComplete, { memoryContext })
+      runAgent(content, providerConfig, handleAgentStep, handleAgentComplete, { memoryContext, personaPrompt: persona?.prompt, onThinking: handleAgentThinking })
     } else {
       sendMessage(content, providerConfig, memoryContext, attachments)
     }
-  }, [agentConfig.enabled, settings, conversations, activeConvId, sendMessage, startAgentPrompt, runAgent, handleAgentStep, handleAgentComplete, getModelParams, memory])
+  }, [agentConfig.enabled, settings, conversations, activeConvId, sendMessage, startAgentPrompt, runAgent, handleAgentStep, handleAgentComplete, handleAgentThinking, getModelParams, memory, setConvPersona, clearConvPersona, setPendingPersona])
 
   const activeConv = conversations.find(c => c.id === activeConvId)
+
+  const handleSelectConversation = useCallback((convId: string) => {
+    if (activeConvId && activeConvId !== convId) {
+      const current = conversationsRef.current.find(c => c.id === activeConvId)
+      if (current && agentStepsRef.current.length > 0) {
+        updateConvStepsRef.current(activeConvId, agentStepsRef.current)
+      }
+    }
+    selectConversation(convId)
+    const target = conversationsRef.current.find(c => c.id === convId)
+    setAgentSteps(target?.steps ? [...target.steps] : [])
+    setPanelForcedOpen(false)
+  }, [activeConvId, selectConversation])
+
+  const handlePanelClose = useCallback(() => {
+    if (activeConvId) {
+      setPanelDismissed(prev => ({ ...prev, [activeConvId]: true }))
+      updateConvStepsRef.current(activeConvId, agentStepsRef.current)
+    }
+    setPanelForcedOpen(false)
+    setAgentSteps([])
+  }, [activeConvId])
+
+  const handlePanelOpen = useCallback(() => {
+    setPanelForcedOpen(true)
+    if (activeConvId) {
+      setPanelDismissed(prev => {
+        if (!prev[activeConvId]) return prev
+        const next = { ...prev }
+        delete next[activeConvId]
+        return next
+      })
+      const conv = conversationsRef.current.find(c => c.id === activeConvId)
+      if (conv?.steps && conv.steps.length > 0) {
+        setAgentSteps([...conv.steps])
+      }
+    }
+  }, [activeConvId])
+
+  const showPanel = panelForcedOpen || (!panelDismissed[activeConvId || ''] && (agentSteps.length > 0 || agentIsRunning))
 
   return (
     <div className="flex h-screen bg-[#131313] overflow-hidden">
@@ -284,7 +380,7 @@ function App() {
         activeConvId={activeConvId}
         isCollapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-        onSelect={selectConversation}
+        onSelect={handleSelectConversation}
         onNew={handleNewConversation}
         onDelete={deleteConversation}
         onPin={togglePin}
@@ -320,14 +416,13 @@ function App() {
         activeProjectId={activeProjectId}
       />
 
-      {wikiOpen && (
-        <WikiListAside
-          workingDirectory={agentConfig.workingDirectory}
-          activePath={wikiFile?.path || null}
-          onSelectFile={(file) => setWikiFile(file)}
-          onClose={() => setWikiOpen(false)}
-        />
-      )}
+      <WikiListAside
+        open={wikiOpen}
+        workingDirectory={agentConfig.workingDirectory}
+        activePath={wikiFile?.path || null}
+        onSelectFile={(file) => openWikiViewer(file)}
+        onClose={() => setWikiOpen(false)}
+      />
 
       <Chat
         messages={messages}
@@ -335,6 +430,9 @@ function App() {
         onSend={handleSend}
         onStop={agentIsRunning ? stopAgent : stopGeneration}
         onClear={handleClear}
+        onClearPersona={() => {
+          if (activeConvId) clearConvPersona(activeConvId)
+        }}
         lang={settings.language}
         onRegenerate={agentConfig.enabled ? undefined : () => {
           const activeConv = conversations.find(c => c.id === activeConvId)
@@ -359,23 +457,30 @@ function App() {
         activeProject={activeProjectId ? projects.find(p => p.id === activeProjectId) || null : null}
         comparisonEnabled={settings.comparisonEnabled}
         onOpenComparator={openComparator}
+        onOpenPanel={handlePanelOpen}
       />
 
       {wikiFile && (
         <WikiViewerAside
+          open={wikiAnimOpen}
           file={wikiFile}
-          onClose={() => setWikiFile(null)}
+          onClose={closeWikiViewer}
         />
       )}
 
-      <ResearchAside
-        steps={agentSteps}
-        isRunning={agentIsRunning}
-        liveThinking={liveThinking}
-        onClose={() => setAgentSteps([])}
-        onStop={agentIsRunning ? stopAgent : undefined}
-        onConfirmTool={confirmTool}
-      />
+      {showPanel && (
+        <ProgressPanel
+          steps={agentSteps}
+          isRunning={agentIsRunning}
+          onClose={handlePanelClose}
+          onStop={agentIsRunning ? stopAgent : undefined}
+          onConfirmTool={confirmTool}
+          projectName={activeProjectId ? (projects.find(p => p.id === activeProjectId)?.name || undefined) : undefined}
+          workingDirectory={agentConfig.workingDirectory || undefined}
+          personaPrompt={activeConv?.personaPrompt}
+          onOpenDocument={(file) => openWikiViewer({ name: file.name, path: file.path, size: file.content.length, modified: Date.now() })}
+        />
+      )}
 
       {comparisonActive && (
         <ModelComparator

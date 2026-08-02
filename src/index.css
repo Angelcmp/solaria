@@ -64,26 +64,13 @@ body {
 }
 
 @keyframes stepGlow {
-  0%, 100% { box-shadow: 0 0 3px rgba(220,178,99,0.08); }
-  50% { box-shadow: 0 0 6px rgba(220,178,99,0.14); }
+  0%, 100% { box-shadow: 0 0 3px rgba(255,255,255,0.06); }
+  50% { box-shadow: 0 0 6px rgba(255,255,255,0.1); }
 }
 
 @keyframes stepGlowTeal {
-  0%, 100% { box-shadow: 0 0 3px rgba(0,229,201,0.08); }
-  50% { box-shadow: 0 0 6px rgba(0,229,201,0.14); }
-}
-
-@keyframes streamingCursor {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
-}
-
-.streaming-cursor::after {
-  content: '▌';
-  display: inline;
-  margin-left: 2px;
-  color: #DCB263;
-  animation: streamingCursor 1s ease-in-out infinite;
+  0%, 100% { box-shadow: 0 0 3px rgba(255,255,255,0.06); }
+  50% { box-shadow: 0 0 6px rgba(255,255,255,0.1); }
 }
 
 .streaming-message {
@@ -97,7 +84,7 @@ body {
   top: 0;
   bottom: 0;
   width: 2px;
-  background: linear-gradient(to bottom, rgba(220,178,99,0.3), rgba(220,178,99,0.05));
+  background: linear-gradient(to bottom, rgba(255,255,255,0.2), rgba(255,255,255,0.05));
   border-radius: 2px;
   animation: stepGlow 2s ease-in-out infinite;
 }

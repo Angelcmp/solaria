@@ -553,6 +553,12 @@ async fn stream_sse(
                                     "token": content,
                                 }));
                             }
+                            if let Some(thinking) = val["choices"][0]["delta"]["reasoning_content"].as_str() {
+                                let _ = app.emit("stream://thinking", serde_json::json!({
+                                    "stream_id": stream_id,
+                                    "token": thinking,
+                                }));
+                            }
                         }
                     }
                 }
@@ -687,6 +693,11 @@ pub async fn stream_anthropic(
                                         full_content.push_str(text);
                                         let _ = app.emit("stream://token", serde_json::json!({
                                             "stream_id": stream_id, "token": text,
+                                        }));
+                                    }
+                                    if let Some(thinking) = val["delta"]["thinking"].as_str() {
+                                        let _ = app.emit("stream://thinking", serde_json::json!({
+                                            "stream_id": stream_id, "token": thinking,
                                         }));
                                     }
                                 }

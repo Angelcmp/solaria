@@ -88,7 +88,7 @@ export default function ProjectModal({ isOpen, onClose, project, onSave }: Proje
               value={name}
               onChange={e => { setName(e.target.value); setError(null) }}
               placeholder="Mi proyecto"
-              className="w-full px-3 py-2 rounded-lg bg-[#1C1B1B] border border-[rgba(255,255,255,0.08)] text-[0.8rem] text-white placeholder-[#555555] outline-none focus:border-[rgba(0,229,201,0.4)] transition-colors"
+              className="w-full px-3 py-2 rounded-lg bg-[#1C1B1B] border border-[rgba(255,255,255,0.08)] text-[0.8rem] text-white placeholder-[#555555] outline-none focus:border-[rgba(255,255,255,0.08)] transition-colors"
             />
           </div>
 
@@ -101,7 +101,7 @@ export default function ProjectModal({ isOpen, onClose, project, onSave }: Proje
               <button
                 type="button"
                 onClick={handleSelectFolder}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[rgba(0,229,201,0.08)] border border-[rgba(0,229,201,0.15)] text-[#00E5C9] text-[0.7rem] hover:bg-[rgba(0,229,201,0.12)] transition-colors whitespace-nowrap"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[rgba(0,229,201,0.08)] border border-[rgba(255,255,255,0.08)] text-[#00E5C9] text-[0.7rem] hover:bg-[rgba(0,229,201,0.12)] transition-colors whitespace-nowrap"
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
                 Seleccionar

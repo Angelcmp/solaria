@@ -15,6 +15,7 @@ interface WikiViewerAsideProps {
   onNext?: () => void
   hasPrev?: boolean
   hasNext?: boolean
+  open?: boolean
 }
 
 function formatSize(bytes: number): string {
@@ -35,7 +36,7 @@ function Spinner() {
   )
 }
 
-export default function WikiViewerAside({ file, onClose, onPrev, onNext, hasPrev, hasNext }: WikiViewerAsideProps) {
+export default function WikiViewerAside({ file, onClose, onPrev, onNext, hasPrev, hasNext, open = true }: WikiViewerAsideProps) {
   const [content, setContent] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -59,7 +60,12 @@ export default function WikiViewerAside({ file, onClose, onPrev, onNext, hasPrev
   }, [file.path, load])
 
   return (
-    <div className="flex flex-col bg-[#1A1A1A] border-l border-[rgba(255,255,255,0.04)] w-[600px] shrink-0 overflow-hidden">
+    <div
+      className="flex bg-[#1A1A1A] border-l border-[rgba(255,255,255,0.04)] shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out"
+      style={{ width: open ? 600 : 0 }}
+      aria-hidden={!open}
+    >
+      <div className="flex flex-col w-[600px] shrink-0 min-h-0 h-full">
       {/* Header */}
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[rgba(255,255,255,0.04)]">
         <button
@@ -112,6 +118,7 @@ export default function WikiViewerAside({ file, onClose, onPrev, onNext, hasPrev
         ) : content ? (
           <Markdown content={content} />
         ) : null}
+      </div>
       </div>
     </div>
   )

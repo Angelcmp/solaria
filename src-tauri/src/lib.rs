@@ -1,5 +1,6 @@
 pub mod audit;
 pub mod cli;
+mod commands;
 mod cookbook;
 pub mod embeddings;
 mod keyring;
@@ -319,6 +320,14 @@ fn get_skills_prompt(working_dir: Option<String>, query: Option<String>, auto_ac
 #[tauri::command]
 fn create_skill(working_dir: String, name: String, description: String, body: String) -> Result<String, String> {
     skills::create_project_skill(&working_dir, &name, &description, &body)
+}
+
+#[tauri::command]
+fn list_commands(working_dir: Option<String>) -> Vec<commands::CommandDefinition> {
+    let wd = working_dir
+        .filter(|d| !d.is_empty())
+        .or_else(resolve_project_root);
+    commands::list_commands(wd.as_deref())
 }
 
 #[tauri::command]
@@ -754,6 +763,7 @@ pub fn run() {
             toggle_skill,
             get_skills_prompt,
             create_skill,
+            list_commands,
             write_text_file,
             list_directory,
             wiki_list_files,

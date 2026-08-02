@@ -1,20 +1,60 @@
 # Solaria — Session Progress
 
-## Última sesión (2026-07-26)
+## Última sesión (2026-08-02)
 
-### Completado — Polish v0.9.0
+### Completado — Transición suave colapsar/expandir en asides (duration-300 ease-in-out)
 
-- **Chat central**: se agregaron `AttachmentCard`, `AssistantMessage`, `CollapseToggle`, indicador de streaming con cursor parpadeante y glow, status bar "Escribiendo... N KB recibidos", botones copiar/regenerar.
-- **Adjuntos de archivos**: el type `Message` se extendió con `attachments?: MessageAttachment[]`, `sendMessage` propaga attachments, se muestran como file cards en burbuja del usuario.
-- **Colapsar respuestas largas**: las respuestas del asistente con más de 8 líneas o 800 caracteres tienen toggle "Mostrar más / Mostrar menos".
-- **Fix sidebar overflow**: los dropdowns de conversaciones ahora se renderizan con `createPortal` a `document.body` para evitar clipping. Wrapper principal cambiado a `overflow-visible`.
-- **Emojis reemplazados**: se eliminaron todos los emojis de la UI (`⏺` → `BulletIcon`, etc.). Solo quedan en CLI de Rust (`✅`, `⚠️`).
-- **Bug template literal**: corregidos `alert()` en `handleFilesSelected` que usaban comillas simples en vez de backticks, no interpolaban `file.name`.
-- **Verificación**: `tsc --noEmit`, `npm test`, `cargo test`, `npm run build` pasan sin errores.
+- **Técnica común**: contenedor único siempre montado con `style={{ width }}` + `transition-[width] duration-300 ease-in-out` + `overflow-hidden`; el contenido interno alterna visibilidad con `hidden` (wrapper de ancho fijo para no aplastar el contenido durante la animación).
+- **ProgressPanel** (`ProgressPanel.tsx`): colapsar/expandir 400↔36; eliminado el swap duro `if (collapsed) return …`; tira (expandir + dot) y contenido en el mismo contenedor animado.
+- **GeneralWorkspace sidebar** (`GeneralWorkspace.tsx`): colapsar/expandir `sidebarWidth`↔52; unidas las ramas `{!isCollapsed && …}`/`{isCollapsed && …}` en un solo contenedor con `overflow-hidden`; **transición desactivada durante el drag** de resize (estado `dragging`, `transition: dragging ? undefined : 'width 300ms cubic-bezier(0.4,0,0.2,1)'`) para que el ancho siga al cursor.
+- **WikiListAside** (`WikiListAside.tsx` + `App.tsx`): prop `open`; render siempre montado (`open={wikiOpen}`) con ancho 320↔0; contenido lazy-load en wrapper `w-[320px]`.
+- **WikiViewerAside** (`WikiViewerAside.tsx` + `App.tsx`): prop `open`; helpers `openWikiViewer`/`closeWikiViewer` con `wikiAnimOpen` (rAF al abrir) y cierre diferido 300ms (`wikiCloseTimerRef`) manteniendo el último archivo para animar la salida; ancho 600↔0.
+- Se eliminó el `transition-all duration-250` muerto del sidebar (nunca animaba por el swap de ramas).
+- **Verificación**: `tsc --noEmit`, `npm test` (11), `npm run build` pasan sin errores.
+
+### Completado — SettingsPanel neutralizado (teal/dorado → escala de grises)
+
+- **Header del panel**: engranaje `bg-[#00E5C9]/10` + `stroke="#00E5C9"` → `bg-[rgba(255,255,255,0.04)]` + `stroke="#E5E5E5"`; dot de versión `bg-[#00E5C9]/40` → `bg-[#666666]`.
+- **Estados activos** (sidebar tabs, AdvancedTab sub-tabs, proveedores, chips de modelo, idioma, chips de modelo de memoria) → tinte `bg-[rgba(0,229,201,0.07/0.08/0.1)]` + `text-white`, eliminado todo `text-[#00E5C9]`.
+- **ProvidersTab**: icono de provider `bg-[rgba(0,229,201,0.08)]`/`stroke="#00E5C9"` → neutro; "Configurada" dot `bg-[#00E5C9]` + texto → `bg-[#999999]` + `text-[#E5E5E5]`; link Tavily `text-[#00E5C9]` → `text-[#999999] hover:text-white`.
+- **AgentTab**: resumen (`BulletIcon` dorado, iteraciones teal) → gris; iconos reloj/engranaje/estrella `stroke="#DCB263"` → `stroke="#999999"`; barra de sección `bg-[#00E5C9]` → `bg-[#666666]`; `const color` de `ToolIcon` (write teal/read dorado) → fijo `#999999`.
+- **SkillsTab/SkillRow**: código install `text-[#DCB263]` + `bg-[rgba(220,178,99,0.08)]` → `text-[#E5E5E5]` + `bg-[rgba(255,255,255,0.04)]`; barras de sección → `bg-[#666666]`; dot skill enabled → `bg-[#999999]`; badge "Proyecto" → `bg-[rgba(255,255,255,0.06)] text-[#E5E5E5]`.
+- **MemoryTab**: badge ON (via `SectionHeader` ya neutro), `db_path`/éxito indexado/check/barras de progreso → gris (`#E5E5E5`/`#999999`); source badges conversation/file → neutro.
+- **McpTab**: dot "conectado(s)" → `bg-[#999999]`; icono y badge "Conectado" de servidor running → neutro; chips de tools → `bg-[rgba(255,255,255,0.04)] text-[#E5E5E5]`.
+- **AuditTab**: dot de actividad y círculo+check de éxito → gris (rojo de error se mantiene); nombre de tool éxito `text-[#00E5C9]` → `text-[#E5E5E5]`.
+- **CookbookTab**: icono de header, badges recommended/serving/CPU, GPU VRAM, descarga en curso, barra de progreso, dot de estado servido, `ollama:<model>` → gris; `StarIcon color` → `#999999`.
+- **ModelManager**: mensaje de éxito `text-[#00E5C9]` → `text-[#E5E5E5]` (errores en rojo se mantienen).
+- Los únicos usos de teal restantes son los tintes de fondo de estados activos `bg-[rgba(0,229,201,...)]` (restricción de diseño respetada: nunca en bordes/iconos/texto).
+- **Verificación**: `tsc --noEmit`, `npm test` (11), `npm run build` pasan sin errores.
+
+### Completado — Panel unificado Progress + ArtifactCard "Abrir en" + grises
+
+- **Panel Progress unificado** (`ProgressPanel.tsx`, reemplaza ResearchAside): secciones Progress (N of M derivado de tool_call/tool_result, barra), Project (nombre + working folder), Archivos (writes con estado ✓/… y reads con "Mostrar en carpeta" vía `revealItemInDir`), Documentos (solo .md de write con "Abrir"), Instrucciones (`personaPrompt`), Contexto (skills vía `list_skills` + fuentes). Header con dot running (teal pulse)/stop/collapse/close; colapsado → tira 36px con botón expandir.
+- **Persistencia por conversación**: `steps?: ConversationStep[]` en `Conversation` + `updateConvSteps` en `useChat.ts`; `App.tsx` guarda pasos al cambiar de conv (`handleSelectConversation`), al cerrar panel (`handlePanelClose`), y en `handleAgentComplete`; restaura al reabrir (`handlePanelOpen`). Estado `panelDismissed` por conv en localStorage `solaria-panel-dismissed` → al cerrar no se reabre sola; botón header en Chat ("Abrir panel de progreso", icono rayo) la restaura.
+- **ArtifactCard estilo Codex**: prop `filePath`, icono documento neutro, sin fecha, botón `.md` (save + write_text_file), menú "Abrir en >" (En este chat / Con la app del sistema / Guardar como…), ruta propagada desde `useAgent.ts` con marcador `\n\n--- Archivo: <path>`.
+- **write_file oculto en Proceso**: `toolContent?` en `AgentStep`; `toolArgs` usa placeholder `[CONTENIDO OCULTO — N caracteres]`; `extractReports` usa `toolContent`.
+- **Referencias y sidebar en grises**: scoreColor/contadores/dots/URLs sin teal/dorado (error rojo semántico se mantiene); botón `+` y Abrir Markdowns gris oscuro; Skills gris con hover dorado (`group-hover`).
+- **ResearchAside.tsx ELIMINADO** (sustituido por ProgressPanel).
+- **Verificación**: `tsc --noEmit`, `npm test` (11), `cargo check`, `npm run build` pasan sin errores.
+
+### Completado — Rediseño UI editorial (sidebar resizable, thinking blocks, bordes neutralizados)
+
+- **Textarea auto-expansión a 250px**: helper `resizeInput()` (auto → min(scrollHeight, 250)) en `Chat.tsx`, llamado en `onChange` y vía `useEffect` dependiente de `[input]` para que crezca también al setear input programáticamente (templates, slash commands). `max-h-[250px]` en className.
+- **Sidebar redimensionable** (`GeneralWorkspace.tsx`): estado `sidebarWidth` (default 260, clamp 200–400), persistido en `localStorage` `solaria-sidebar-width`, drag handle `cursor-col-resize` con listeners `mousemove/mouseup`, `w-[320px]` → `style={{ width }}`. Colapsado (52px) intacto.
+- **Thinking blocks estilo Claude**: backend `providers.rs` emite `stream://thinking` (OpenAI `reasoning_content`, Anthropic `delta.thinking`); `useChat.ts` (Message.thinking + appendToAssistantThinking + listener); `Chat.tsx` componente `ThinkingBlock` colapsable (icono cerebro, chars, chevron, fondo neutro) renderizado antes del contenido.
+- **Bordes/strokes/glows de acento neutralizados en TODOS los archivos**: teal `#00E5C9` / dorado `#DCB263` ahora SOLO como tintas de fondo o texto de estado; todos los `border-*`, `ring-*`, `focus:border-[#DCB263]`, `hover:border-[#DCB263]`, `border-[#00E5C9]/NN` → neutros `rgba(255,255,255,0.06–0.2)`; glows `stepGlow`/`stepGlowTeal` y `streaming-message::before` en `index.css` → blanco; focus shadow del input de chat → `focus-within:shadow-[0_0_0_1px_rgba(255,255,255,0.08)]`. Glows del botón CTA con gradiente se MANTIENEN intactos.
+- **Radios suavizados**: `rounded-lg` → `rounded-xl` en superficies clave (search de GeneralWorkspace/TemplateSelector, cards de ResearchAside, filas de conversación/proyecto, inputs de TemplateForm, cards de ModelComparator, surfaces de SettingsPanel).
+- **Markdown.tsx**: blockquote `border-l-2 border-[#00E5C9]` → neutro; tool call chips `borderColor` → neutros (bg tint + text de acento intactos); task checkbox `border-[#00E5C9]` → neutro (fill `bg-[#00E5C9]` intacto).
+- **Verificación**: `cargo check`, `tsc --noEmit`, `npm test` (11), `cargo test` (11), `npm run build` pasan sin errores.
 
 ### Pendiente (próxima sesión)
 
-1. **Prototipo de template con formulario inteligente** — `TemplateForm` para "Contrato de Arrendamiento" en Panamá.
+1. **Fase 2 Progress**: inyectar/parsear `<plan>` del agente para el Progress "N of M" real con checkmarks completados.
 2. **Adjuntos de PDF/imágenes/Office** — parsear PDFs, mostrar previews, exportar a PDF/DOCX.
 3. **Sidebar estilo Codex** — secciones colapsables: Search, Workspace (Dashboard, Documentos, Skills, Configuración), Fijados, Recientes, Proyectos, Archivados.
 4. **Auto-updater** — integración con backend `solariam.im` para actualizaciones automáticas.
+
+### Restricciones de diseño (mantener)
+
+- Paleta Solaria intacta; acentos teal `#00E5C9` y dorado `#DCB263` SOLO como tintas de fondo (`bg-[rgba(0,229,201,0.06)]` / `bg-[rgba(220,178,99,0.08)]`), nunca en bordes/strokes/glows. Acentos SÍ permitidos como `text-[#00E5C9]` en badges/estados activos y como `fill`/`stroke` de iconos SVG, pero nunca como borde.
+- Bordes neutros `rgba(255,255,255,0.06–0.08)`, hover `bg-[rgba(255,255,255,0.04)]`, inputs `bg-[#0F0F0F]`, botón CTA con gradiente existente intacto (sus glows hover se mantienen).

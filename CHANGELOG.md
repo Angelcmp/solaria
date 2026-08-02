@@ -3,11 +3,19 @@
 ## [Unreleased]
 
 ### Added
+- **Sistema de templates rediseñado** — set curado de 20 templates en español (Legal Panamá, Finanzas, Negocios, Investigación, Documentos, Productividad) con modelo `PromptTemplate` en `src/lib/prompts.ts`, incluye `agentMode` opcional para activar el modo agente automáticamente y variables con formulario inteligente (`TemplateForm.tsx`)
+- **Selector de templates estilo Codex** — modal con búsqueda, filtro por categoría, secciones Favoritos y Recientes (localStorage), cards con icono y badges Agent/Formulario (`TemplateSelector.tsx`)
+- **Persona por conversación** — templates con `systemPrompt` ahora inyectan una persona persistente en la conversación (badge en header con botón para quitarla); se propaga a chat normal, agente, regeneración y respuestas del agente (`useChat.ts`, `useAgent.ts`, `Chat.tsx`)
+- **Slash commands** — menú inline al escribir `/` en el input con comandos built-in (`/contrato`, `/investigar`, `/resumen`, `/factura`, `/analizar`) y comandos personalizados descubiertos en `.solaria/commands/*.md` (global y por proyecto) vía nuevo comando Tauri `list_commands` (`src-tauri/src/commands.rs`)
+- **Thinking blocks estilo Claude** — el razonamiento del modelo se muestra en un bloque colapsable (icono cerebro, chars, chevron) antes del contenido; capturado vía nuevo evento `stream://thinking` (`reasoning_content` en OpenAI-compat, `delta.thinking` en Anthropic) (`providers.rs`, `useChat.ts`, `Chat.tsx`)
+- **Sidebar redimensionable** — drag handle en el borde derecho para ajustar el ancho del panel izquierdo (200–400px, default 260px), persistido en localStorage (`GeneralWorkspace.tsx`)
+- **Textarea auto-expansible** — el input del chat crece hasta 250px según el contenido (`resizeInput()` en `Chat.tsx`)
 - **System prompt por defecto** — modo chat normal ahora usa `DEFAULT_SYSTEM_PROMPT` para guiar al modelo a generar markdown válido y correctamente formateado (`useChat.ts`)
 - **Normalización de markdown** — nueva función `normalizeMarkdown()` corrige code fences mal formados (inline, sin saltos de línea, cierre pegado) antes de renderizar (`Markdown.tsx`)
 - **WikiListAside independiente** — cerrar la lista de markdowns ya no cierra el visor del `.md` abierto, manteniendo la lectura (`App.tsx`)
 
 ### Changed
+- **Estilo editorial** — acentos teal `#00E5C9` / dorado `#DCB263` neutralizados de todos los bordes/strokes/glows (ahora solo tintas de fondo y texto de estado); radios suavizados (`rounded-xl`) en superficies clave; glows de streaming/step neutralizados a blanco. Glows del botón CTA con gradiente intactos
 - **Burbuja de usuario rediseñada** — `rounded-2xl` uniforme, padding `px-4 py-2.5`, font-size `0.8125rem`, borde `[rgba(255,255,255,0.08)]`; separación entre mensajes `mb-6`; padding asistente `pt-2 pb-1` (`Chat.tsx`)
 - **Tool call timeline en chat** — chips individuales reemplazados por resumen `⏺ Ejecutando N herramientas...` durante ejecución del agente; chips suprimidos del markdown mientras corre (`Chat.tsx`, `Markdown.tsx`)
 - **StepCard expandido por defecto** — pasos del agente en ResearchAside ya no se auto-colapsan; usuario minimiza manualmente. Eliminada lógica `autoCollapse` (`ResearchAside.tsx`)

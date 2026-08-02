@@ -72,7 +72,7 @@ export default function ModelPicker({
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 px-2 py-[3px] rounded border border-[rgba(0,229,201,0.2)] bg-[rgba(0,229,201,0.07)] text-[#00E5C9] text-[0.65rem] leading-none hover:bg-[rgba(0,229,201,0.12)] transition-colors cursor-pointer whitespace-nowrap"
+        className="flex items-center gap-2 px-2 py-[3px] rounded border border-[rgba(255,255,255,0.08)] bg-[rgba(0,229,201,0.07)] text-[#00E5C9] text-[0.65rem] leading-none hover:bg-[rgba(0,229,201,0.12)] transition-colors cursor-pointer whitespace-nowrap"
       >
         <span className="max-w-[110px] truncate">{activeProviderLabel}</span>
         <span className="text-[0.55rem] opacity-70 max-w-[80px] truncate">{activeModel}</span>
@@ -85,7 +85,7 @@ export default function ModelPicker({
         <div className="absolute top-full right-0 mt-1.5 w-[300px] max-h-[360px] overflow-hidden bg-[#151515] border border-[rgba(255,255,255,0.1)] rounded-xl shadow-[0_16px_48px_rgba(0,0,0,0.5)] z-50 flex flex-col">
           {/* Search */}
           <div className="px-3 py-2.5 border-b border-[rgba(255,255,255,0.06)]">
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#1C1B1B] border border-[rgba(255,255,255,0.06)] focus-within:border-[rgba(0,229,201,0.25)] transition-colors">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#1C1B1B] border border-[rgba(255,255,255,0.06)] focus-within:border-[rgba(255,255,255,0.08)] transition-colors">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#666666" strokeWidth="2">
                 <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
               </svg>

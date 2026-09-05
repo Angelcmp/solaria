@@ -289,6 +289,7 @@ fn process_alive(pid: u32) -> bool {
 
 const UPDATE_REPO: &str = "Angelcmp/solaria";
 const DEFAULT_API_BASE: &str = "https://api.github.com";
+#[cfg(not(target_os = "macos"))]
 const DEFAULT_INSTALL_SH_URL: &str =
     "https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh";
 

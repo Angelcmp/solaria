@@ -487,7 +487,11 @@ verify_checksum() {
   curl -fsSL -o "$dir/SHA256SUMS.txt" "$sums_url" \
     || { warn "no se pudo descargar SHA256SUMS.txt; omitiendo verificación"; return 0; }
   local expected
-  expected="$(grep -F " $asset" "$dir/SHA256SUMS.txt" | awk '{print $1}' | head -1)"
+  # Match tolerante: compara normalizando espacios a puntos, porque el
+  # nombre del asset puede diferir del nombre en disco ("a b.deb" vs "a.b.deb").
+  expected="$(awk -v a="$asset" '
+    { h=$1; sub(/^[^ ]+[ ]+/, ""); g=$0; sub(/.*\//, "", g); gsub(/ /, ".", g); ga=a; gsub(/ /, ".", ga); if (g==ga) { print h; exit } }
+  ' "$dir/SHA256SUMS.txt" | head -1)"
   [ -n "$expected" ] || { warn "sin entrada para $asset en SHA256SUMS.txt; omitiendo verificación"; return 0; }
   echo "$expected  $localfile" | ( cd "$dir" && sha256sum -c - ) \
     || err "checksum inválido para $asset (descarga corrupta o manipulada)"

@@ -59,6 +59,15 @@ jobs:
           chmod +x "$STAGE/solaria-agent" "$STAGE/solaria"
           tar -czf "dist/solaria-${VER}-linux-x86_64.tar.gz" -C dist "solaria-${VER}-linux-x86_64"
           ( cd dist && sha256sum "solaria-${VER}-linux-x86_64.tar.gz" > SHA256SUMS.txt )
+          # Nombres deterministas (sin espacios): el nombre del asset debe
+          # coincidir byte a byte con la entrada del SHA256SUMS.
+          for d in src-tauri/target/release/bundle/deb src-tauri/target/release/bundle/appimage; do
+            [ -d "$d" ] || continue
+            ( cd "$d" && for f in *; do
+              n="$(echo "$f" | tr ' ' '.')"
+              [ "$f" = "$n" ] || mv "$f" "$n"
+            done )
+          done
           ( cd src-tauri/target/release/bundle && find deb appimage -type f \( -name '*.deb' -o -name '*.AppImage' \) -exec sha256sum {} + >> "$GITHUB_WORKSPACE/dist/SHA256SUMS.txt" )
           cat dist/SHA256SUMS.txt
 

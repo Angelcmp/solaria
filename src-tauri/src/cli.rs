@@ -266,18 +266,23 @@ pub fn stop() {
     }
 }
 
-/// Lee el pid file y verifica que el proceso siga vivo (Linux: /proc/<pid>).
+/// Lee el pid file y verifica que el proceso siga vivo (portable: sysinfo).
 fn read_daemon_pid(pid_path: &std::path::Path) -> Option<u32> {
     let content = std::fs::read_to_string(pid_path).ok()?;
     let pid: u32 = content.trim().parse().ok()?;
-    let alive = std::path::Path::new(&format!("/proc/{}", pid)).exists();
-    if alive {
+    if process_alive(pid) {
         Some(pid)
     } else {
         // Pid rancio de una ejecución anterior: limpiarlo.
         let _ = std::fs::remove_file(pid_path);
         None
     }
+}
+
+/// ¿Sigue vivo el proceso? (Linux usaba /proc; ahora sysinfo en todo OS).
+fn process_alive(pid: u32) -> bool {
+    let sys = sysinfo::System::new_all();
+    sys.process(sysinfo::Pid::from_u32(pid)).is_some()
 }
 
 // ── update / uninstall: cáscaras finas que delegan en install.sh ──
@@ -294,8 +299,17 @@ fn api_base() -> String {
 
 /// URL del instalador (sobreescribible para pruebas).
 fn install_sh_url() -> String {
-    std::env::var("SOLARIA_INSTALL_SH_URL")
-        .unwrap_or_else(|_| DEFAULT_INSTALL_SH_URL.to_string())
+    if let Ok(url) = std::env::var("SOLARIA_INSTALL_SH_URL") {
+        return url;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        "https://raw.githubusercontent.com/Angelcmp/solaria/main/install-macos.sh".to_string()
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        DEFAULT_INSTALL_SH_URL.to_string()
+    }
 }
 
 pub fn update(args: &[String]) {
@@ -486,6 +500,7 @@ mod tests {
 
 fn home_dir() -> std::path::PathBuf {
     std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|_| std::path::PathBuf::from("."))
 }

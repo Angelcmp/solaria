@@ -94,6 +94,14 @@ curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | 
 curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | bash -s -- --uninstall
 ```
 
+### macOS (Apple Silicon, ~2-4 min)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install-macos.sh | bash
+```
+
+Descarga el binario precompilado (`darwin-aarch64`, verificado con sha256) a `~/.local/share/solaria` y el wrapper `solaria` a `~/.local/bin` (sin sudo, sin dependencias). Los mismos comandos CLI (`ask`, `agent`, `serve`, `update`, `uninstall`) funcionan igual que en Linux. Nota: al ser un build sin firma de Apple, el primer arranque de la GUI pedirá clic derecho → Abrir; el CLI no está afectado. Solo arm64 (Intel no soportado).
+
 ### Manual
 
 ```bash

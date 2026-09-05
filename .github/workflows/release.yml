@@ -89,13 +89,20 @@ jobs:
           path: release-assets/*
 
   publish:
-    needs: build-linux
+    needs: [build-linux, build-macos]
     runs-on: ubuntu-24.04
     steps:
-      - name: Download artifacts
+      - name: Download Linux artifacts
         uses: actions/download-artifact@v4
         with:
           pattern: linux-*
+          merge-multiple: true
+          path: dist
+
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: darwin-*
           merge-multiple: true
           path: dist
 
@@ -104,7 +111,7 @@ jobs:
           set -euo pipefail
           shopt -s nullglob
           cd dist
-          sha256sum ./*.tar.gz ./*.deb ./*.AppImage > SHA256SUMS.txt
+          sha256sum ./*.tar.gz ./*.deb ./*.AppImage ./*.dmg > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Publish GitHub Release
@@ -114,4 +121,64 @@ jobs:
             dist/*.tar.gz
             dist/*.deb
             dist/*.AppImage
+            dist/*.dmg
             dist/SHA256SUMS.txt
+
+  build-macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          targets: aarch64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      - name: Build (Tauri release)
+        run: npm run tauri build
+
+      - name: Smoke test (CLI, sin GUI)
+        run: |
+          ./src-tauri/target/release/solaria-agent version
+          ./src-tauri/target/release/solaria-agent --help > /dev/null
+
+      - name: Package tarball
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          VER="${GITHUB_REF_NAME#v}"
+          STAGE="dist/solaria-${VER}-darwin-aarch64"
+          mkdir -p "$STAGE"
+          cp "src-tauri/target/release/solaria-agent" "$STAGE/"
+          cp "scripts/solaria" "$STAGE/solaria"
+          cp "src-tauri/icons/128x128.png" "$STAGE/solaria.png"
+          chmod +x "$STAGE/solaria-agent" "$STAGE/solaria"
+          tar -czf "dist/solaria-${VER}-darwin-aarch64.tar.gz" -C dist "solaria-${VER}-darwin-aarch64"
+          for d in src-tauri/target/release/bundle/dmg; do
+            [ -d "$d" ] || continue
+            ( cd "$d" && for f in *; do
+              n="$(echo "$f" | tr ' ' '.')"
+              [ "$f" = "$n" ] || mv "$f" "$n"
+            done )
+          done
+          mkdir -p release-assets
+          cp dist/*.tar.gz release-assets/
+          cp src-tauri/target/release/bundle/dmg/*.dmg release-assets/ 2>/dev/null || true
+          ls release-assets/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: darwin-aarch64
+          path: release-assets/*

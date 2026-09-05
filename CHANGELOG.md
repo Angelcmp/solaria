@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.9.3] — 2026-09-05
+
+### Added
+- **Soporte macOS Apple Silicon** — nuevo `install-macos.sh` (descarga tarball `darwin-aarch64` verificado, user-local sin sudo ni dependencias, PATH en `.zshrc`, skip-if-current, uninstall total); job `build-macos` (`macos-14`) en `release.yml` con smoke test CLI y `.dmg` como asset
+- **CLI portable**: `read_daemon_pid` vía `sysinfo` (adiós `/proc`), `home_dir()` con fallback `USERPROFILE`, `solaria update` descarga `install-macos.sh` en macOS (`SOLARIA_INSTALL_SH_URL` sigue mandando)
+
 ## [0.9.2] — 2026-09-05
 
 ### Added

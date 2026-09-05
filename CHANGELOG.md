@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+- **Verificación sha256 con nombres con espacios** — el `.deb`/`.AppImage` del bundle Tauri llevan espacios (`Solaria Agent_…`) y el asset publicado usa puntos; `verify_checksum` compara normalizando espacios→puntos y sin prefijos de dir; `release.yml` renombra a puntos antes de firmar; `SHA256SUMS.txt` de v0.9.1 republicado ya corregido
+- **`unzip` en dependencias** — `fnm` lo exige y faltaba en imágenes mínimas y en las 4 listas del instalador
+
 ## [0.9.1] — 2026-09-05
 
 ### Added

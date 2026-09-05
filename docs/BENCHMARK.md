@@ -56,5 +56,8 @@ scripts/bench/bench-install.sh server-stop
 ```
 
 Logs con marcas `BENCH-TIME` por etapa en `/tmp/solaria-bench/logs/*.log`.
-Con un release real publicado basta apuntar `GITHUB_API` a `https://api.github.com`
-y `SOLARIA_VERSION` al tag para medir descargas reales.
+
+## Validación real (v0.9.1, one-liner contra GitHub)
+
+- **Ubuntu 24.04**: rc=0, checksums verificados (tarball + `.deb`), `solaria 0.9.1 responde correctamente` (vía `.deb`).
+- **Fedora 41**: rc=0 en 106s, checksum verificado, `solaria 0.9.1 responde correctamente` (vía tarball).

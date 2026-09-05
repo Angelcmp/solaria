@@ -81,7 +81,7 @@ Descarga el binario precompilado del último GitHub Release (Linux x86_64/aarch6
 
 ```bash
 # Fijar versión
-SOLARIA_VERSION=v0.9.1 curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | bash
+SOLARIA_VERSION=v0.9.3 curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | bash
 
 # Compilar desde fuente (todas las arch, 15-30 min; requiere Rust, Node, ~8 GB de disco)
 curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | bash -s -- --from-source
@@ -93,6 +93,9 @@ curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | 
 curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | bash
 curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | bash -s -- --uninstall
 ```
+
+> Si tras instalar ves `solaria: command not found`, abre una terminal nueva
+> (el wrapper vive en `~/.local/bin` y el instalador lo añade a tu PATH).
 
 ### macOS (Apple Silicon, ~2-4 min)
 

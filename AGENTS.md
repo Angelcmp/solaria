@@ -1,6 +1,31 @@
 # Solaria — Session Progress
 
-## Última sesión (2026-08-02)
+## Última sesión (2026-09-05)
+
+### Completado — Instalación Linux rápida, Fase 1 (precompilados)
+
+- **CI de releases** (`.github/workflows/release.yml` nuevo): trigger tag `v*`, runner `ubuntu-24.04` x86_64; deps del sistema + `npm ci` + `tauri build`; empaqueta tarball `solaria-<ver>-linux-x86_64.tar.gz` (binario + wrapper + icono) y publica tarball + `SHA256SUMS.txt` + `.deb`/`.AppImage` vía `softprops/action-gh-release`.
+- **`install.sh` modo descarga por defecto**: `resolve_tag` (`SOLARIA_VERSION`), `asset_url`/`json_tag` (python3 o grep), `verify_checksum` contra `SHA256SUMS.txt`; `.deb` + `apt-get install -f` en apt, tarball + `install_system_deps` en el resto; `install_binary` refactorizado en `deploy_binary` + `install_wrapper`; `ICON_SRC`/`WRAPPER_SRC` parametrizables; `--from-source` conserva flujo fuente; `git` solo exigido en modo fuente.
+- **`README.md`**: sección instalación reescrita (2-4 min, `SOLARIA_VERSION`, `--from-source`, update/reinstall); **`CHANGELOG.md`**: entrada `[Unreleased]`.
+- **Verificación**: `bash -n`, `--help`, flag desconocido, YAML válido, parseo de release JSON (con y sin python3), checksum válido/inválido. Pendiente: probar un release real con tag (requiere push + runner) y la instalación limpia en contenedor.
+- **Benchmark multi-distro** (esta sesión, `docs/BENCHMARK.md`): harness `scripts/bench/` (mock API + tarball/`.deb` stub, `GITHUB_API` + `SOLARIA_TIMING` nuevos en `install.sh`), 5 distros en podman en frío: Ubuntu 60s, Debian 85s, Fedora 75s, Arch 70s, openSUSE TW 111s (todas OK, `solaria version` responde). Encontró y corrigió 4 bugs: fallback `http`, `pacman -Sy`, preflight sin `awk`, nombres zypper.
+- **Fase 1b — reinstall inteligente + uninstall total** (`install.sh`): `installed_version()` y skip si coincide (`--force` para forzar); `stop_daemon()` (stop graceful + pkill + pid) en deploy y `.deb`; `--uninstall` borra todo (dpkg `--remove`, `/usr/bin`, wrapper, desktop, icono, repo, `~/.solaria`). E2E en podman Ubuntu: install → skip 0.1s → `--force` → uninstall sin restos.
+- **Fase 2 — `solaria update` / `solaria uninstall`** (`cli.rs`, `main.rs`): `update [--check]` compara semver contra último Release y delega vía `exec` a `install.sh` (`SOLARIA_VERSION`=tag); `uninstall [--yes]` confirma interactivamente (exige `--yes` sin TTY) y ejecuta `install.sh --uninstall`. Overrides `SOLARIA_API_BASE`/`SOLARIA_INSTALL_SH_URL`. Tests unitarios de versiones OK; ayuda actualizada.
+- **Siguiente**: Fase 2 — `solaria update` (subcomando que compara versión y auto-actualiza desde Releases).
+
+## Sesión anterior (2026-09-04)
+
+### Completado — CLI v0.9.0 + instalador Linux (`31401f9`, PR #18)
+
+- **Comandos nuevos** (`cli.rs`, `main.rs`): `version` (`--version`/`-V`), `status`/`stop` vía `~/.solaria/solaria.pid` con check `/proc/<pid>` y limpieza de pid rancio.
+- **`serve` con pid real**: guarda el pid del hijo daemon, detecta instancia corriendo, reporta pid file.
+- **Parser en cualquier posición**: `--provider=`/`--model=`/`--api-key=`/`--host=`/`--dir=`, `-d`; resto posicional = prompt; flag desconocido → error. `ask` sin prompt solo lee stdin con pipe (no bloquea TTY).
+- **Wrapper reescrito** (`scripts/solaria`): orden `/usr/local/lib/solaria/` → `~/.local/share/solaria/` → `target/release` → PATH; inyecta `--dir $PWD` solo a `ask`/`agent` tras el subcomando; respeta `--dir` explícito.
+- **Instalador canónico** (`install.sh` nuevo, 414 líneas): preflight, deps por distro, clonado, `tauri build`, verify, `--debug-build`/`--skip-build`/`--skip-clone`/`--clean`/`--uninstall`; `scripts/install.sh` → shim legacy.
+- **Bump 0.8.5 → 0.9.0** (`package.json`, `Cargo.toml`, `tauri.conf.json`); `README.md`: URL `install.sh`, requisitos y flags.
+- **Verificación**: `CHANGELOG.md` con sección `[0.9.0]`, `README.md` CLI actualizado (esta sesión).
+
+## Sesión anterior (2026-08-02)
 
 ### Completado — Transición suave colapsar/expandir en asides (duration-300 ease-in-out)
 

@@ -71,19 +71,26 @@ sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev \
 
 ## Instalación
 
-### Rápida (recomendada)
+### Rápida (recomendada, ~2-4 min)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | bash
 ```
 
-El script instala automáticamente Rust, Node.js, dependencias del sistema, clona el repositorio y compila Solaria. Requiere Linux x86_64/aarch64, ~8 GB de disco libre y conexión a internet (la primera compilación tarda 15-30 min; con `--debug-build`, 5-10 min). Puede pedir sudo una vez para dependencias y `/usr/local`.
+Descarga el binario precompilado del último GitHub Release (Linux x86_64; en sistemas con `apt` instala el `.deb`, en el resto un tarball con verificación sha256) e instala solo las dependencias de ejecución. Requiere conexión a internet y puede pedir sudo una vez.
 
 ```bash
-# Build más rápido (debug, igual de funcional)
-curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | bash -s -- --debug-build
+# Fijar versión
+SOLARIA_VERSION=v0.9.1 curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | bash
 
-# Desinstalar
+# Compilar desde fuente (todas las arch, 15-30 min; requiere Rust, Node, ~8 GB de disco)
+curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | bash -s -- --from-source
+
+# Build desde fuente más rápido (debug, igual de funcional, 5-10 min)
+curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | bash -s -- --from-source --debug-build
+
+# Actualizar a la última versión / desinstalar
+curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | bash
 curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | bash -s -- --uninstall
 ```
 
@@ -121,11 +128,16 @@ Una vez compilado, el binario `src-tauri/target/release/solaria-agent` se puede 
 # Agente de investigación sobre el directorio actual
 ./src-tauri/target/release/solaria-agent agent "investiga este proyecto" --dir .
 
-# Daemon con pid file
+# Daemon con pid file (verifica instancia ya corriendo)
 ./src-tauri/target/release/solaria-agent serve
+./src-tauri/target/release/solaria-agent status
+./src-tauri/target/release/solaria-agent stop
+
+# Versión
+./src-tauri/target/release/solaria-agent version
 ```
 
-También puedes usar el wrapper `scripts/solaria` desde el repo, que usa el directorio actual como `--dir` por defecto:
+También puedes usar el wrapper `scripts/solaria` desde el repo (o el instalado en `~/.local/bin` por `install.sh`), que resuelve el binario real en orden `/usr/local/lib/solaria/` → `~/.local/share/solaria/` → build local `target/release` → PATH, e inyecta `--dir $PWD` solo a `ask`/`agent` (respeta `--dir`/`--dir=`/`-d` explícito):
 
 ```bash
 ./scripts/solaria set-key openai sk-...
@@ -197,12 +209,25 @@ solaria agent "investiga esto" --api-key sk-...
 # Preview de herramientas sin ejecutarlas
 solaria agent "borra los archivos temporales" --dry
 
-# Chat one-shot (también acepta stdin vía pipe)
+# Chat one-shot (también acepta stdin vía pipe; sin prompt y sin pipe muestra ayuda)
 solaria ask "¿qué hace este proyecto?"
 cat README.md | solaria ask "resume esto"
 ```
 
-Flags disponibles: `--provider`, `--model`, `--api-key`, `--host`, `--dir`, `--dry`.
+Comandos: `ask`, `agent`, `set-key`, `serve`, `status`, `stop`, `version` (`--version`/`-V`), `update`, `uninstall`.
+
+```bash
+# Ver si hay nueva versión (sin instalar)
+solaria update --check
+
+# Actualizar a la última (delega en install.sh; no hace nada si estás al día)
+solaria update
+
+# Desinstalar TODO (binarios, .deb, repo, ~/.solaria con keys y datos)
+solaria uninstall --yes   # sin --yes pide confirmación interactiva
+```
+
+Flags disponibles (`ask`/`agent`): `--provider`, `--model`, `--api-key`, `--host`, `--dir`, `--dry`. Se aceptan en cualquier posición y con `=` (`--dir=/ruta`) o `-d` para `--dir`; el resto posicional se une como prompt. `status`/`stop` usan el pid file `~/.solaria/solaria.pid`.
 
 > Para usar un modelo local (Ollama), añade `--provider ollama --model <modelo> --host http://localhost:11434`.
 

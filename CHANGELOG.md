@@ -2,6 +2,40 @@
 
 ## [Unreleased]
 
+## [0.9.1] — 2026-09-05
+
+### Added
+- **Comandos CLI `update` y `uninstall`** — `solaria update [--check]` consulta el último Release, compara semver y delega en `install.sh` (`SOLARIA_VERSION` fijado al tag); `solaria uninstall [--yes]` pide confirmación interactiva (se niega sin TTY y sin `--yes`) y ejecuta `install.sh --uninstall`. Ambos descargan el instalador y lo reemplazan vía `exec`. URLs sobreescribibles para GHES/pruebas (`SOLARIA_API_BASE`, `SOLARIA_INSTALL_SH_URL`) (`cli.rs`, `main.rs`)
+- **Reinstalación inteligente en `install.sh`** — `installed_version()` detecta la versión instalada; si coincide con la solicitada no hace nada (0.1s, `usa --force para reinstalar`); nuevo flag `--force` (`SOLARIA_FORCE=1`)
+- **Parada ordenada en deploy/uninstall** — `stop_daemon()` intenta `solaria stop` antes de `pkill` y siempre limpia el pid file
+- **Instalación rápida con precompilados** — nuevo workflow `.github/workflows/release.yml` (tag `v*`, Linux x86_64): publica en cada GitHub Release el tarball `solaria-<ver>-linux-x86_64.tar.gz` (binario + wrapper + icono), `.deb`/`.AppImage` del bundle Tauri y `SHA256SUMS.txt`
+- **`install.sh` modo descarga por defecto (~2-4 min)** — resuelve el release (`SOLARIA_VERSION=latest|vX.Y.Z`), instala el `.deb` en sistemas `apt` (con `apt-get install -f` para deps) o el tarball verificado con sha256 en el resto; solo instala dependencias de ejecución, ya no requiere Rust/Node ni compilar
+- **Flag `--from-source` (`SOLARIA_FROM_SOURCE=1`)** — conserva el flujo anterior (clonar + `tauri build`, 15-30 min) para otras arquitecturas (aarch64) o desarrollo; `git` solo se exige en este modo
+- **Robustez multi-distro** (detectado con benchmark en podman, `docs/BENCHMARK.md`): fallback sin python3 acepta `http(s)`, `pacman -Sy` en Arch virgen, preflight tolerante sin `awk`/`free`/`df`, `need_cmd awk gawk`, nombres zypper corregidos (`webkitgtk3-devel`, `libappindicator3-devel` + `refresh`)
+- **Instrumentación y testabilidad** — `GITHUB_API` sobreescribible (mock/GHES) y `SOLARIA_TIMING=1` (marcas `BENCH-TIME` por etapa); harness repetible en `scripts/bench/`
+
+### Changed
+- **`--uninstall` es borrado total por defecto** — `dpkg --remove` si hay `.deb` registrado, binario suelto en `/usr/bin`, wrapper, `.desktop`, icono, `/usr/local/lib/solaria`, repo `APP_DIR` y datos `~/.solaria` (keys, conversaciones)
+
+## [0.9.0] — 2026-09-04
+
+### Added
+- **Comandos CLI `version`, `status`, `stop`** — `solaria version` (`--version`/`-V`) imprime versión; `status`/`stop` consultan/detienen el daemon vía pid file `~/.solaria/solaria.pid` con verificación `/proc/<pid>` y limpieza de pid rancio (`cli.rs`, `main.rs`)
+- **Instalador canónico en raíz (`install.sh`)** — preflight (OS/arco/disco/red), dependencias por distro (apt/dnf/pacman/zypper), clonado a `~/.local/share/solaria`, build Tauri (release o `--debug-build`), verify y `--uninstall`; `scripts/install.sh` queda como shim legacy
+- **Daemon `serve` con pid real** — guarda el pid del hijo (no del CLI efímero), detecta instancia ya corriendo y reporta pid file
+
+### Changed
+- **Bump 0.8.5 → 0.9.0** (`package.json`, `src-tauri/Cargo.toml`, `tauri.conf.json`)
+- **Wrapper `scripts/solaria` reescrito** — resuelve binario en `/usr/local/lib/solaria/` → `~/.local/share/solaria/` → build local `target/release` → PATH; inyecta `--dir $PWD` solo a `ask`/`agent` (insertado tras el subcomando) y respeta `--dir`/`--dir=`/`-d` explícito en cualquier posición
+- **Parser CLI acepta flags en cualquier posición** — `--provider=`/`--model=`/`--api-key=`/`--host=`/`--dir=` y `-d`; posicionales restantes se unen como prompt; flag desconocido → error
+- **`ask` sin prompt solo lee stdin si hay pipe** — en TTY interactiva ya no bloquea (`IsTerminal` check)
+- **URL de instalación** — `scripts/install.sh` → `install.sh` en `README.md`, con notas de requisitos (~8 GB, 15-30 min, sudo una vez) y flags `--debug-build`/`--uninstall`
+
+### Fixed
+- **`serve` reportaba el pid equivocado** — ahora guarda e imprime el pid del daemon hijo
+
+## [Unreleased]
+
 ### Added
 - **Sistema de templates rediseñado** — set curado de 20 templates en español (Legal Panamá, Finanzas, Negocios, Investigación, Documentos, Productividad) con modelo `PromptTemplate` en `src/lib/prompts.ts`, incluye `agentMode` opcional para activar el modo agente automáticamente y variables con formulario inteligente (`TemplateForm.tsx`)
 - **Selector de templates estilo Codex** — modal con búsqueda, filtro por categoría, secciones Favoritos y Recientes (localStorage), cards con icono y badges Agent/Formulario (`TemplateSelector.tsx`)

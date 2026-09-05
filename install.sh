@@ -2,16 +2,27 @@
 #
 # Solaria Agent — Instalador para Linux
 #
-#   Instalación rápida (recomendado):
+#   Instalación rápida (recomendado, ~2-4 min, precompilado x86_64):
 #     curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | bash
 #
+#   Compilar desde fuente (todas las arch, 15-30 min):
+#     curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | bash -s -- --from-source
+#
 #   Opciones (flags o variables de entorno):
-#     --debug-build | SOLARIA_DEBUG_BUILD=1   Build debug (más rápido, ~5-10 min)
-#     --skip-build  | SOLARIA_SKIP_BUILD=1    Omitir compilación (usa binario existente)
-#     --skip-clone  | SOLARIA_SKIP_CLONE=1    Omitir clonado (usa checkout existente en APP_DIR)
-#     --clean       | SOLARIA_CLEAN=1         Borra ~/.local/share/solaria si no es repo git
-#     --uninstall                             Desinstala Solaria del sistema
-#     --help                                  Muestra esta ayuda
+#     --from-source   | SOLARIA_FROM_SOURCE=1   Compilar desde fuente en vez de descargar precompilado
+#     --force         | SOLARIA_FORCE=1         Reinstalar aunque la versión instalada esté al día
+#     --debug-build   | SOLARIA_DEBUG_BUILD=1   Build debug desde fuente (más rápido, ~5-10 min)
+#     --skip-build    | SOLARIA_SKIP_BUILD=1    (fuente) Omitir compilación (usa binario existente)
+#     --skip-clone    | SOLARIA_SKIP_CLONE=1    (fuente) Omitir clonado (usa checkout existente en APP_DIR)
+#     --clean         | SOLARIA_CLEAN=1         Borra ~/.local/share/solaria si no es repo git
+#     --uninstall                             Desinstala TODO: binarios, paquete .deb,
+#                                             repo, datos (~/.solaria) y entrada de menú
+#     --help                                    Muestra esta ayuda
+#
+#   Versión a instalar (modo descarga):
+#     SOLARIA_VERSION=latest (default) | v0.9.1 | 0.9.1
+#   Si la versión instalada ya coincide con la solicitada, no hace nada
+#   (usa --force para reinstalar). Actualizar = re-ejecutar el instalador.
 #
 #   Variables extra:
 #     SOLARIA_INSTALL_DIR   Dónde va el wrapper `solaria` (default: ~/.local/bin)
@@ -25,6 +36,7 @@
 set -euo pipefail
 
 REPO="${REPO:-Angelcmp/solaria}"
+GITHUB_API="${GITHUB_API:-https://api.github.com}"
 BRANCH="${BRANCH:-main}"
 BINARY_NAME="solaria-agent"
 INSTALL_DIR="${SOLARIA_INSTALL_DIR:-$HOME/.local/bin}"
@@ -37,6 +49,13 @@ DEBUG_BUILD="${SOLARIA_DEBUG_BUILD:-0}"
 SKIP_BUILD="${SOLARIA_SKIP_BUILD:-0}"
 SKIP_CLONE="${SOLARIA_SKIP_CLONE:-0}"
 CLEAN="${SOLARIA_CLEAN:-0}"
+FROM_SOURCE="${SOLARIA_FROM_SOURCE:-0}"
+FORCE="${SOLARIA_FORCE:-0}"
+SOLARIA_VERSION="${SOLARIA_VERSION:-latest}"
+# Orígenes del wrapper e icono (el modo descarga los sobreescribe
+# con los extraídos del tarball; el modo fuente usa el checkout).
+WRAPPER_SRC="${WRAPPER_SRC:-$APP_DIR/scripts/solaria}"
+ICON_SRC="${ICON_SRC:-$APP_DIR/src-tauri/icons/128x128.png}"
 
 # ── Colors & log ──
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
@@ -44,6 +63,15 @@ info() { echo -e "${CYAN}::${NC} $1"; }
 ok()   { echo -e "${GREEN}ok${NC}  $1"; }
 warn() { echo -e "${YELLOW}aviso${NC} $1"; }
 err()  { echo -e "${RED}error${NC} $1" >&2; exit 1; }
+
+# ── Timing (SOLARIA_TIMING=1): marcas BENCH-TIME por etapa ──
+T_START="$(date +%s)"; T_LAST="$T_START"
+tmark() {
+  [ "${SOLARIA_TIMING:-0}" = "1" ] || return 0
+  local now elapsed total
+  now="$(date +%s)"; elapsed=$((now - T_LAST)); total=$((now - T_START)); T_LAST="$now"
+  echo "BENCH-TIME etapa=$1 fase_s=$elapsed total_s=$total"
+}
 
 usage() {
   sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
@@ -55,6 +83,8 @@ for arg in "$@"; do
   case "$arg" in
     --help) usage ;;
     --debug-build) DEBUG_BUILD=1 ;;
+    --from-source) FROM_SOURCE=1 ;;
+    --force) FORCE=1 ;;
     --skip-build) SKIP_BUILD=1 ;;
     --skip-clone) SKIP_CLONE=1 ;;
     --clean) CLEAN=1 ;;
@@ -74,19 +104,54 @@ run_privileged() {
   fi
 }
 
-# ── Uninstall ──
+# ── Uninstall (borrado total) ──
 do_uninstall() {
-  info "Desinstalando Solaria..."
-  pkill -x "$BINARY_NAME" 2>/dev/null || true
+  info "Desinstalando Solaria (borrado total)..."
+  stop_daemon
+  # Paquete .deb registrado: darlo de baja para no dejar la entrada huérfana.
+  if command -v dpkg &>/dev/null && dpkg -s "$BINARY_NAME" >/dev/null 2>&1; then
+    run_privileged dpkg --remove "$BINARY_NAME" \
+      || warn "no se pudo purgar el paquete .deb (prueba con sudo)"
+  fi
+  # Binario suelto en /usr/bin (instalación manual o restos de otros modos).
+  if [ -f "/usr/bin/$BINARY_NAME" ]; then
+    if [ -w "/usr/bin/$BINARY_NAME" ]; then
+      rm -f "/usr/bin/$BINARY_NAME"
+    else
+      run_privileged rm -f "/usr/bin/$BINARY_NAME" \
+        || warn "no se pudo borrar /usr/bin/$BINARY_NAME (prueba con sudo)"
+    fi
+  fi
   rm -f "$INSTALL_DIR/solaria" "$DESKTOP_DIR/solaria.desktop" \
-        "$HOME/.solaria/solaria.pid"
+        "$HOME/.local/share/icons/solaria.png"
   if [ -d "$LIB_DIR_DEFAULT" ]; then
     run_privileged rm -rf "$LIB_DIR_DEFAULT" \
       || warn "no se pudo borrar $LIB_DIR_DEFAULT (prueba con sudo)"
   fi
-  info "Repo y datos conservados en: $APP_DIR y ~/.solaria"
-  info "Para borrado total: rm -rf \"$APP_DIR\" ~/.solaria"
-  ok "Solaria desinstalado"
+  # Repo clonado (+ binario en modo usuario) y todos los datos locales.
+  rm -rf "$APP_DIR" "$HOME/.solaria"
+  ok "Solaria desinstalado por completo (binarios, repo y datos)"
+}
+
+# ── Instalación existente: versión instalada ("" si no hay) ──
+installed_version() {
+  local out=""
+  if [ -x "$INSTALL_DIR/solaria" ]; then
+    out="$("$INSTALL_DIR/solaria" version 2>/dev/null)" || out=""
+  elif command -v solaria &>/dev/null; then
+    out="$(solaria version 2>/dev/null)" || out=""
+  fi
+  echo "$out" | sed 's/^solaria //;s/^v//' | head -1
+}
+
+# ── Parada ordenada del daemon (stop graceful + respaldo pkill + pid) ──
+stop_daemon() {
+  if [ -x "$INSTALL_DIR/solaria" ]; then
+    "$INSTALL_DIR/solaria" stop >/dev/null 2>&1 || true
+  fi
+  pkill -x "$BINARY_NAME" 2>/dev/null || true
+  sleep 1
+  rm -f "$HOME/.solaria/solaria.pid"
 }
 
 if [ "${ACTION:-install}" = "uninstall" ]; then
@@ -110,13 +175,17 @@ esac
 info "Detectado: Linux ($ARCH)"
 
 # RAM y disco mínimos (el build release es pesado)
-if command -v free &>/dev/null; then
+if command -v free &>/dev/null && command -v awk &>/dev/null; then
   MEM_GB=$(free -g | awk '/^Mem:/{print $2}')
   [ "$MEM_GB" -lt 4 ] && warn "RAM ${MEM_GB}GB < 4GB recomendados; el build puede fallar o usar swap"
 fi
-FREE_KB=$(df -k "$HOME" | awk 'NR==2{print $4}')
-[ "$FREE_KB" -lt 8388608 ] && warn "disco libre < 8GB; el build necesita ~6-10GB en ~/.local/share + target/"
-[ "$(nproc)" -lt 2 ] && warn "solo $(nproc) CPU; la compilación tardará bastante"
+if command -v df &>/dev/null && command -v awk &>/dev/null; then
+  FREE_KB=$(df -k "$HOME" | awk 'NR==2{print $4}')
+  [ "$FREE_KB" -lt 8388608 ] && warn "disco libre < 8GB; el build necesita ~6-10GB en ~/.local/share + target/"
+fi
+if command -v nproc &>/dev/null; then
+  [ "$(nproc)" -lt 2 ] && warn "solo $(nproc) CPU; la compilación tardará bastante"
+fi
 
 # ── Comandos base: git + curl ──
 need_cmd() {
@@ -127,7 +196,7 @@ need_cmd() {
   elif command -v dnf &>/dev/null; then
     run_privileged dnf install -y "$2"
   elif command -v pacman &>/dev/null; then
-    run_privileged pacman -S --noconfirm "$2"
+    run_privileged pacman -Sy --noconfirm "$2"
   elif command -v zypper &>/dev/null; then
     run_privileged zypper install -y "$2"
   else
@@ -135,8 +204,11 @@ need_cmd() {
   fi
   command -v "$1" &>/dev/null || err "no se pudo instalar '$1'"
 }
-need_cmd git git
 need_cmd curl curl
+need_cmd awk gawk
+if [ "$FROM_SOURCE" = "1" ]; then
+  need_cmd git git
+fi
 
 # ── Dependencias del sistema (compilador, webkit, ssl, utilidades) ──
 install_system_deps() {
@@ -148,30 +220,31 @@ install_system_deps() {
   if command -v apt-get &>/dev/null; then
     run_privileged apt-get update -qq
     run_privileged apt-get install -y -qq \
-      build-essential pkg-config curl wget file xdg-utils \
+      build-essential pkg-config curl wget file xdg-utils unzip \
       libssl-dev libsecret-1-dev \
       libwebkit2gtk-4.1-dev libgtk-3-dev \
       libayatana-appindicator3-dev librsvg2-dev patchelf \
     || err "falló apt. Revisa tu conexión e inténtalo de nuevo"
   elif command -v dnf &>/dev/null; then
     run_privileged dnf install -y \
-      gcc gcc-c++ make pkg-config curl wget file xdg-utils \
+      gcc gcc-c++ make pkg-config curl wget file xdg-utils unzip \
       openssl-devel libsecret-devel \
       webkit2gtk4.1-devel gtk3-devel \
       libappindicator-gtk3-devel librsvg2-devel patchelf \
     || err "falló dnf"
   elif command -v pacman &>/dev/null; then
-    run_privileged pacman -S --noconfirm \
-      base-devel pkg-config curl wget file xdg-utils \
+    run_privileged pacman -Sy --noconfirm \
+      base-devel pkg-config curl wget file xdg-utils unzip \
       openssl libsecret \
       webkit2gtk-4.1 gtk3 libappindicator-gtk3 librsvg patchelf \
     || err "falló pacman"
   elif command -v zypper &>/dev/null; then
+    run_privileged zypper --non-interactive refresh || true
     run_privileged zypper install -y \
-      gcc gcc-c++ make pkg-config curl wget file xdg-utils \
+      gcc gcc-c++ make pkg-config curl wget file xdg-utils unzip \
       libopenssl-devel libsecret-devel \
-      webkit2gtk3-devel gtk3-devel \
-      libappindicator-gtk3-devel librsvg-devel patchelf \
+      webkitgtk3-devel gtk3-devel \
+      libappindicator3-devel librsvg-devel patchelf \
     || err "falló zypper"
   else
     err "gestor de paquetes no reconocido. Instala manualmente: Rust, Node 18+, webkit2gtk, gtk3, openssl, patchelf (ver README.md)"
@@ -270,7 +343,51 @@ build_project() {
   ok "Build completado"
 }
 
-# ── Install binary + wrapper ──
+# ── Deploy: copia el binario al destino sistema o usuario ──
+deploy_binary() {
+  local src="$1"
+  [ -x "$src" ] || err "binario no ejecutable: $src"
+
+  # Cierra instancias en ejecución (stop ordenado + respaldo pkill + pid).
+  stop_daemon
+
+  # Destino preferido: /usr/local (requiere sudo una vez); si no, local.
+  local dest_dir="$LIB_DIR"
+  if [ "$dest_dir" = "$LIB_DIR_DEFAULT" ]; then
+    if mkdir -p "$dest_dir" 2>/dev/null && [ -w "$dest_dir" ]; then
+      cp "$src" "$dest_dir/$BINARY_NAME"
+    elif run_privileged mkdir -p "$dest_dir" \
+      && run_privileged cp "$src" "$dest_dir/$BINARY_NAME" \
+      && run_privileged chmod +x "$dest_dir/$BINARY_NAME"; then
+      info "binario instalado en sistema (con sudo)"
+    else
+      dest_dir="$APP_DIR"
+      warn "sin acceso a /usr/local; instalando en modo usuario ($dest_dir)"
+      mkdir -p "$dest_dir"
+      cp "$src" "$dest_dir/$BINARY_NAME"
+    fi
+  else
+    mkdir -p "$dest_dir"
+    cp "$src" "$dest_dir/$BINARY_NAME"
+  fi
+  chmod +x "$dest_dir/$BINARY_NAME" 2>/dev/null || true
+  ok "Binario instalado en $dest_dir/$BINARY_NAME"
+}
+
+# ── Wrapper CLI `solaria` en el PATH ──
+install_wrapper() {
+  mkdir -p "$INSTALL_DIR"
+  [ -f "$WRAPPER_SRC" ] || err "no se encontró el wrapper en $WRAPPER_SRC"
+  # Reemplaza el symlink legacy (si existe) por el wrapper real
+  if [ -L "$INSTALL_DIR/solaria" ]; then
+    rm -f "$INSTALL_DIR/solaria"
+  fi
+  cp "$WRAPPER_SRC" "$INSTALL_DIR/solaria"
+  chmod +x "$INSTALL_DIR/solaria"
+  ok "Wrapper CLI instalado en $INSTALL_DIR/solaria"
+}
+
+# ── Install binary + wrapper (modo fuente: resuelve el build local) ──
 install_binary() {
   local profile="release"
   [ "$DEBUG_BUILD" = "1" ] && profile="debug"
@@ -284,48 +401,14 @@ install_binary() {
   [ -n "${BINARY_PATH:-}" ] && [ -x "$BINARY_PATH" ] \
     || err "no se encontró el binario en src-tauri/target/$profile/ (¿falló el build?)"
 
-  # Cierra instancias en ejecución (si no, `cp` falla con "text busy").
-  # -x = match exacto: no mata a esta shell ni al wrapper.
-  pkill -x "$BINARY_NAME" 2>/dev/null || true
-  sleep 1
-
-  mkdir -p "$INSTALL_DIR"
-
-  # Destino preferido: /usr/local (requiere sudo una vez); si no, local.
-  local dest_dir="$LIB_DIR"
-  if [ "$dest_dir" = "$LIB_DIR_DEFAULT" ]; then
-    if mkdir -p "$dest_dir" 2>/dev/null && [ -w "$dest_dir" ]; then
-      cp "$BINARY_PATH" "$dest_dir/$BINARY_NAME"
-    elif run_privileged mkdir -p "$dest_dir" \
-      && run_privileged cp "$BINARY_PATH" "$dest_dir/$BINARY_NAME" \
-      && run_privileged chmod +x "$dest_dir/$BINARY_NAME"; then
-      info "binario instalado en sistema (con sudo)"
-    else
-      dest_dir="$APP_DIR"
-      warn "sin acceso a /usr/local; instalando en modo usuario ($dest_dir)"
-      cp "$BINARY_PATH" "$dest_dir/$BINARY_NAME"
-    fi
-  else
-    mkdir -p "$dest_dir"
-    cp "$BINARY_PATH" "$dest_dir/$BINARY_NAME"
-  fi
-  chmod +x "$dest_dir/$BINARY_NAME" 2>/dev/null || true
-
-  # Reemplaza el symlink legacy (si existe) por el wrapper real
-  if [ -L "$INSTALL_DIR/solaria" ]; then
-    rm -f "$INSTALL_DIR/solaria"
-  fi
-  cp "$APP_DIR/scripts/solaria" "$INSTALL_DIR/solaria"
-  chmod +x "$INSTALL_DIR/solaria"
-
-  ok "Binario instalado en $dest_dir/$BINARY_NAME"
-  ok "Wrapper CLI instalado en $INSTALL_DIR/solaria"
+  deploy_binary "$BINARY_PATH"
+  install_wrapper
 }
 
 # ── Desktop entry (Linux) ──
 install_desktop_entry() {
   mkdir -p "$DESKTOP_DIR"
-  local icon_src="$APP_DIR/src-tauri/icons/128x128.png"
+  local icon_src="$ICON_SRC"
   local icon_dst="$HOME/.local/share/icons/solaria.png"
   if [ -f "$icon_src" ]; then
     mkdir -p "$(dirname "$icon_dst")"
@@ -347,6 +430,120 @@ StartupNotify=true
 EOF
   chmod +x "$DESKTOP_DIR/solaria.desktop"
   ok "Entrada de menú creada (Solaria)"
+}
+
+# ── Modo descarga: precompilado desde GitHub Releases ──
+
+github_api() {
+  curl -fsSL "$GITHUB_API/repos/$REPO/$1" \
+    || err "no se pudo contactar la API de GitHub ($GITHUB_API) (revisa tu conexión)"
+}
+
+# Extrae un campo simple de un JSON (python3 si existe, si no grep).
+json_tag() {
+  if command -v python3 &>/dev/null; then
+    python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("tag_name",""))' "$1"
+  else
+    grep -o '"tag_name": *"[^"]*"' "$1" | head -1 | cut -d'"' -f4
+  fi
+}
+
+# Primera browser_download_url cuyo nombre de asset matchee el patrón.
+asset_url() {
+  local file="$1" pattern="$2"
+  if command -v python3 &>/dev/null; then
+    python3 -c 'import json,sys,re; d=json.load(open(sys.argv[1])); ms=[a.get("browser_download_url","") for a in d.get("assets",[]) if re.search(sys.argv[2], a.get("name",""))]; print(ms[0] if ms else "")' "$file" "$pattern"
+  else
+    grep -o '"browser_download_url": *"[^"]*"' "$file" \
+      | grep -o 'https\?://[^"]*' | grep -E "$pattern" | head -1 || true
+  fi
+}
+
+# Resuelve el tag a instalar (SOLARIA_VERSION=latest|vX.Y.Z|X.Y.Z).
+resolve_tag() {
+  local ver="$SOLARIA_VERSION" tmp
+  if [ "$ver" = "latest" ]; then
+    tmp="$(mktemp)"
+    github_api "releases/latest" > "$tmp" \
+      || err "no se pudo obtener el último release de $REPO"
+    ver="$(json_tag "$tmp")"
+    rm -f "$tmp"
+    [ -n "$ver" ] || err "el repositorio aún no tiene releases publicados; usa --from-source"
+  fi
+  case "$ver" in
+    v*) echo "$ver" ;;
+    *) echo "v$ver" ;;
+  esac
+}
+
+# Verifica sha256 de un archivo local contra el SHA256SUMS.txt del release.
+# (el nombre local puede diferir del nombre del asset: se busca por asset).
+verify_checksum() {
+  local dir="$1" localfile="$2" asset="$3" sums_url="$4"
+  if [ -z "$sums_url" ]; then
+    warn "release sin SHA256SUMS.txt; omitiendo verificación"
+    return 0
+  fi
+  curl -fsSL -o "$dir/SHA256SUMS.txt" "$sums_url" \
+    || { warn "no se pudo descargar SHA256SUMS.txt; omitiendo verificación"; return 0; }
+  local expected
+  expected="$(grep -F " $asset" "$dir/SHA256SUMS.txt" | awk '{print $1}' | head -1)"
+  [ -n "$expected" ] || { warn "sin entrada para $asset en SHA256SUMS.txt; omitiendo verificación"; return 0; }
+  echo "$expected  $localfile" | ( cd "$dir" && sha256sum -c - ) \
+    || err "checksum inválido para $asset (descarga corrupta o manipulada)"
+  ok "checksum verificado: $asset"
+}
+
+download_install() {
+  local tag="$1"
+  info "Descargando Solaria $tag (precompilado x86_64)..."
+  local tmpd json deb_url tarball_url sums_url base stage
+  tmpd="$(mktemp -d)"
+  json="$tmpd/release.json"
+  github_api "releases/tags/$tag" > "$json" \
+    || err "no existe el release $tag en $REPO (¿aún no se publica? usa --from-source)"
+  deb_url="$(asset_url "$json" '_amd64\.deb$')"
+  tarball_url="$(asset_url "$json" 'linux-x86_64\.tar\.gz$')"
+  sums_url="$(asset_url "$json" 'SHA256SUMS\.txt$')"
+  [ -n "$tarball_url" ] || err "el release $tag no trae precompilado x86_64; usa --from-source"
+
+  # Tarball: trae binario + wrapper + icono (el wrapper y el .desktop
+  # los gestiona este instalador; el .deb no los incluye).
+  base="solaria-${tag#v}-linux-x86_64"
+  info "Descargando $base.tar.gz..."
+  curl -fsSL -o "$tmpd/pkg.tar.gz" "$tarball_url" \
+    || err "falló la descarga del tarball"
+  verify_checksum "$tmpd" "pkg.tar.gz" "$(basename "$tarball_url")" "$sums_url"
+  tar -xzf "$tmpd/pkg.tar.gz" -C "$tmpd" \
+    || err "no se pudo extraer el tarball"
+  stage="$tmpd/$base"
+  [ -x "$stage/solaria-agent" ] \
+    || err "el tarball no contiene el binario esperado ($base/solaria-agent)"
+  WRAPPER_SRC="$stage/solaria"
+  ICON_SRC="$stage/solaria.png"
+  tmark "descarga+verify+extract"
+
+  # Vía .deb en sistemas apt (registra el paquete y resuelve deps vía apt).
+  if [ -n "$deb_url" ] && command -v apt-get &>/dev/null; then
+    info "Instalando paquete .deb..."
+    stop_daemon
+    curl -fsSL -o "$tmpd/solaria.deb" "$deb_url" \
+      || err "falló la descarga del .deb"
+    verify_checksum "$tmpd" "solaria.deb" "$(basename "$deb_url")" "$sums_url"
+    run_privileged dpkg -i "$tmpd/solaria.deb" 2>/dev/null || true
+    run_privileged apt-get install -f -y -qq \
+      || err "apt no pudo resolver las dependencias del .deb"
+    ok "Paquete .deb instalado"
+  else
+    # Vía binaria universal: deps de ejecución + despliegue del binario.
+    install_system_deps
+    deploy_binary "$stage/solaria-agent"
+  fi
+  tmark "deps+deploy"
+
+  install_wrapper
+  install_desktop_entry
+  rm -rf "$tmpd"
 }
 
 # ── PATH ──
@@ -389,6 +586,7 @@ print_summary() {
   echo "  Menú apps:   busca Solaria"
   echo ""
   echo "  Actualizar:   curl -fsSL https://raw.githubusercontent.com/$REPO/$BRANCH/install.sh | bash"
+  echo "                (misma versión: SOLARIA_VERSION=vX.Y.Z; desde fuente: --from-source)"
   echo "  Desinstalar:  curl -fsSL https://raw.githubusercontent.com/$REPO/$BRANCH/install.sh | bash -s -- --uninstall"
   echo ""
 }
@@ -399,16 +597,42 @@ main() {
   echo -e "${CYAN}  Solaria Agent — Instalación (Linux)${NC}"
   echo ""
 
-  install_system_deps
-  ensure_rust
-  ensure_node
-  clone_repo
-  build_project
-  install_binary
-  install_desktop_entry
+  if [ "$FROM_SOURCE" = "1" ]; then
+    info "Modo fuente: clonando y compilando (15-30 min)"
+    tmark "inicio"
+    install_system_deps
+    ensure_rust
+    ensure_node
+    clone_repo
+    build_project
+    tmark "deps+clone+build"
+    install_binary
+    install_desktop_entry
+  else
+    if [ "$ARCH" != "x86_64" ]; then
+      err "precompilado disponible solo para x86_64 (detectado: $ARCH); re-ejecuta con --from-source"
+    fi
+    info "Modo rápido: precompilado desde GitHub Releases (~2-4 min)"
+    tmark "inicio"
+    local tag installed
+    tag="$(resolve_tag)"
+    installed="$(installed_version)"
+    if [ -n "$installed" ] && [ "$installed" = "${tag#v}" ] && [ "$FORCE" != "1" ]; then
+      ok "Solaria $installed ya está instalado y al día (usa --force para reinstalar)"
+      tmark "total"
+      exit 0
+    fi
+    if [ -n "$installed" ]; then
+      info "Actualizando $installed → ${tag#v}..."
+    fi
+    download_install "$tag"
+    tmark "release_completo"
+  fi
   ensure_path
   verify_install
+  tmark "wrapper+desktop+verify"
   print_summary
+  tmark "total"
 }
 
 main "$@"

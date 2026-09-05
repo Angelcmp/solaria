@@ -77,7 +77,7 @@ sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev \
 curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | bash
 ```
 
-Descarga el binario precompilado del último GitHub Release (Linux x86_64; en sistemas con `apt` instala el `.deb`, en el resto un tarball con verificación sha256) e instala solo las dependencias de ejecución. Requiere conexión a internet y puede pedir sudo una vez.
+Descarga el binario precompilado del último GitHub Release (Linux x86_64/aarch64; en sistemas con `apt` instala el `.deb`, en el resto un tarball con verificación sha256) e instala solo las dependencias de ejecución. Requiere conexión a internet y puede pedir sudo una vez.
 
 ```bash
 # Fijar versión

@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.9.2] — 2026-09-05
+
+### Added
+- **Precompilados Linux aarch64** — `release.yml` con matrix x86_64 (`ubuntu-24.04`) + aarch64 (`ubuntu-24.04-arm`); cada Release trae tarball + `.deb`/`.AppImage` por arch y un `SHA256SUMS.txt` conjunto (job `publish` separado para no pisarse)
+- **`install.sh` multi-arch** — el asset se elige por `uname -m` (`linux-$ARCH`, `.deb` `_amd64`/`_arm64`); eliminado el gate que obligaba `--from-source` en aarch64 (si un release no trae tu arch, lo indica y sugiere fuente)
+
 ### Fixed
 - **Verificación sha256 con nombres con espacios** — el `.deb`/`.AppImage` del bundle Tauri llevan espacios (`Solaria Agent_…`) y el asset publicado usa puntos; `verify_checksum` compara normalizando espacios→puntos y sin prefijos de dir; `release.yml` renombra a puntos antes de firmar; `SHA256SUMS.txt` de v0.9.1 republicado ya corregido
 - **`unzip` en dependencias** — `fnm` lo exige y faltaba en imágenes mínimas y en las 4 listas del instalador

@@ -2,7 +2,7 @@
 #
 # Solaria Agent — Instalador para Linux
 #
-#   Instalación rápida (recomendado, ~2-4 min, precompilado x86_64):
+#   Instalación rápida (recomendado, ~2-4 min, precompilado x86_64/aarch64):
 #     curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | bash
 #
 #   Compilar desde fuente (todas las arch, 15-30 min):
@@ -500,20 +500,24 @@ verify_checksum() {
 
 download_install() {
   local tag="$1"
-  info "Descargando Solaria $tag (precompilado x86_64)..."
-  local tmpd json deb_url tarball_url sums_url base stage
+  info "Descargando Solaria $tag (precompilado $ARCH)..."
+  local tmpd json deb_url tarball_url sums_url base stage deb_suffix
+  case "$ARCH" in
+    x86_64) deb_suffix='_amd64\.deb$' ;;
+    aarch64) deb_suffix='_arm64\.deb$' ;;
+  esac
   tmpd="$(mktemp -d)"
   json="$tmpd/release.json"
   github_api "releases/tags/$tag" > "$json" \
     || err "no existe el release $tag en $REPO (¿aún no se publica? usa --from-source)"
-  deb_url="$(asset_url "$json" '_amd64\.deb$')"
-  tarball_url="$(asset_url "$json" 'linux-x86_64\.tar\.gz$')"
+  deb_url="$(asset_url "$json" "$deb_suffix")"
+  tarball_url="$(asset_url "$json" "linux-${ARCH}\\.tar\\.gz\$")"
   sums_url="$(asset_url "$json" 'SHA256SUMS\.txt$')"
-  [ -n "$tarball_url" ] || err "el release $tag no trae precompilado x86_64; usa --from-source"
+  [ -n "$tarball_url" ] || err "el release $tag no trae precompilado $ARCH; usa --from-source"
 
   # Tarball: trae binario + wrapper + icono (el wrapper y el .desktop
   # los gestiona este instalador; el .deb no los incluye).
-  base="solaria-${tag#v}-linux-x86_64"
+  base="solaria-${tag#v}-linux-$ARCH"
   info "Descargando $base.tar.gz..."
   curl -fsSL -o "$tmpd/pkg.tar.gz" "$tarball_url" \
     || err "falló la descarga del tarball"
@@ -613,9 +617,6 @@ main() {
     install_binary
     install_desktop_entry
   else
-    if [ "$ARCH" != "x86_64" ]; then
-      err "precompilado disponible solo para x86_64 (detectado: $ARCH); re-ejecuta con --from-source"
-    fi
     info "Modo rápido: precompilado desde GitHub Releases (~2-4 min)"
     tmark "inicio"
     local tag installed

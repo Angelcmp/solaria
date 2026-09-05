@@ -57,6 +57,7 @@ jobs:
       - name: Package tarball
         run: |
           set -euo pipefail
+          shopt -s nullglob
           VER="${GITHUB_REF_NAME#v}"
           STAGE="dist/solaria-${VER}-linux-${{ matrix.arch }}"
           mkdir -p "$STAGE"
@@ -74,15 +75,18 @@ jobs:
               [ "$f" = "$n" ] || mv "$f" "$n"
             done )
           done
+          # Directorio plano: el download del job publish lo fusiona tal cual.
+          mkdir -p release-assets
+          cp dist/*.tar.gz release-assets/
+          cp src-tauri/target/release/bundle/deb/*.deb release-assets/ 2>/dev/null || true
+          cp src-tauri/target/release/bundle/appimage/*.AppImage release-assets/ 2>/dev/null || true
+          ls release-assets/
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: linux-${{ matrix.arch }}
-          path: |
-            dist/*.tar.gz
-            src-tauri/target/release/bundle/deb/*.deb
-            src-tauri/target/release/bundle/appimage/*.AppImage
+          path: release-assets/*
 
   publish:
     needs: build-linux

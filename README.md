@@ -74,10 +74,18 @@ sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev \
 ### Rápida (recomendada)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | bash
 ```
 
-El script instala automáticamente Rust, Node.js, dependencias del sistema, clona el repositorio y compila Solaria.
+El script instala automáticamente Rust, Node.js, dependencias del sistema, clona el repositorio y compila Solaria. Requiere Linux x86_64/aarch64, ~8 GB de disco libre y conexión a internet (la primera compilación tarda 15-30 min; con `--debug-build`, 5-10 min). Puede pedir sudo una vez para dependencias y `/usr/local`.
+
+```bash
+# Build más rápido (debug, igual de funcional)
+curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | bash -s -- --debug-build
+
+# Desinstalar
+curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | bash -s -- --uninstall
+```
 
 ### Manual
 

@@ -8,6 +8,11 @@ fn main() {
         Some("agent") => solaria_desktop_lib::cli::agent(&args),
         Some("set-key") => solaria_desktop_lib::cli::set_key(&args),
         Some("serve") => solaria_desktop_lib::cli::serve(),
+        Some("status") => solaria_desktop_lib::cli::status(),
+        Some("stop") => solaria_desktop_lib::cli::stop(),
+        Some("version") | Some("--version") | Some("-V") => {
+            println!("solaria {}", env!("CARGO_PKG_VERSION"));
+        }
         Some("--gui") => solaria_desktop_lib::run(),
         Some("-h") | Some("--help") => solaria_desktop_lib::cli::print_help(),
         None => {

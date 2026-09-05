@@ -13,6 +13,7 @@
 - **Fase 1b — reinstall inteligente + uninstall total** (`install.sh`): `installed_version()` y skip si coincide (`--force` para forzar); `stop_daemon()` (stop graceful + pkill + pid) en deploy y `.deb`; `--uninstall` borra todo (dpkg `--remove`, `/usr/bin`, wrapper, desktop, icono, repo, `~/.solaria`). E2E en podman Ubuntu: install → skip 0.1s → `--force` → uninstall sin restos.
 - **Fase 2 — `solaria update` / `solaria uninstall`** (`cli.rs`, `main.rs`): `update [--check]` compara semver contra último Release y delega vía `exec` a `install.sh` (`SOLARIA_VERSION`=tag); `uninstall [--yes]` confirma interactivamente (exige `--yes` sin TTY) y ejecuta `install.sh --uninstall`. Overrides `SOLARIA_API_BASE`/`SOLARIA_INSTALL_SH_URL`. Tests unitarios de versiones OK; ayuda actualizada.
 - **Siguiente**: precompilados aarch64 y/o soporte macOS.
+- **Fase A — aarch64 publicado (v0.9.2, esta sesión)**: `release.yml` con matrix x86_64 + aarch64 (`ubuntu-24.04-arm`) y job `publish` único (assets planos + `SHA256SUMS.txt` conjunto); `install.sh` resuelve assets por `uname -m` (falló el primer intento: download preservaba rutas → sums vacío; corregido aplanando + release v0.9.2 recreado). Validado: binario ELF aarch64 real, `.deb` arm64, checksums OK, one-liner en Ubuntu ARM emulado (rc=0, 582s bajo qemu, `solaria 0.9.2` responde) y regresión x86_64 verde. Siguiente: macOS Apple Silicon.
 
 ## Sesión anterior (2026-09-04)
 

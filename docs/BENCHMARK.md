@@ -61,3 +61,5 @@ Logs con marcas `BENCH-TIME` por etapa en `/tmp/solaria-bench/logs/*.log`.
 
 - **Ubuntu 24.04**: rc=0, checksums verificados (tarball + `.deb`), `solaria 0.9.1 responde correctamente` (vía `.deb`).
 - **Fedora 41**: rc=0 en 106s, checksum verificado, `solaria 0.9.1 responde correctamente` (vía tarball).
+- **Ubuntu 24.04 ARM emulado (qemu, v0.9.2)**: rc=0 en 582s (emulación ~5-10x; en hardware real se esperan 2-4 min), checksums verificados (tarball + `.deb` arm64), `solaria 0.9.2 responde correctamente` (vía `.deb`).
+- **Ubuntu 24.04 x86_64 (v0.9.2, regresión)**: rc=0, `solaria 0.9.2 responde correctamente`.

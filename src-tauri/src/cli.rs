@@ -22,6 +22,8 @@ COMMANDS:
   status              Show whether the background daemon is running
   stop                Stop the background daemon
   version             Print version
+  update [--check]    Check for updates (GitHub Releases) and install
+  uninstall [--yes]   Remove Solaria completely (binaries, repo, data)
 
 OPTIONS (for ask / agent):
   --provider <NAME>   LLM provider: openai, deepseek, anthropic, groq,
@@ -275,6 +277,210 @@ fn read_daemon_pid(pid_path: &std::path::Path) -> Option<u32> {
         // Pid rancio de una ejecución anterior: limpiarlo.
         let _ = std::fs::remove_file(pid_path);
         None
+    }
+}
+
+// ── update / uninstall: cáscaras finas que delegan en install.sh ──
+
+const UPDATE_REPO: &str = "Angelcmp/solaria";
+const DEFAULT_API_BASE: &str = "https://api.github.com";
+const DEFAULT_INSTALL_SH_URL: &str =
+    "https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh";
+
+/// Base de la API de releases (sobreescribible para GHES o pruebas).
+fn api_base() -> String {
+    std::env::var("SOLARIA_API_BASE").unwrap_or_else(|_| DEFAULT_API_BASE.to_string())
+}
+
+/// URL del instalador (sobreescribible para pruebas).
+fn install_sh_url() -> String {
+    std::env::var("SOLARIA_INSTALL_SH_URL")
+        .unwrap_or_else(|_| DEFAULT_INSTALL_SH_URL.to_string())
+}
+
+pub fn update(args: &[String]) {
+    let check_only = args.iter().any(|a| a == "--check");
+    let current = env!("CARGO_PKG_VERSION").to_string();
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let latest = runtime.block_on(fetch_latest_tag()).unwrap_or_else(|e| {
+        eprintln!("solaria: no se pudo consultar actualizaciones: {}", e);
+        std::process::exit(1);
+    });
+    let latest_ver = normalize_version(&latest);
+    if !version_is_newer(&latest_ver, &current) {
+        println!("solaria: ya estás al día (versión {})", current);
+        return;
+    }
+    if check_only {
+        println!(
+            "solaria: hay actualización disponible: {} → {} (ejecuta `solaria update`)",
+            current, latest_ver
+        );
+        return;
+    }
+    println!("solaria: actualizando {} → {}...", current, latest_ver);
+    let installer = runtime
+        .block_on(download_installer())
+        .unwrap_or_else(|e| {
+            eprintln!("solaria: no se pudo descargar el instalador: {}", e);
+            std::process::exit(1);
+        });
+    exec_installer(&installer, &[], Some(&latest));
+}
+
+pub fn uninstall(args: &[String]) {
+    let yes = args.iter().any(|a| a == "--yes" || a == "-y");
+    if !yes {
+        if !std::io::IsTerminal::is_terminal(&std::io::stdin()) {
+            eprintln!("solaria: esto borrará binarios, repo y datos (~/.solaria). Re-ejecuta con --yes para confirmar.");
+            std::process::exit(1);
+        }
+        eprintln!("Esto desinstalará Solaria por completo:");
+        eprintln!("  - binario, wrapper, entrada de menú, paquete .deb");
+        eprintln!("  - repo clonado y datos locales (~/.solaria: keys, conversaciones)");
+        eprint!("¿Continuar? [s/N] ");
+        let _ = std::io::Write::flush(&mut std::io::stderr());
+        let mut answer = String::new();
+        if std::io::BufRead::read_line(&mut std::io::stdin().lock(), &mut answer).is_err() {
+            std::process::exit(1);
+        }
+        let a = answer.trim().to_lowercase();
+        if !["s", "si", "sí", "y", "yes"].contains(&a.as_str()) {
+            eprintln!("solaria: cancelado.");
+            return;
+        }
+    }
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let installer = runtime
+        .block_on(download_installer())
+        .unwrap_or_else(|e| {
+            eprintln!("solaria: no se pudo descargar el instalador: {}", e);
+            std::process::exit(1);
+        });
+    exec_installer(&installer, &["--uninstall"], None);
+}
+
+async fn fetch_latest_tag() -> Result<String, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .user_agent("solaria-cli")
+        .build()
+        .map_err(|e| e.to_string())?;
+    let url = format!("{}/repos/{}/releases/latest", api_base(), UPDATE_REPO);
+    let v: serde_json::Value = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .error_for_status()
+        .map_err(|e| e.to_string())?
+        .json()
+        .await
+        .map_err(|e| e.to_string())?;
+    v.get("tag_name")
+        .and_then(|t| t.as_str())
+        .map(|s| s.to_string())
+        .ok_or_else(|| "respuesta sin tag_name".to_string())
+}
+
+async fn download_installer() -> Result<std::path::PathBuf, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .user_agent("solaria-cli")
+        .build()
+        .map_err(|e| e.to_string())?;
+    let bytes = client
+        .get(install_sh_url())
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .error_for_status()
+        .map_err(|e| e.to_string())?
+        .bytes()
+        .await
+        .map_err(|e| e.to_string())?;
+    let path =
+        std::env::temp_dir().join(format!("solaria-install-{}.sh", std::process::id()));
+    std::fs::write(&path, &bytes).map_err(|e| e.to_string())?;
+    Ok(path)
+}
+
+/// Reemplaza el proceso actual por `bash <instalador>` (en Unix vía exec:
+/// el binario puede borrarse bajo sus pies sin problema).
+fn exec_installer(path: &std::path::Path, args: &[&str], version: Option<&str>) -> ! {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        let mut cmd = std::process::Command::new("bash");
+        cmd.arg(path);
+        for a in args {
+            cmd.arg(a);
+        }
+        if let Some(v) = version {
+            cmd.env("SOLARIA_VERSION", v);
+        }
+        let err = cmd.exec();
+        eprintln!("solaria: no se pudo ejecutar el instalador: {}", err);
+        std::process::exit(1);
+    }
+    #[cfg(not(unix))]
+    {
+        let mut cmd = std::process::Command::new("bash");
+        cmd.arg(path);
+        for a in args {
+            cmd.arg(a);
+        }
+        if let Some(v) = version {
+            cmd.env("SOLARIA_VERSION", v);
+        }
+        match cmd.status() {
+            Ok(s) => std::process::exit(s.code().unwrap_or(1)),
+            Err(e) => {
+                eprintln!("solaria: no se pudo ejecutar el instalador: {}", e);
+                std::process::exit(1);
+            }
+        }
+    }
+}
+
+fn normalize_version(v: &str) -> String {
+    let v = v.trim().trim_start_matches(['v', 'V'].as_slice());
+    v.split(['-', '+']).next().unwrap_or("").to_string()
+}
+
+fn version_parts(v: &str) -> Vec<u64> {
+    normalize_version(v)
+        .split('.')
+        .map(|p| p.parse().unwrap_or(0))
+        .collect()
+}
+
+fn version_is_newer(latest: &str, current: &str) -> bool {
+    let (mut l, mut c) = (version_parts(latest), version_parts(current));
+    let n = l.len().max(c.len());
+    l.resize(n, 0);
+    c.resize(n, 0);
+    l > c
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalize_strips_v_and_suffix() {
+        assert_eq!(normalize_version("v0.9.1"), "0.9.1");
+        assert_eq!(normalize_version("  V1.2.3-beta+1 "), "1.2.3");
+        assert_eq!(normalize_version("0.9.0"), "0.9.0");
+    }
+
+    #[test]
+    fn newer_compares_semver() {
+        assert!(version_is_newer("0.9.1", "0.9.0"));
+        assert!(!version_is_newer("0.9.0", "0.9.1"));
+        assert!(!version_is_newer("0.9.0", "0.9.0"));
+        assert!(version_is_newer("0.10.0", "0.9.9"));
+        assert!(version_is_newer("v1.0.0", "0.9.9"));
     }
 }
 

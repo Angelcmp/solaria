@@ -13,6 +13,8 @@ fn main() {
         Some("version") | Some("--version") | Some("-V") => {
             println!("solaria {}", env!("CARGO_PKG_VERSION"));
         }
+        Some("update") => solaria_desktop_lib::cli::update(&args),
+        Some("uninstall") => solaria_desktop_lib::cli::uninstall(&args),
         Some("--gui") => solaria_desktop_lib::run(),
         Some("-h") | Some("--help") => solaria_desktop_lib::cli::print_help(),
         None => {

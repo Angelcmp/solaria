@@ -1,45 +1,71 @@
 #!/bin/bash
 # Solaria Agent - CLI wrapper
-# Pasa el directorio actual como --dir a Solaria para que las herramientas
-# del agente trabajen sobre el proyecto desde el que se invoca.
+# Resuelve el binario real y pasa el directorio actual como --dir
+# SOLO a los subcomandos que lo usan (ask / agent).
 #
 # Uso:
 #   cd /mi/proyecto
-#   solaria
-#   solaria agent "investiga este código"
-#   solaria ask "resume este archivo" --model phi3:latest
+#   solaria                                   # abre la GUI
+#   solaria agent "investiga este código"     # trabaja sobre $PWD
+#   solaria ask "resume esto" --model phi3:latest
 #
 # También funciona con rutas explícitas:
-#   solaria --dir=/otro/proyecto agent "tarea"
+#   solaria --dir /otro/proyecto agent "tarea"
+#   solaria agent "tarea" --dir /otro/proyecto
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-BIN_DIR="$(cd "$SCRIPT_DIR/../src-tauri/target/release" && pwd 2>/dev/null || echo "$SCRIPT_DIR")"
 BINARY="solaria-agent"
 
-# Look for the binary in common locations
-if [ -f "$BIN_DIR/$BINARY" ]; then
-  BIN_PATH="$BIN_DIR/$BINARY"
-elif [ -f "/usr/local/lib/solaria/$BINARY" ]; then
-  BIN_PATH="/usr/local/lib/solaria/$BINARY"
-elif command -v "$BINARY" &>/dev/null; then
+# Orden de búsqueda del binario real:
+# 1. Instalación sistema (/usr/local, requiere sudo una vez)
+# 2. Instalación usuario (~/.local/share/solaria, sin sudo)
+# 3. Build local de desarrollo (target/release junto al repo)
+# 4. PATH (por si el binario ya está expuesto directamente)
+DEV_BIN_DIR="$(cd "$SCRIPT_DIR/../src-tauri/target/release" 2>/dev/null && pwd || echo "")"
+
+BIN_PATH=""
+for candidate in \
+  "/usr/local/lib/solaria/$BINARY" \
+  "$HOME/.local/share/solaria/$BINARY" \
+  "${DEV_BIN_DIR:+$DEV_BIN_DIR/$BINARY}"; do
+  [ -n "$candidate" ] && [ -x "$candidate" ] && { BIN_PATH="$candidate"; break; }
+done
+
+if [ -z "$BIN_PATH" ] && command -v "$BINARY" &>/dev/null; then
   BIN_PATH="$BINARY"
-else
-  echo "Error: no se encuentra el binario de Solaria."
-  echo "Busca en: $BIN_DIR/$BINARY"
-  echo "Instálalo con: curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/scripts/install.sh | bash"
+fi
+
+if [ -z "$BIN_PATH" ]; then
+  echo "Error: no se encuentra el binario de Solaria." >&2
+  echo "Buscado en:" >&2
+  echo "  /usr/local/lib/solaria/$BINARY" >&2
+  echo "  \$HOME/.local/share/solaria/$BINARY" >&2
+  [ -n "$DEV_BIN_DIR" ] && echo "  $DEV_BIN_DIR/$BINARY" >&2
+  echo "Instálalo con: curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | bash" >&2
   exit 1
 fi
 
-# Si el usuario no pasó --dir, usamos el directorio actual como default.
+# Solo ask/agent usan --dir. Para GUI/serve/set-key/version/etc.
+# no se inyecta nada: el binario decide (bare = abrir GUI).
+NEEDS_DIR=false
+case "${1:-}" in
+  ask|agent) NEEDS_DIR=true ;;
+esac
+
+# Soporta --dir <path>, --dir=<path> y -d (esté donde esté).
 has_dir=false
 for arg in "$@"; do
   case "$arg" in
-    --dir|--dir=*|-d) has_dir=true ;;
+    --dir|--dir=*|-d) has_dir=true; break ;;
   esac
 done
 
-if [ "$has_dir" = false ]; then
-  set -- "$@" "--dir=$PWD"
+if [ "$NEEDS_DIR" = true ] && [ "$has_dir" = false ]; then
+  # Insertar --dir justo tras el subcomando (antes de los args del usuario).
+  # Al final NO vale: el parser toma el primer posicional como prompt y
+  # uniría el resto ("hola --dir /..."). Forma espacio: cli.rs la espera.
+  sub="$1"; shift
+  set -- "$sub" --dir "$PWD" "$@"
 fi
 
 exec "$BIN_PATH" "$@"

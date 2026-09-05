@@ -19,6 +19,9 @@ COMMANDS:
   set-key <PROVIDER> <KEY>
                       Store an API key in the system keyring
   serve               Start background daemon with tray icon
+  status              Show whether the background daemon is running
+  stop                Stop the background daemon
+  version             Print version
 
 OPTIONS (for ask / agent):
   --provider <NAME>   LLM provider: openai, deepseek, anthropic, groq,
@@ -28,6 +31,7 @@ OPTIONS (for ask / agent):
   --api-key <KEY>     API key for the selected provider (one-shot use)
   --host <URL>        Ollama host URL [default: http://localhost:11434]
   --dir <PATH>        Working directory for agent tools [default: current dir]
+                      (`--dir=/path` and `-d` also accepted)
   --dry               Preview tool calls without executing (agent only)
   -h, --help          Print this help
 
@@ -68,56 +72,72 @@ fn parse_cli_args(args: &[String]) -> CliConfig {
         dry_run: false,
     };
 
+    // Flags conocidos se aceptan en cualquier posición (antes o después
+    // del prompt): primero se extraen, el resto positional se une como prompt.
+    let mut positionals: Vec<String> = Vec::new();
     let mut i = 2; // skip binary path and command name
     while i < args.len() {
-        match args[i].as_str() {
-            "--provider" => {
-                if i + 1 < args.len() {
-                    config.provider = args[i + 1].clone();
-                    i += 1;
+        let arg = args[i].as_str();
+        if let Some(value) = arg.strip_prefix("--dir=") {
+            config.working_dir = value.to_string();
+        } else if let Some(value) = arg.strip_prefix("--provider=") {
+            config.provider = value.to_string();
+        } else if let Some(value) = arg.strip_prefix("--model=") {
+            config.model = value.to_string();
+        } else if let Some(value) = arg.strip_prefix("--api-key=") {
+            config.api_key = Some(value.to_string());
+        } else if let Some(value) = arg.strip_prefix("--host=") {
+            config.ollama_host = value.to_string();
+        } else {
+            match arg {
+                "--provider" => {
+                    if i + 1 < args.len() {
+                        config.provider = args[i + 1].clone();
+                        i += 1;
+                    }
                 }
-            }
-            "--model" => {
-                if i + 1 < args.len() {
-                    config.model = args[i + 1].clone();
-                    i += 1;
+                "--model" => {
+                    if i + 1 < args.len() {
+                        config.model = args[i + 1].clone();
+                        i += 1;
+                    }
                 }
-            }
-            "--api-key" => {
-                if i + 1 < args.len() {
-                    config.api_key = Some(args[i + 1].clone());
-                    i += 1;
+                "--api-key" => {
+                    if i + 1 < args.len() {
+                        config.api_key = Some(args[i + 1].clone());
+                        i += 1;
+                    }
                 }
-            }
-            "--host" => {
-                if i + 1 < args.len() {
-                    config.ollama_host = args[i + 1].clone();
-                    i += 1;
+                "--host" => {
+                    if i + 1 < args.len() {
+                        config.ollama_host = args[i + 1].clone();
+                        i += 1;
+                    }
                 }
-            }
-            "--dir" => {
-                if i + 1 < args.len() {
-                    config.working_dir = args[i + 1].clone();
-                    i += 1;
+                "--dir" | "-d" => {
+                    if i + 1 < args.len() {
+                        config.working_dir = args[i + 1].clone();
+                        i += 1;
+                    }
                 }
-            }
-            "--dry" => {
-                config.dry_run = true;
-            }
-            "-h" | "--help" => {
-                // handled before this is called
-            }
-            _ if !args[i].starts_with('-') => {
-                config.prompt = args[i..].join(" ");
-                break;
-            }
-            _ => {
-                eprintln!("solaria: unknown flag '{}'", args[i]);
-                std::process::exit(1);
+                "--dry" => {
+                    config.dry_run = true;
+                }
+                "-h" | "--help" => {
+                    // handled before this is called
+                }
+                _ if !arg.starts_with('-') => {
+                    positionals.push(args[i].clone());
+                }
+                _ => {
+                    eprintln!("solaria: unknown flag '{}'", args[i]);
+                    std::process::exit(1);
+                }
             }
         }
         i += 1;
     }
+    config.prompt = positionals.join(" ");
 
     config
 }
@@ -125,9 +145,13 @@ fn parse_cli_args(args: &[String]) -> CliConfig {
 pub fn ask(args: &[String]) {
     let config = parse_cli_args(args);
     if config.prompt.is_empty() {
-        let mut input = String::new();
-        if let Ok(_) = std::io::Read::read_to_string(&mut std::io::stdin(), &mut input) {
-            if !input.trim().is_empty() {
+        // Solo leer stdin si viene por pipe/redirección; en una TTY
+        // interactiva read_to_string bloquearía para siempre.
+        if !std::io::IsTerminal::is_terminal(&std::io::stdin()) {
+            let mut input = String::new();
+            if std::io::Read::read_to_string(&mut std::io::stdin(), &mut input).is_ok()
+                && !input.trim().is_empty()
+            {
                 let trimmed = input.trim().to_string();
                 let runtime = tokio::runtime::Runtime::new().unwrap();
                 runtime.block_on(run_ask(&config, &trimmed));
@@ -171,27 +195,87 @@ pub fn set_key(args: &[String]) {
 }
 
 pub fn serve() {
-    // Drop a lock/pid file and fork the GUI process in the background
+    // Drop a lock/pid file and fork the GUI process in the background.
+    // El pid guardado es el del daemon hijo, no el del CLI efímero.
     let pid_path = home_dir().join(".solaria").join("solaria.pid");
-    if pid_path.exists() {
-        eprintln!("solaria: already running (pid file exists at {:?})", pid_path);
+    if let Some(running) = read_daemon_pid(&pid_path) {
+        eprintln!(
+            "solaria: already running (pid {} exists at {:?})",
+            running, pid_path
+        );
         std::process::exit(1);
     }
     let _ = std::fs::create_dir_all(pid_path.parent().unwrap());
-    let pid = std::process::id();
-    let _ = std::fs::write(&pid_path, pid.to_string());
 
     let self_path = std::env::current_exe().unwrap();
-    std::process::Command::new(&self_path)
+    match std::process::Command::new(&self_path)
         .arg("--gui")
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .stdin(std::process::Stdio::null())
         .spawn()
-        .ok();
+    {
+        Ok(child) => {
+            let _ = std::fs::write(&pid_path, child.id().to_string());
+            eprintln!("solaria: daemon started (pid {})", child.id());
+            eprintln!("         pid file: {:?}", pid_path);
+        }
+        Err(e) => {
+            eprintln!("solaria: failed to start daemon: {}", e);
+            std::process::exit(1);
+        }
+    }
+}
 
-    eprintln!("solaria: daemon started (pid {})", pid);
-    eprintln!("         pid file: {:?}", pid_path);
+pub fn status() {
+    let pid_path = home_dir().join(".solaria").join("solaria.pid");
+    match read_daemon_pid(&pid_path) {
+        Some(pid) => {
+            println!("solaria: running (pid {})", pid);
+        }
+        None => {
+            println!("solaria: not running");
+            std::process::exit(1);
+        }
+    }
+}
+
+pub fn stop() {
+    let pid_path = home_dir().join(".solaria").join("solaria.pid");
+    let pid = match read_daemon_pid(&pid_path) {
+        Some(pid) => pid,
+        None => {
+            eprintln!("solaria: not running (no pid file at {:?})", pid_path);
+            std::process::exit(1);
+        }
+    };
+    // SIGTERM via kill(2) externo para no añadir dependencias.
+    let killed = std::process::Command::new("kill")
+        .arg(pid.to_string())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if killed {
+        let _ = std::fs::remove_file(&pid_path);
+        eprintln!("solaria: stopped (pid {})", pid);
+    } else {
+        eprintln!("solaria: could not signal pid {}", pid);
+        std::process::exit(1);
+    }
+}
+
+/// Lee el pid file y verifica que el proceso siga vivo (Linux: /proc/<pid>).
+fn read_daemon_pid(pid_path: &std::path::Path) -> Option<u32> {
+    let content = std::fs::read_to_string(pid_path).ok()?;
+    let pid: u32 = content.trim().parse().ok()?;
+    let alive = std::path::Path::new(&format!("/proc/{}", pid)).exists();
+    if alive {
+        Some(pid)
+    } else {
+        // Pid rancio de una ejecución anterior: limpiarlo.
+        let _ = std::fs::remove_file(pid_path);
+        None
+    }
 }
 
 fn home_dir() -> std::path::PathBuf {

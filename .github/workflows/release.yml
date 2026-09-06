@@ -212,7 +212,7 @@ jobs:
         run: |
           BIN="src-tauri/target/release/solaria-agent"
           [ -x "$BIN" ] || { echo "falta el binario"; exit 1; }
-          file "$BIN" | grep -q "Mach-O 64-bit arm64" || { file "$BIN"; exit 1; }
+          file "$BIN" | grep -q "Mach-O 64-bit.*arm64" || { file "$BIN"; exit 1; }
           echo "Mach-O arm64 OK"
 
       - name: Package tarball

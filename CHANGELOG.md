@@ -9,6 +9,11 @@
 - **CLI portable a Windows**: `stop()` vía `taskkill`, `serve` con flags detached (`DETACHED_PROCESS|CREATE_NO_WINDOW`), `exec_installer` ejecuta `install.ps1` con PowerShell, URL de instalador por OS
 - **Tools con pista Windows**: `glob`/`grep` centralizados en `run_sh()`; sin `sh` (Git for Windows) devuelven error claro en vez de resultados vacíos silenciosos
 
+### Fixed
+- **Smoke Windows por salida, no por exit code** — con `windows_subsystem` el `$LASTEXITCODE` no es fiable; el CI valida el texto de `version`/`--help`
+- **Const sin uso según OS** — `DEFAULT_INSTALL_SH_URL` con `cfg!` por OS dejaba la constante huérfana en mac; literales inline
+- **`.msi` en release** — publicado también el instalador MSI; rename a puntos extendido al dir `msi` y `SHA256SUMS.txt` de v0.9.4 republicado
+
 ## [0.9.3] — 2026-09-05
 
 ### Added

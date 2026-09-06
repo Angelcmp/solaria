@@ -234,7 +234,7 @@ jobs:
           Copy-Item 'scripts\solaria.ps1' (Join-Path $stage 'solaria.ps1')
           Copy-Item 'src-tauri\icons\128x128.png' (Join-Path $stage 'solaria.png')
           tar -czf "dist/solaria-$ver-win-x86_64.tar.gz" -C dist "solaria-$ver-win-x86_64"
-          foreach ($d in @('src-tauri\target\release\bundle\nsis')) {
+          foreach ($d in @('src-tauri\target\release\bundle\nsis', 'src-tauri\target\release\bundle\msi')) {
             if (-not (Test-Path $d)) { continue }
             Get-ChildItem $d | Where-Object { $_.Name -match ' ' } | ForEach-Object {
               Rename-Item $_.FullName ($_.Name -replace ' ', '.')

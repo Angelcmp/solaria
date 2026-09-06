@@ -210,13 +210,18 @@ pub fn serve() {
     let _ = std::fs::create_dir_all(pid_path.parent().unwrap());
 
     let self_path = std::env::current_exe().unwrap();
-    match std::process::Command::new(&self_path)
-        .arg("--gui")
+    let mut cmd = std::process::Command::new(&self_path);
+    cmd.arg("--gui")
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
-        .stdin(std::process::Stdio::null())
-        .spawn()
+        .stdin(std::process::Stdio::null());
+    #[cfg(windows)]
     {
+        // DETACHED_PROCESS | CREATE_NO_WINDOW: sin consola colgada.
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000 | 0x00000008);
+    }
+    match cmd.spawn() {
         Ok(child) => {
             let _ = std::fs::write(&pid_path, child.id().to_string());
             eprintln!("solaria: daemon started (pid {})", child.id());
@@ -251,9 +256,17 @@ pub fn stop() {
             std::process::exit(1);
         }
     };
-    // SIGTERM via kill(2) externo para no añadir dependencias.
+    // Señal de parada sin añadir dependencias: kill(1) en Unix,
+    // taskkill en Windows.
+    #[cfg(unix)]
     let killed = std::process::Command::new("kill")
         .arg(pid.to_string())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    #[cfg(windows)]
+    let killed = std::process::Command::new("taskkill")
+        .args(["/PID", &pid.to_string(), "/F"])
         .status()
         .map(|s| s.success())
         .unwrap_or(false);
@@ -303,12 +316,11 @@ fn install_sh_url() -> String {
     if let Ok(url) = std::env::var("SOLARIA_INSTALL_SH_URL") {
         return url;
     }
-    #[cfg(target_os = "macos")]
-    {
+    if cfg!(target_os = "macos") {
         "https://raw.githubusercontent.com/Angelcmp/solaria/main/install-macos.sh".to_string()
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
+    } else if cfg!(target_os = "windows") {
+        "https://raw.githubusercontent.com/Angelcmp/solaria/main/install.ps1".to_string()
+    } else {
         DEFAULT_INSTALL_SH_URL.to_string()
     }
 }
@@ -438,12 +450,17 @@ fn exec_installer(path: &std::path::Path, args: &[&str], version: Option<&str>) 
         eprintln!("solaria: no se pudo ejecutar el instalador: {}", err);
         std::process::exit(1);
     }
-    #[cfg(not(unix))]
+    #[cfg(windows)]
     {
-        let mut cmd = std::process::Command::new("bash");
+        // install.ps1 habla PowerShell (-Uninstall); los args Unix se traducen.
+        let mut cmd = std::process::Command::new("powershell");
+        cmd.args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"]);
         cmd.arg(path);
         for a in args {
-            cmd.arg(a);
+            cmd.arg(match *a {
+                "--uninstall" => "-Uninstall",
+                other => other,
+            });
         }
         if let Some(v) = version {
             cmd.env("SOLARIA_VERSION", v);
@@ -455,6 +472,11 @@ fn exec_installer(path: &std::path::Path, args: &[&str], version: Option<&str>) 
                 std::process::exit(1);
             }
         }
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        eprintln!("solaria: actualización automática no soportada en este OS");
+        std::process::exit(1);
     }
 }
 

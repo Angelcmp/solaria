@@ -89,7 +89,7 @@ jobs:
           path: release-assets/*
 
   publish:
-    needs: [build-linux, build-macos]
+    needs: [build-linux, build-macos, build-windows]
     runs-on: ubuntu-24.04
     steps:
       - name: Download Linux artifacts
@@ -106,12 +106,19 @@ jobs:
           merge-multiple: true
           path: dist
 
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: windows-*
+          merge-multiple: true
+          path: dist
+
       - name: Checksums
         run: |
           set -euo pipefail
           shopt -s nullglob
           cd dist
-          sha256sum ./*.tar.gz ./*.deb ./*.AppImage ./*.dmg > SHA256SUMS.txt
+          sha256sum ./*.tar.gz ./*.deb ./*.AppImage ./*.dmg ./*.exe > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Publish GitHub Release
@@ -122,6 +129,7 @@ jobs:
             dist/*.deb
             dist/*.AppImage
             dist/*.dmg
+            dist/*.exe
             dist/SHA256SUMS.txt
 
   build-macos:
@@ -181,4 +189,63 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: darwin-aarch64
+          path: release-assets/*
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      - name: Build (Tauri release)
+        run: npm run tauri build
+
+      - name: Smoke test (CLI)
+        shell: pwsh
+        run: |
+          & .\src-tauri\target\release\solaria-agent.exe version
+          if ($LASTEXITCODE -ne 0) { throw 'version fallo' }
+          & .\src-tauri\target\release\solaria-agent.exe --help > $null
+          if ($LASTEXITCODE -ne 0) { throw '--help fallo' }
+
+      - name: Package tarball
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ver = $env:GITHUB_REF_NAME.TrimStart('v')
+          $stage = "dist/solaria-$ver-win-x86_64"
+          New-Item -ItemType Directory -Path $stage -Force | Out-Null
+          Copy-Item 'src-tauri\target\release\solaria-agent.exe' $stage
+          Copy-Item 'scripts\solaria.ps1' (Join-Path $stage 'solaria.ps1')
+          Copy-Item 'src-tauri\icons\128x128.png' (Join-Path $stage 'solaria.png')
+          tar -czf "dist/solaria-$ver-win-x86_64.tar.gz" -C dist "solaria-$ver-win-x86_64"
+          foreach ($d in @('src-tauri\target\release\bundle\nsis')) {
+            if (-not (Test-Path $d)) { continue }
+            Get-ChildItem $d | Where-Object { $_.Name -match ' ' } | ForEach-Object {
+              Rename-Item $_.FullName ($_.Name -replace ' ', '.')
+            }
+          }
+          New-Item -ItemType Directory -Path release-assets -Force | Out-Null
+          Copy-Item dist/*.tar.gz release-assets/
+          Copy-Item 'src-tauri\target\release\bundle\nsis\*.exe' release-assets/ -ErrorAction SilentlyContinue
+          Get-ChildItem release-assets/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x86_64
           path: release-assets/*

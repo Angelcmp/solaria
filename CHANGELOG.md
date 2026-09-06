@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [0.9.4] — 2026-09-06
+
+### Added
+- **Soporte Windows x64** — nuevo `install.ps1` (`irm …/install.ps1 | iex`: tarball `win-x86_64` verificado con `Get-FileHash`, user-local sin admin, skip-if-current, desinstalación total) y wrapper `scripts/solaria.ps1` (resuelve binario, inyecta `--dir` solo a `ask`/`agent`); job `build-windows` (`windows-latest`) en `release.yml` con smoke CLI + instalador NSIS
+- **CLI portable a Windows**: `stop()` vía `taskkill`, `serve` con flags detached (`DETACHED_PROCESS|CREATE_NO_WINDOW`), `exec_installer` ejecuta `install.ps1` con PowerShell, URL de instalador por OS
+- **Tools con pista Windows**: `glob`/`grep` centralizados en `run_sh()`; sin `sh` (Git for Windows) devuelven error claro en vez de resultados vacíos silenciosos
+
 ## [0.9.3] — 2026-09-05
 
 ### Added

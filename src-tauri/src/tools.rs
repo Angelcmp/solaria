@@ -24,6 +24,32 @@ pub struct ToolResult {
     pub preview: Option<String>,
 }
 
+/// Ejecuta `sh -c <script>` y devuelve stdout (el exit code se ignora,
+/// igual que antes: `find`/`grep` devuelven 1 cuando no hay resultados).
+/// En Windows requiere el sh de Git for Windows (modelo Claude Code).
+async fn run_sh(script: &str) -> Result<String, String> {
+    match tokio::process::Command::new("sh")
+        .arg("-c")
+        .arg(script)
+        .output()
+        .await
+    {
+        Ok(out) => Ok(String::from_utf8_lossy(&out.stdout).to_string()),
+        Err(e) => Err(format!("no se pudo ejecutar sh: {}{}", e, shell_hint())),
+    }
+}
+
+fn shell_hint() -> &'static str {
+    #[cfg(windows)]
+    {
+        " (en Windows instala Git for Windows: https://git-scm.com/download/win)"
+    }
+    #[cfg(not(windows))]
+    {
+        ""
+    }
+}
+
 const BLOCKED_PATHS: &[&str] = &[
     "/etc/shadow",
     "/etc/gshadow",
@@ -292,15 +318,10 @@ async fn glob_execute(args: &str, working_dir: &Option<String>) -> ToolResult {
     let wd = working_dir.as_deref().unwrap_or(".");
     let wd_clean = wd.trim_end_matches('/');
 
-    let output = tokio::process::Command::new("sh")
-        .arg("-c")
-        .arg(format!("find '{}' -name '{}' -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/target/*' 2>/dev/null | sed 's|^{}/||' | head -200", wd_clean, pattern.replace('\'', "'\\''"), wd_clean))
-        .output()
-        .await;
+    let output = run_sh(&format!("find '{}' -name '{}' -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/target/*' 2>/dev/null | sed 's|^{}/||' | head -200", wd_clean, pattern.replace('\'', "'\\''"), wd_clean)).await;
 
     match output {
-        Ok(out) => {
-            let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+        Ok(stdout) => {
             let files: Vec<&str> = stdout.lines().collect();
 
             if files.is_empty() {
@@ -321,10 +342,10 @@ async fn glob_execute(args: &str, working_dir: &Option<String>) -> ToolResult {
                 }
             }
         }
-        Err(e) => ToolResult {
+        Err(msg) => ToolResult {
             success: false,
             output: String::new(),
-            error: Some(format!("Error en búsqueda glob: {}", e)),
+            error: Some(format!("Error en búsqueda glob: {}", msg)),
             requires_confirmation: false,
             preview: None,
         },
@@ -358,24 +379,14 @@ async fn grep_execute(args: &str, working_dir: &Option<String>) -> ToolResult {
         };
     }
 
-    let output = tokio::process::Command::new("sh")
-        .arg("-c")
-        .arg(format!("rg -n '{}' '{}' 2>/dev/null | head -200", pattern.replace('\'', "'\\''"), path))
-        .output()
-        .await;
+    let output = run_sh(&format!("rg -n '{}' '{}' 2>/dev/null | head -200", pattern.replace('\'', "'\\''"), path)).await;
 
     match output {
-        Ok(out) => {
-            let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+        Ok(stdout) => {
             if stdout.is_empty() {
-                let fallback = tokio::process::Command::new("sh")
-                    .arg("-c")
-                    .arg(format!("grep -rn '{}' '{}' 2>/dev/null | head -200", pattern.replace('\'', "'\\''"), path))
-                    .output()
-                    .await;
+                let fallback = run_sh(&format!("grep -rn '{}' '{}' 2>/dev/null | head -200", pattern.replace('\'', "'\\''"), path)).await;
                 match fallback {
-                    Ok(fb) => {
-                        let fb_out = String::from_utf8_lossy(&fb.stdout).to_string();
+                    Ok(fb_out) => {
                         if fb_out.is_empty() {
                             ToolResult {
                                 success: true,
@@ -412,10 +423,10 @@ async fn grep_execute(args: &str, working_dir: &Option<String>) -> ToolResult {
                 }
             }
         }
-        Err(e) => ToolResult {
+        Err(msg) => ToolResult {
             success: false,
             output: String::new(),
-            error: Some(format!("Error en búsqueda grep: {}", e)),
+            error: Some(format!("Error en búsqueda grep: {}", msg)),
             requires_confirmation: false,
             preview: None,
         },

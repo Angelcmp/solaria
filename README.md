@@ -105,6 +105,14 @@ curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install-macos
 
 Descarga el binario precompilado (`darwin-aarch64`, verificado con sha256) a `~/.local/share/solaria` y el wrapper `solaria` a `~/.local/bin` (sin sudo, sin dependencias). Los mismos comandos CLI (`ask`, `agent`, `serve`, `update`, `uninstall`) funcionan igual que en Linux. Nota: al ser un build sin firma de Apple, el primer arranque de la GUI pedirá clic derecho → Abrir; el CLI no está afectado. Solo arm64 (Intel no soportado).
 
+### Windows (x64, ~2-4 min)
+
+```powershell
+irm https://raw.githubusercontent.com/Angelcmp/solaria/main/install.ps1 | iex
+```
+
+Descarga el binario precompilado (`win-x86_64`, verificado con sha256) a `%LOCALAPPDATA%\solaria` y el wrapper `solaria.ps1` a una carpeta `bin` que se añade a tu PATH de usuario (sin admin). Los mismos comandos CLI funcionan igual. Para `glob`/`grep` del agente se recomienda [Git for Windows](https://git-scm.com/download/win). Solo x64.
+
 ### Manual
 
 ```bash

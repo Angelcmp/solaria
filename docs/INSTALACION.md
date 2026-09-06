@@ -1,6 +1,6 @@
 # Instalar Solaria
 
-> Versión actual: **v0.9.3** · Releases: <https://github.com/Angelcmp/solaria/releases>
+> Versión actual: **v0.9.4** · Releases: <https://github.com/Angelcmp/solaria/releases>
 >
 > Este documento espeja la sección de instalación del `README.md` del
 > repositorio. Si algo difiere, manda el `README.md`.
@@ -9,6 +9,7 @@
 
 - **Linux**: x86_64 o aarch64 (Ubuntu/Debian, Fedora/RHEL, Arch, openSUSE y derivadas).
 - **macOS**: Apple Silicon (arm64). Intel no soportado.
+- **Windows**: 10 o superior, x64.
 - Conexión a internet. En Linux puede pedir sudo una vez (dependencias del sistema).
 
 ## Linux (~1-2 min)
@@ -44,10 +45,21 @@ Instala el binario (`darwin-aarch64`, verificado con sha256) en
 Sin sudo y sin dependencias. El primer arranque de la GUI pedirá
 clic derecho → Abrir (build sin firma de Apple); el CLI no está afectado.
 
+## Windows x64 (~2-4 min)
+
+```powershell
+irm https://raw.githubusercontent.com/Angelcmp/solaria/main/install.ps1 | iex
+```
+
+Instala el binario (`win-x86_64`, verificado con sha256) en
+`%LOCALAPPDATA%\solaria` y el wrapper `solaria.ps1` en una carpeta `bin`
+que se añade a tu PATH de usuario. Sin admin. Para `glob`/`grep` del
+agente se recomienda [Git for Windows](https://git-scm.com/download/win).
+
 ## Primeros pasos
 
 ```bash
-solaria version                 # debe responder: solaria 0.9.3
+solaria version                 # debe responder: solaria 0.9.4
 solaria set-key openai sk-...   # guarda tu API key (también: deepseek, anthropic, groq, ollama)
 solaria ask "¿qué hace este proyecto?"
 ```

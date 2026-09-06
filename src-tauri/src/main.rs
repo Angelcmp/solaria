@@ -20,12 +20,17 @@ fn main() {
         None => {
             // GUI mode: fork to background, free the terminal
             if let Ok(self_path) = std::env::current_exe() {
-                let _ = std::process::Command::new(&self_path)
-                    .arg("--gui")
+                let mut cmd = std::process::Command::new(&self_path);
+                cmd.arg("--gui")
                     .stdout(std::process::Stdio::null())
                     .stderr(std::process::Stdio::null())
-                    .stdin(std::process::Stdio::null())
-                    .spawn();
+                    .stdin(std::process::Stdio::null());
+                #[cfg(windows)]
+                {
+                    use std::os::windows::process::CommandExt;
+                    cmd.creation_flags(0x08000000 | 0x00000008);
+                }
+                let _ = cmd.spawn();
             } else {
                 solaria_desktop_lib::run();
             }

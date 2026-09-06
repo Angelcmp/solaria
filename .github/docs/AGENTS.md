@@ -1,5 +1,15 @@
 # Solaria — Session Progress
 
+## Cierre (2026-09-06)
+
+- **Releases v0.9.1 → v0.9.5 publicadas y verdes**: instalación en minutos (Linux x64/ARM, macOS ARM, Windows x64) con checksums verificados.
+- **`update`/`uninstall`** nacieron en CLI y se movieron a botones GUI al eliminar el CLI (Fase G; la terminal solo lanza).
+- **Updater Tauri firmado** con `latest.json` en las 4 plataformas (claves generadas, privada en secret).
+- **Docs**: `INSTALACION.md` detallado por distro (web), `README.md` resumido por SO, 11 `.md` internos/comerciales movidos a `.github/docs/`.
+- **Pendiente lado usuario**: probar en Mac real y Windows real; decidir firma Apple ($99/año).
+- **Pendiente producto**: Fase 2 Progress (N of M real), adjuntos PDF/Office, sidebar estilo Codex.
+- **Estado repo**: `main` limpio y sincronizado.
+
 ## Última sesión (2026-09-05)
 
 ### Completado — Instalación Linux rápida, Fase 1 (precompilados)

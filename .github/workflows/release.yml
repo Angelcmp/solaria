@@ -118,7 +118,7 @@ jobs:
           set -euo pipefail
           shopt -s nullglob
           cd dist
-          sha256sum ./*.tar.gz ./*.deb ./*.AppImage ./*.dmg ./*.exe > SHA256SUMS.txt
+          sha256sum ./*.tar.gz ./*.deb ./*.AppImage ./*.dmg ./*.exe ./*.msi > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Publish GitHub Release
@@ -130,6 +130,7 @@ jobs:
             dist/*.AppImage
             dist/*.dmg
             dist/*.exe
+            dist/*.msi
             dist/SHA256SUMS.txt
 
   build-macos:
@@ -217,10 +218,10 @@ jobs:
       - name: Smoke test (CLI)
         shell: pwsh
         run: |
-          & .\src-tauri\target\release\solaria-agent.exe version
-          if ($LASTEXITCODE -ne 0) { throw 'version fallo' }
-          & .\src-tauri\target\release\solaria-agent.exe --help > $null
-          if ($LASTEXITCODE -ne 0) { throw '--help fallo' }
+          $out = & .\src-tauri\target\release\solaria-agent.exe version
+          if ($out -notmatch 'solaria ') { throw "version inesperado: $out" }
+          $help = & .\src-tauri\target\release\solaria-agent.exe --help
+          if ($help -notmatch 'COMMANDS') { throw 'help inesperado' }
 
       - name: Package tarball
         shell: pwsh
@@ -242,6 +243,7 @@ jobs:
           New-Item -ItemType Directory -Path release-assets -Force | Out-Null
           Copy-Item dist/*.tar.gz release-assets/
           Copy-Item 'src-tauri\target\release\bundle\nsis\*.exe' release-assets/ -ErrorAction SilentlyContinue
+          Copy-Item 'src-tauri\target\release\bundle\msi\*.msi' release-assets/ -ErrorAction SilentlyContinue
           Get-ChildItem release-assets/
 
       - name: Upload artifacts

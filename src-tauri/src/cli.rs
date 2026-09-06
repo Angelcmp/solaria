@@ -302,9 +302,6 @@ fn process_alive(pid: u32) -> bool {
 
 const UPDATE_REPO: &str = "Angelcmp/solaria";
 const DEFAULT_API_BASE: &str = "https://api.github.com";
-#[cfg(not(target_os = "macos"))]
-const DEFAULT_INSTALL_SH_URL: &str =
-    "https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh";
 
 /// Base de la API de releases (sobreescribible para GHES o pruebas).
 fn api_base() -> String {
@@ -321,7 +318,7 @@ fn install_sh_url() -> String {
     } else if cfg!(target_os = "windows") {
         "https://raw.githubusercontent.com/Angelcmp/solaria/main/install.ps1".to_string()
     } else {
-        DEFAULT_INSTALL_SH_URL.to_string()
+        "https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh".to_string()
     }
 }
 

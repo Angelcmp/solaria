@@ -189,5 +189,5 @@
 
 - [Issues](https://github.com/Angelcmp/solaria/issues)
 - [PRs](https://github.com/Angelcmp/solaria/pulls)
-- [SECURITY.md](./SECURITY.md)
-- [README.md](./README.md)
+- [SECURITY.md](../../SECURITY.md)
+- [README.md](../../README.md)

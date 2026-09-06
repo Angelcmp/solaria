@@ -1,6 +1,6 @@
 [package]
 name = "solaria-agent"
-version = "0.9.4"
+version = "0.9.5"
 description = "Deep Research Agentic System with Skills — investigate, analyze, and automate"
 authors = ["you"]
 edition = "2021"
@@ -21,6 +21,8 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-updater = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "0.12", features = ["json", "stream"] }
@@ -34,4 +36,7 @@ sqlite-vec = "0.1"
 zerocopy = "0.7"
 sysinfo = "0.33"
 regex = "1"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.52"
 

@@ -1,9 +1,10 @@
 # Instalar Solaria
 
-> Versión actual: **v0.9.4** · Releases: <https://github.com/Angelcmp/solaria/releases>
+> Versión actual: **v0.9.5** · Releases: <https://github.com/Angelcmp/solaria/releases>
 >
-> Este documento espeja la sección de instalación del `README.md` del
-> repositorio. Si algo difiere, manda el `README.md`.
+> Solaria es una app gráfica: la terminal solo la lanza (`solaria` abre la
+> ventana). Este documento espeja la sección de instalación del `README.md`
+> del repositorio. Si algo difiere, manda el `README.md`.
 
 ## Requisitos
 
@@ -43,7 +44,7 @@ curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install-macos
 Instala el binario (`darwin-aarch64`, verificado con sha256) en
 `~/.local/share/solaria` y el wrapper `solaria` en `~/.local/bin`.
 Sin sudo y sin dependencias. El primer arranque de la GUI pedirá
-clic derecho → Abrir (build sin firma de Apple); el CLI no está afectado.
+clic derecho → Abrir (build sin firma de Apple).
 
 ## Windows x64 (~2-4 min)
 
@@ -58,30 +59,25 @@ agente se recomienda [Git for Windows](https://git-scm.com/download/win).
 
 ## Primeros pasos
 
-```bash
-solaria version                 # debe responder: solaria 0.9.4
-solaria set-key openai sk-...   # guarda tu API key (también: deepseek, anthropic, groq, ollama)
-solaria ask "¿qué hace este proyecto?"
-```
+1. Abre la app (`solaria` en Linux, Menú inicio en Windows, Solaria.app en macOS).
+2. Guarda tu API key en **Configuración → Proveedores** (OpenAI, Anthropic, DeepSeek, Groq, Ollama…).
+3. Tu versión instalada está en **Configuración → Aplicación**.
 
 ## Actualizar, fijar versión, reinstalar, desinstalar
 
-```bash
-solaria update --check   # ver si hay versión nueva (sin instalar)
-solaria update           # instalar la última (no hace nada si estás al día)
+- **Actualizar**: en la app, **Configuración → Aplicación → Buscar actualizaciones** (o re-ejecuta el instalador: no hace nada si estás al día).
+- **Desinstalar**: en la app, **Configuración → Aplicación → Desinstalar** (doble confirmación; borra binarios y datos).
 
+```bash
 # Fijar versión con el instalador
-SOLARIA_VERSION=v0.9.3 curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | bash
+SOLARIA_VERSION=v0.9.5 curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | bash
 
 # Reinstalar aunque esté al día
 curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | bash -s -- --force
 
-# Desinstalar TODO (binarios, paquete .deb, repo, datos en ~/.solaria)
-solaria uninstall --yes
+# Desinstalar todo con el instalador (alternativa al botón de la app)
+curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | bash -s -- --uninstall
 ```
-
-> `solaria uninstall` sin `--yes` pide confirmación interactiva y se niega
-> a borrar si no hay terminal.
 
 ## Compilar desde fuente (opcional)
 

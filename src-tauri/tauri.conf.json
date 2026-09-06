@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Solaria Agent",
-  "version": "0.9.4",
-"identifier": "im.solaria.agent",
+  "version": "0.9.5",
+  "identifier": "im.solaria.agent",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -33,6 +33,15 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/Angelcmp/solaria/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDk5Nzg4Q0Q2ODgwMkM3RTYKUldUbXh3S0kxb3g0bVJqUkxHdVZua0dveSt0K01xY1p5MVE5M1lHQWEwZHhxV2hFOEJOQTZjVXYK"
+    }
   }
 }

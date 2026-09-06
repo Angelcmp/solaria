@@ -75,21 +75,17 @@ do_uninstall() {
 }
 
 # ── Instalación existente: versión instalada ("" si no hay) ──
+# Se lee del fichero VERSION junto al binario, sin ejecutar nada.
 installed_version() {
-  local out=""
-  if [ -x "$INSTALL_DIR/solaria" ]; then
-    out="$("$INSTALL_DIR/solaria" version 2>/dev/null)" || out=""
-  elif command -v solaria &>/dev/null; then
-    out="$(solaria version 2>/dev/null)" || out=""
+  local v=""
+  if [ -f "$APP_DIR/VERSION" ]; then
+    v="$(cat "$APP_DIR/VERSION" 2>/dev/null)"
   fi
-  echo "$out" | sed 's/^solaria //;s/^v//' | head -1
+  echo "$v" | sed 's/^solaria //;s/^v//' | head -1
 }
 
-# ── Parada ordenada del daemon (stop graceful + respaldo pkill + pid) ──
+# ── Parada de la app en ejecución (pkill + pid) ──
 stop_daemon() {
-  if [ -x "$INSTALL_DIR/solaria" ]; then
-    "$INSTALL_DIR/solaria" stop >/dev/null 2>&1 || true
-  fi
   pkill -x "$BINARY_NAME" 2>/dev/null || true
   sleep 1
   rm -f "$HOME/.solaria/solaria.pid"
@@ -182,6 +178,7 @@ download_install() {
   mkdir -p "$APP_DIR" "$INSTALL_DIR"
   cp "$stage/solaria-agent" "$APP_DIR/$BINARY_NAME"
   chmod +x "$APP_DIR/$BINARY_NAME"
+  echo "${tag#v}" > "$APP_DIR/VERSION"
   ok "Binario instalado en $APP_DIR/$BINARY_NAME"
 
   [ -f "$WRAPPER_SRC" ] || err "no se encontró el wrapper en $WRAPPER_SRC"
@@ -190,7 +187,7 @@ download_install() {
   fi
   cp "$WRAPPER_SRC" "$INSTALL_DIR/solaria"
   chmod +x "$INSTALL_DIR/solaria"
-  ok "Wrapper CLI instalado en $INSTALL_DIR/solaria"
+  ok "Lanzador instalado en $INSTALL_DIR/solaria"
   rm -rf "$tmpd"
 }
 
@@ -212,14 +209,17 @@ ensure_path() {
   export PATH="$PATH:$INSTALL_DIR"
 }
 
-# ── Verificación post-instalación ──
+# ── Verificación post-instalación (por ficheros; la app es GUI) ──
 verify_install() {
   info "Verificando instalación..."
-  "$INSTALL_DIR/solaria" version >/dev/null 2>&1 \
-    || err "el comando solaria no responde. Revisa que $INSTALL_DIR esté en tu PATH"
-  "$INSTALL_DIR/solaria" --help >/dev/null 2>&1 \
-    || err "'solaria --help' falló"
-  ok "solaria $($INSTALL_DIR/solaria version) responde correctamente"
+  [ -x "$INSTALL_DIR/solaria" ] \
+    || err "falta el lanzador en $INSTALL_DIR/solaria"
+  [ -x "$APP_DIR/$BINARY_NAME" ] \
+    || err "falta el binario en $APP_DIR/$BINARY_NAME"
+  local ver
+  ver="$(installed_version)"
+  [ -n "$ver" ] || ver="(versión desconocida)"
+  ok "solaria $ver listo ($APP_DIR/$BINARY_NAME)"
 }
 
 # ── Resumen ──
@@ -230,12 +230,10 @@ print_summary() {
   echo -e "${GREEN}══════════════════════════════════════${NC}"
   echo ""
   echo "  Abrir app:   solaria          (primer arranque GUI: clic derecho → Abrir)"
-  echo "  Guardar key: solaria set-key openai sk-..."
-  echo "  Chat:        solaria ask \"tu pregunta\""
-  echo "  Agente:      solaria agent \"tu tarea\""
+  echo "  Guardar key: en la app, Configuración → Proveedores"
   echo ""
-  echo "  Actualizar:   solaria update"
-  echo "  Desinstalar:  solaria uninstall --yes"
+  echo "  Actualizar:   en la app, Configuración → Aplicación"
+  echo "  Desinstalar:  en la app, Configuración → Aplicación → Desinstalar"
   echo ""
 }
 

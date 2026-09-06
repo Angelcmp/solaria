@@ -297,7 +297,151 @@ function GeneralTab({
           ))}
         </div>
       </Section>
+
+      {/* Section: Aplicación (versión, actualización, desinstalación) */}
+      <AppSection />
     </div>
+  )
+}
+
+function AppSection() {
+  const [version, setVersion] = useState<string>('')
+  const [checking, setChecking] = useState(false)
+  const [available, setAvailable] = useState<{ version: string; notes?: string } | null>(null)
+  const [upToDate, setUpToDate] = useState(false)
+  const [installing, setInstalling] = useState(false)
+  const [installed, setInstalled] = useState(false)
+  const [uninstallStep, setUninstallStep] = useState<0 | 1 | 2>(0)
+  const [uninstallMsg, setUninstallMsg] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    import('@tauri-apps/api/core').then(({ invoke }) => {
+      invoke<string>('app_version').then(v => { if (alive) setVersion(v) }).catch(() => {})
+    })
+    return () => { alive = false }
+  }, [])
+
+  async function check() {
+    setChecking(true)
+    setError(null)
+    setAvailable(null)
+    setUpToDate(false)
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      const info = await invoke<{ version: string; notes?: string } | null>('check_app_update')
+      if (info) setAvailable(info)
+      else setUpToDate(true)
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setChecking(false)
+    }
+  }
+
+  async function install() {
+    setInstalling(true)
+    setError(null)
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      await invoke('install_app_update')
+      await invoke('restart_app')
+      setInstalled(true)
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setInstalling(false)
+    }
+  }
+
+  async function uninstall() {
+    setError(null)
+    setUninstallMsg(null)
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      const msg = await invoke<string>('uninstall_app')
+      setUninstallMsg(msg)
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setUninstallStep(0)
+    }
+  }
+
+  return (
+    <Section title="Aplicación">
+      <div className="p-3 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-[0.7rem] text-[#999999]">Versión instalada</span>
+          <span className="text-[0.7rem] font-medium text-[#E5E5E5]">{version || '…'}</span>
+        </div>
+        {upToDate && (
+          <div className="text-[0.65rem] text-[#999999]">Estás al día.</div>
+        )}
+        {available && !installed && (
+          <div className="space-y-2">
+            <div className="text-[0.65rem] text-[#E5E5E5]">Disponible la versión {available.version}.</div>
+            {available.notes && (
+              <div className="text-[0.6rem] text-[#999999] whitespace-pre-wrap">{available.notes}</div>
+            )}
+          </div>
+        )}
+        {installed && (
+          <div className="text-[0.65rem] text-[#E5E5E5]">Actualización instalada. Reiniciando…</div>
+        )}
+        {error && (
+          <div className="text-[0.65rem] text-[#E5E5E5] bg-[rgba(255,255,255,0.04)] rounded-lg px-2 py-1.5 break-words">{error}</div>
+        )}
+        <div className="flex gap-2">
+          {!available && !installed && (
+            <button
+              onClick={check}
+              disabled={checking}
+              className="px-4 py-2 rounded-lg text-[0.7rem] font-medium transition-all bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] text-[#E5E5E5] hover:border-[rgba(255,255,255,0.12)] disabled:opacity-50"
+            >
+              {checking ? 'Comprobando…' : 'Buscar actualizaciones'}
+            </button>
+          )}
+          {available && !installed && (
+            <button
+              onClick={install}
+              disabled={installing}
+              className="px-4 py-2 rounded-lg text-[0.7rem] font-medium transition-all bg-[rgba(0,229,201,0.1)] border border-[rgba(255,255,255,0.08)] text-white disabled:opacity-50"
+            >
+              {installing ? 'Instalando…' : `Actualizar a ${available.version}`}
+            </button>
+          )}
+          {uninstallStep === 0 && (
+            <button
+              onClick={() => setUninstallStep(1)}
+              className="px-4 py-2 rounded-lg text-[0.7rem] font-medium transition-all bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] text-[#999999] hover:text-[#E5E5E5] hover:border-[rgba(255,255,255,0.12)]"
+            >
+              Desinstalar
+            </button>
+          )}
+          {uninstallStep === 1 && (
+            <button
+              onClick={() => setUninstallStep(2)}
+              className="px-4 py-2 rounded-lg text-[0.7rem] font-medium transition-all bg-[#2A2A2A] border border-[rgba(255,255,255,0.12)] text-[#E5E5E5]"
+            >
+              Confirma: borra binarios y datos
+            </button>
+          )}
+          {uninstallStep === 2 && (
+            <button
+              onClick={uninstall}
+              className="px-4 py-2 rounded-lg text-[0.7rem] font-medium transition-all bg-[#2A2A2A] border border-[rgba(255,255,255,0.12)] text-white"
+            >
+              Sí, desinstalar todo
+            </button>
+          )}
+        </div>
+        {uninstallMsg && (
+          <div className="text-[0.65rem] text-[#E5E5E5]">{uninstallMsg}</div>
+        )}
+      </div>
+    </Section>
   )
 }
 

@@ -29,7 +29,8 @@ image_of() {
 
 cmd_setup() {
   rm -rf "$WORK"; mkdir -p "$WORK/assets" "$WORK/logs"
-  # Stub del binario: responde version/--help como el real para el verify.
+  # Stub del binario: ejecutable válido para que el deploy lo acepte
+  # (la verificación es por ficheros, no ejecuta nada).
   mkdir -p "$WORK/stub"
   cat > "$WORK/stub/solaria-agent" <<'EOF'
 #!/usr/bin/env bash

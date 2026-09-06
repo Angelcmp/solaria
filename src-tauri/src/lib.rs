@@ -1,5 +1,4 @@
 pub mod audit;
-pub mod cli;
 mod commands;
 mod cookbook;
 pub mod embeddings;
@@ -34,6 +33,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::collections::HashMap;
 use tauri::Emitter;
+use tauri::Manager;
 
 // ── Cancel infrastructure for streaming ─────────────────────────────────────
 
@@ -161,6 +161,162 @@ fn get_api_key(provider: String) -> Result<String, String> {
 #[tauri::command]
 fn delete_api_key(provider: String) -> keyring::KeyResult {
     keyring::delete_key(&provider)
+}
+
+// ── Actualización y desinstalación desde la GUI ──
+
+#[derive(serde::Serialize)]
+struct UpdateInfo {
+    version: String,
+    notes: Option<String>,
+    date: Option<String>,
+}
+
+#[tauri::command]
+fn app_version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
+}
+
+#[tauri::command]
+async fn check_app_update(app: tauri::AppHandle) -> Result<Option<UpdateInfo>, String> {
+    use tauri_plugin_updater::UpdaterExt;
+    let updater = app.updater().map_err(|e| e.to_string())?;
+    match updater.check().await.map_err(|e| e.to_string())? {
+        Some(update) => Ok(Some(UpdateInfo {
+            version: update.version,
+            notes: update.body,
+            date: update.date.map(|d| d.to_string()),
+        })),
+        None => Ok(None),
+    }
+}
+
+#[tauri::command]
+async fn install_app_update(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri_plugin_updater::UpdaterExt;
+    let updater = app.updater().map_err(|e| e.to_string())?;
+    match updater.check().await.map_err(|e| e.to_string())? {
+        Some(update) => update
+            .download_and_install(|_, _| {}, || {})
+            .await
+            .map_err(|e| e.to_string()),
+        None => Err("no hay actualización disponible".into()),
+    }
+}
+
+#[tauri::command]
+fn restart_app(app: tauri::AppHandle) {
+    tauri::process::restart(&app.env());
+}
+
+#[tauri::command]
+async fn uninstall_app(_app: tauri::AppHandle) -> Result<String, String> {
+    #[cfg(target_os = "linux")]
+    {
+        uninstall_linux().await
+    }
+    #[cfg(target_os = "macos")]
+    {
+        uninstall_macos(&_app).await
+    }
+    #[cfg(target_os = "windows")]
+    {
+        uninstall_windows().await
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    {
+        Err("desinstalación no soportada en este OS".into())
+    }
+}
+
+#[cfg(target_os = "linux")]
+async fn uninstall_linux() -> Result<String, String> {
+    // Descarga el instalador y lo lanza detached: él mata el daemon/app.
+    let url = "https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh";
+    let bytes = reqwest::get(url)
+        .await
+        .map_err(|e| e.to_string())?
+        .error_for_status()
+        .map_err(|e| e.to_string())?
+        .bytes()
+        .await
+        .map_err(|e| e.to_string())?;
+    let path = std::env::temp_dir().join("solaria-uninstall.sh");
+    std::fs::write(&path, &bytes).map_err(|e| e.to_string())?;
+    let script = format!(
+        "#!/bin/sh\nsleep 2\nif command -v pkexec >/dev/null 2>&1; then pkexec bash {} --uninstall; else bash {} --uninstall; fi\n",
+        path.display(),
+        path.display()
+    );
+    let runner = std::env::temp_dir().join("solaria-uninstall-run.sh");
+    std::fs::write(&runner, script).map_err(|e| e.to_string())?;
+    std::process::Command::new("sh")
+        .arg(&runner)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok("Desinstalador lanzado (puede pedir tu contraseña). La app se cerrará.".into())
+}
+
+#[cfg(target_os = "macos")]
+async fn uninstall_macos(app: &tauri::AppHandle) -> Result<String, String> {
+    let home = home_dir();
+    let _ = std::fs::remove_dir_all(home.join(".solaria"));
+    let _ = std::fs::remove_dir_all(home.join(".local/share/solaria"));
+    let _ = std::fs::remove_file(home.join(".local/bin/solaria"));
+    let _ = app;
+    Ok("Datos borrados. Arrastra Solaria.app a la papelera para terminar.".into())
+}
+
+#[cfg(target_os = "windows")]
+async fn uninstall_windows() -> Result<String, String> {
+    // Uninstaller NSIS registrado por el instalador.
+    let key = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
+        .open_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Solaria Agent")
+        .or_else(|_| {
+            winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE).open_subkey(
+                "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Solaria Agent",
+            )
+        })
+        .map_err(|_| {
+            "desinstalador no encontrado. Descárgalo de https://github.com/Angelcmp/solaria/releases".to_string()
+        })?;
+    let uninst: String = key
+        .get_value("UninstallString")
+        .map_err(|e| e.to_string())?;
+    let (exe, args) = split_uninstall_string(&uninst);
+    std::process::Command::new(exe)
+        .args(args)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok("Desinstalador lanzado. La app se cerrará.".into())
+}
+
+#[cfg(target_os = "windows")]
+fn split_uninstall_string(s: &str) -> (String, Vec<String>) {
+    let s = s.trim();
+    if s.starts_with('"') {
+        if let Some(end) = s[1..].find('"') {
+            let exe = s[1..1 + end].to_string();
+            let rest = s[1 + end + 1..].trim();
+            let args = if rest.is_empty() {
+                vec![]
+            } else {
+                rest.split_whitespace().map(|a| a.to_string()).collect()
+            };
+            return (exe, args);
+        }
+    }
+    let mut parts = s.split_whitespace();
+    match parts.next() {
+        Some(exe) => (
+            exe.to_string(),
+            parts.map(|a| a.to_string()).collect(),
+        ),
+        None => (s.to_string(), vec![]),
+    }
 }
 
 #[tauri::command]
@@ -733,7 +889,19 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.unminimize();
+                let _ = w.set_focus();
+            }
+        }))
         .invoke_handler(tauri::generate_handler![
+            app_version,
+            check_app_update,
+            install_app_update,
+            restart_app,
+            uninstall_app,
             app_log,
             ollama_chat,
             ollama_chat_stream,

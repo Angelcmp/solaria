@@ -84,21 +84,15 @@ function Test-Checksum($dir, $localFile, $asset, $sumsUrl) {
 }
 
 function Get-InstalledVersion {
-  $w = Join-Path $BinDir 'solaria.ps1'
-  $out = ''
-  if (Test-Path $w) {
-    try { $out = & powershell -NoProfile -File $w version 2>$null } catch { $out = '' }
-  } elseif (Get-Command solaria -ErrorAction SilentlyContinue) {
-    try { $out = solaria version 2>$null } catch { $out = '' }
+  # Fichero VERSION junto al binario (sin ejecutar nada: la app es GUI).
+  $vf = Join-Path $AppDir 'VERSION'
+  if (Test-Path $vf) {
+    return ((Get-Content $vf -TotalCount 1) -replace '^solaria\s+v?', '' -replace '^v', '').Trim()
   }
-  ($out -replace '^solaria\s+v?', '' -replace '^v', '').Trim().Split("`n")[0]
+  return ''
 }
 
 function Stop-Daemon {
-  $w = Join-Path $BinDir 'solaria.ps1'
-  if (Test-Path $w) {
-    try { & powershell -NoProfile -File $w stop 2>$null | Out-Null } catch {}
-  }
   Get-Process -Name 'solaria-agent' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
   Start-Sleep -Seconds 1
   Remove-Item (Join-Path $HomeDir '.solaria\solaria.pid') -Force -ErrorAction SilentlyContinue
@@ -167,25 +161,26 @@ Stop-Daemon
 New-Item -ItemType Directory -Path $AppDir -Force | Out-Null
 New-Item -ItemType Directory -Path $BinDir -Force | Out-Null
 Copy-Item (Join-Path $stage 'solaria-agent.exe') (Join-Path $AppDir 'solaria-agent.exe') -Force
+$Version.TrimStart('v') | Out-File (Join-Path $AppDir 'VERSION') -NoNewline -Encoding ascii
 $stageWrapper = Join-Path $stage 'solaria.ps1'
 if (-not (Test-Path $stageWrapper)) { Fail "el tarball no contiene el wrapper esperado ($base/solaria.ps1)" }
 Copy-Item $stageWrapper $BinDir -Force
 Log-Ok "Binario instalado en $(Join-Path $AppDir 'solaria-agent.exe')"
-Log-Ok "Wrapper CLI instalado en $(Join-Path $BinDir 'solaria.ps1')"
+Log-Ok "Lanzador instalado en $(Join-Path $BinDir 'solaria.ps1')"
 Remove-Item $tmp -Recurse -Force
 
 Add-PathUser $BinDir
 
-# --- Verificar ---
-& (Join-Path $BinDir 'solaria.ps1') version >$null 2>&1
-if ($LASTEXITCODE -ne 0) { Fail 'el comando solaria no responde. Abre una terminal nueva (PATH)' }
-Log-Ok "solaria $(& (Join-Path $BinDir 'solaria.ps1') version) responde correctamente"
+# --- Verificar (por ficheros; la app es GUI) ---
+if (-not (Test-Path (Join-Path $BinDir 'solaria.ps1'))) { Fail "falta el lanzador en $BinDir" }
+if (-not (Test-Path (Join-Path $AppDir 'solaria-agent.exe'))) { Fail "falta el binario en $AppDir" }
+Log-Ok "solaria $($Version.TrimStart('v')) listo ($(Join-Path $AppDir 'solaria-agent.exe'))"
 
 Write-Host ''
 Write-Host '  Solaria instalado correctamente' -ForegroundColor Green
 Write-Host ''
 Write-Host '  Abrir app:   solaria'
-Write-Host '  Guardar key: solaria set-key openai sk-...'
-Write-Host '  Actualizar:  solaria update'
-Write-Host '  Desinstalar: solaria uninstall --yes'
+Write-Host '  Guardar key: en la app, Configuracion -> Proveedores'
+Write-Host '  Actualizar:  en la app, Configuracion -> Aplicacion'
+Write-Host '  Desinstalar: en la app, Configuracion -> Aplicacion -> Desinstalar'
 Write-Host ''

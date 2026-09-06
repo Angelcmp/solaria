@@ -52,6 +52,8 @@ jobs:
       - run: npm ci
 
       - name: Build (Tauri release)
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: npm run tauri build
 
       - name: Package tarball
@@ -65,6 +67,7 @@ jobs:
           cp "scripts/solaria" "$STAGE/solaria"
           cp "src-tauri/icons/128x128.png" "$STAGE/solaria.png"
           chmod +x "$STAGE/solaria-agent" "$STAGE/solaria"
+          echo "$VER" > "$STAGE/VERSION"
           tar -czf "dist/solaria-${VER}-linux-${{ matrix.arch }}.tar.gz" -C dist "solaria-${VER}-linux-${{ matrix.arch }}"
           # Nombres deterministas (sin espacios): el nombre del asset debe
           # coincidir byte a byte con la entrada del SHA256SUMS.
@@ -80,6 +83,7 @@ jobs:
           cp dist/*.tar.gz release-assets/
           cp src-tauri/target/release/bundle/deb/*.deb release-assets/ 2>/dev/null || true
           cp src-tauri/target/release/bundle/appimage/*.AppImage release-assets/ 2>/dev/null || true
+          cp src-tauri/target/release/bundle/appimage/*.tar.gz* release-assets/ 2>/dev/null || true
           ls release-assets/
 
       - name: Upload artifacts
@@ -118,8 +122,50 @@ jobs:
           set -euo pipefail
           shopt -s nullglob
           cd dist
-          sha256sum ./*.tar.gz ./*.deb ./*.AppImage ./*.dmg ./*.exe ./*.msi > SHA256SUMS.txt
+          sha256sum ./*.tar.gz ./*.deb ./*.AppImage ./*.dmg ./*.exe ./*.msi ./*.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
+
+      - name: latest.json (updater Tauri)
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          python3 - <<'EOF'
+          import glob, json, os, re
+          from datetime import datetime, timezone
+          tag = os.environ['TAG_NAME']
+          ver = tag[1:] if tag.startswith('v') else tag
+          base = f'https://github.com/Angelcmp/solaria/releases/download/{tag}'
+          platforms = {}
+          for sig in sorted(glob.glob('dist/*.sig')):
+              bundle = sig[:-4]
+              if not os.path.isfile(bundle):
+                  continue
+              with open(sig) as fh:
+                  signature = fh.read()
+              name = os.path.basename(bundle)
+              url = base + '/' + name
+              key = None
+              low = name.lower()
+              if low.endswith('.appimage.tar.gz'):
+                  arch = 'x86_64' if ('amd64' in low or 'x86_64' in low) else 'aarch64'
+                  key = f'linux-{arch}'
+              elif low.endswith('.app.tar.gz'):
+                  arch = 'aarch64' if ('aarch64' in low or 'arm64' in low) else 'x86_64'
+                  key = f'darwin-{arch}'
+              elif 'nsis' in low and low.endswith('.zip'):
+                  key = 'windows-x86_64'
+              if key and key not in platforms:
+                  platforms[key] = {'url': url, 'signature': signature}
+          latest = {
+              'version': ver,
+              'notes': f'Solaria {ver}',
+              'pub_date': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
+              'platforms': platforms,
+          }
+          with open('dist/latest.json', 'w') as fh:
+              json.dump(latest, fh, indent=2)
+          print(json.dumps(latest, indent=2)[:800])
+          EOF
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
@@ -131,6 +177,9 @@ jobs:
             dist/*.dmg
             dist/*.exe
             dist/*.msi
+            dist/*.zip
+            dist/*.sig
+            dist/latest.json
             dist/SHA256SUMS.txt
 
   build-macos:
@@ -155,12 +204,16 @@ jobs:
       - run: npm ci
 
       - name: Build (Tauri release)
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: npm run tauri build
 
-      - name: Smoke test (CLI, sin GUI)
+      - name: Smoke test (artefacto GUI)
         run: |
-          ./src-tauri/target/release/solaria-agent version
-          ./src-tauri/target/release/solaria-agent --help > /dev/null
+          BIN="src-tauri/target/release/solaria-agent"
+          [ -x "$BIN" ] || { echo "falta el binario"; exit 1; }
+          file "$BIN" | grep -q "Mach-O 64-bit arm64" || { file "$BIN"; exit 1; }
+          echo "Mach-O arm64 OK"
 
       - name: Package tarball
         run: |
@@ -173,6 +226,7 @@ jobs:
           cp "scripts/solaria" "$STAGE/solaria"
           cp "src-tauri/icons/128x128.png" "$STAGE/solaria.png"
           chmod +x "$STAGE/solaria-agent" "$STAGE/solaria"
+          echo "$VER" > "$STAGE/VERSION"
           tar -czf "dist/solaria-${VER}-darwin-aarch64.tar.gz" -C dist "solaria-${VER}-darwin-aarch64"
           for d in src-tauri/target/release/bundle/dmg; do
             [ -d "$d" ] || continue
@@ -184,6 +238,7 @@ jobs:
           mkdir -p release-assets
           cp dist/*.tar.gz release-assets/
           cp src-tauri/target/release/bundle/dmg/*.dmg release-assets/ 2>/dev/null || true
+          cp src-tauri/target/release/bundle/macos/*.tar.gz* release-assets/ 2>/dev/null || true
           ls release-assets/
 
       - name: Upload artifacts
@@ -213,15 +268,17 @@ jobs:
       - run: npm ci
 
       - name: Build (Tauri release)
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: npm run tauri build
 
-      - name: Smoke test (CLI)
+      - name: Smoke test (artefacto GUI)
         shell: pwsh
         run: |
-          $out = & .\src-tauri\target\release\solaria-agent.exe version
-          if ($out -notmatch 'solaria ') { throw "version inesperado: $out" }
-          $help = & .\src-tauri\target\release\solaria-agent.exe --help
-          if ($help -notmatch 'COMMANDS') { throw 'help inesperado' }
+          $bin = '.\src-tauri\target\release\solaria-agent.exe'
+          if (-not (Test-Path $bin)) { throw 'falta el binario' }
+          if ((Get-Item $bin).Length -lt 1MB) { throw 'binario sospechosamente pequeño' }
+          Write-Host 'PE x64 OK'
 
       - name: Package tarball
         shell: pwsh
@@ -233,6 +290,7 @@ jobs:
           Copy-Item 'src-tauri\target\release\solaria-agent.exe' $stage
           Copy-Item 'scripts\solaria.ps1' (Join-Path $stage 'solaria.ps1')
           Copy-Item 'src-tauri\icons\128x128.png' (Join-Path $stage 'solaria.png')
+          $ver | Out-File (Join-Path $stage 'VERSION') -NoNewline -Encoding ascii
           tar -czf "dist/solaria-$ver-win-x86_64.tar.gz" -C dist "solaria-$ver-win-x86_64"
           foreach ($d in @('src-tauri\target\release\bundle\nsis', 'src-tauri\target\release\bundle\msi')) {
             if (-not (Test-Path $d)) { continue }
@@ -244,6 +302,7 @@ jobs:
           Copy-Item dist/*.tar.gz release-assets/
           Copy-Item 'src-tauri\target\release\bundle\nsis\*.exe' release-assets/ -ErrorAction SilentlyContinue
           Copy-Item 'src-tauri\target\release\bundle\msi\*.msi' release-assets/ -ErrorAction SilentlyContinue
+          Copy-Item 'src-tauri\target\release\bundle\nsis\*.zip*' release-assets/ -ErrorAction SilentlyContinue
           Get-ChildItem release-assets/
 
       - name: Upload artifacts

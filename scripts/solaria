@@ -1,17 +1,11 @@
 #!/bin/bash
-# Solaria Agent - CLI wrapper
-# Resuelve el binario real y pasa el directorio actual como --dir
-# SOLO a los subcomandos que lo usan (ask / agent).
+# Solaria Agent - lanzador GUI
+# Resuelve el binario real y abre la aplicación.
+# (La terminal solo lanza; toda la interacción vive en la ventana.)
 #
 # Uso:
 #   cd /mi/proyecto
 #   solaria                                   # abre la GUI
-#   solaria agent "investiga este código"     # trabaja sobre $PWD
-#   solaria ask "resume esto" --model phi3:latest
-#
-# También funciona con rutas explícitas:
-#   solaria --dir /otro/proyecto agent "tarea"
-#   solaria agent "tarea" --dir /otro/proyecto
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BINARY="solaria-agent"
@@ -43,29 +37,6 @@ if [ -z "$BIN_PATH" ]; then
   [ -n "$DEV_BIN_DIR" ] && echo "  $DEV_BIN_DIR/$BINARY" >&2
   echo "Instálalo con: curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | bash" >&2
   exit 1
-fi
-
-# Solo ask/agent usan --dir. Para GUI/serve/set-key/version/etc.
-# no se inyecta nada: el binario decide (bare = abrir GUI).
-NEEDS_DIR=false
-case "${1:-}" in
-  ask|agent) NEEDS_DIR=true ;;
-esac
-
-# Soporta --dir <path>, --dir=<path> y -d (esté donde esté).
-has_dir=false
-for arg in "$@"; do
-  case "$arg" in
-    --dir|--dir=*|-d) has_dir=true; break ;;
-  esac
-done
-
-if [ "$NEEDS_DIR" = true ] && [ "$has_dir" = false ]; then
-  # Insertar --dir justo tras el subcomando (antes de los args del usuario).
-  # Al final NO vale: el parser toma el primer posicional como prompt y
-  # uniría el resto ("hola --dir /..."). Forma espacio: cli.rs la espera.
-  sub="$1"; shift
-  set -- "$sub" --dir "$PWD" "$@"
 fi
 
 exec "$BIN_PATH" "$@"

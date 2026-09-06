@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [0.9.5] — 2026-09-06
+
+### Removed (breaking)
+- **Adiós al CLI de terminal** — Solaria es solo app gráfica: `solaria` a pelo abre la ventana (también en terminal Linux). Mueren `ask/agent/set-key/serve/status/stop/version/update/uninstall`, flags y `--dir`. La terminal lanza, no opera.
+
+### Added
+- **Botones Actualizar/Desinstalar en la GUI** (Configuración → Aplicación): versión instalada, buscar actualizaciones (updater Tauri firmado con `latest.json` en Releases), instalar + reiniciar, desinstalar con doble confirmación (mecanismo nativo por OS)
+- **Instancia única**: segundo lanzamiento enfoca la ventana existente
+- **Instaladores sin CLI**: versión por fichero `VERSION` (incluido en tarballs), parada por `pkill`/`taskkill`, verificación por ficheros; wrappers reducidos a lanzadores
+
 ## [0.9.4] — 2026-09-06
 
 ### Added

@@ -103,7 +103,7 @@ curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | 
 curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install-macos.sh | bash
 ```
 
-Descarga el binario precompilado (`darwin-aarch64`, verificado con sha256) a `~/.local/share/solaria` y el wrapper `solaria` a `~/.local/bin` (sin sudo, sin dependencias). Los mismos comandos CLI (`ask`, `agent`, `serve`, `update`, `uninstall`) funcionan igual que en Linux. Nota: al ser un build sin firma de Apple, el primer arranque de la GUI pedirá clic derecho → Abrir; el CLI no está afectado. Solo arm64 (Intel no soportado).
+Descarga el binario precompilado (`darwin-aarch64`, verificado con sha256) a `~/.local/share/solaria` y el lanzador `solaria` a `~/.local/bin` (sin sudo, sin dependencias). Abre la app igual que en Linux. Nota: al ser un build sin firma de Apple, el primer arranque de la GUI pedirá clic derecho → Abrir. Solo arm64 (Intel no soportado).
 
 ### Windows (x64, ~2-4 min)
 
@@ -111,7 +111,7 @@ Descarga el binario precompilado (`darwin-aarch64`, verificado con sha256) a `~/
 irm https://raw.githubusercontent.com/Angelcmp/solaria/main/install.ps1 | iex
 ```
 
-Descarga el binario precompilado (`win-x86_64`, verificado con sha256) a `%LOCALAPPDATA%\solaria` y el wrapper `solaria.ps1` a una carpeta `bin` que se añade a tu PATH de usuario (sin admin). Los mismos comandos CLI funcionan igual. Para `glob`/`grep` del agente se recomienda [Git for Windows](https://git-scm.com/download/win). Solo x64.
+Descarga el binario precompilado (`win-x86_64`, verificado con sha256) a `%LOCALAPPDATA%\solaria` y el lanzador `solaria.ps1` a una carpeta `bin` que se añade a tu PATH de usuario (sin admin). Abre la app igual. Para `glob`/`grep` del agente se recomienda [Git for Windows](https://git-scm.com/download/win). Solo x64.
 
 ### Manual
 
@@ -132,36 +132,17 @@ npm run tauri build
 
 > Si al ejecutar `solaria` (modo GUI) ves `Could not connect to localhost: Connection refused`, asegúrate de haber corrido primero `npm run tauri build` para generar un binario de producción, o usa `npm run tauri dev` que levanta el servidor de desarrollo automáticamente.
 
-Una vez compilado, el binario `src-tauri/target/release/solaria-agent` se puede ejecutar directamente desde la terminal:
+Una vez compilado, el binario `src-tauri/target/release/solaria-agent` abre la GUI directamente (también desde la terminal):
 
 ```bash
-# GUI (se forkea al fondo; requiere un entorno gráfico)
+# GUI (se forkea al fondo y libera la terminal; requiere entorno gráfico)
 ./src-tauri/target/release/solaria-agent
-
-# Configura tu API key (OpenAI, Anthropic, etc.)
-./src-tauri/target/release/solaria-agent set-key openai sk-...
-
-# Chat one-shot (por defecto usa OpenAI gpt-4o-mini)
-./src-tauri/target/release/solaria-agent ask "resume este archivo"
-
-# Agente de investigación sobre el directorio actual
-./src-tauri/target/release/solaria-agent agent "investiga este proyecto" --dir .
-
-# Daemon con pid file (verifica instancia ya corriendo)
-./src-tauri/target/release/solaria-agent serve
-./src-tauri/target/release/solaria-agent status
-./src-tauri/target/release/solaria-agent stop
-
-# Versión
-./src-tauri/target/release/solaria-agent version
 ```
 
-También puedes usar el wrapper `scripts/solaria` desde el repo (o el instalado en `~/.local/bin` por `install.sh`), que resuelve el binario real en orden `/usr/local/lib/solaria/` → `~/.local/share/solaria/` → build local `target/release` → PATH, e inyecta `--dir $PWD` solo a `ask`/`agent` (respeta `--dir`/`--dir=`/`-d` explícito):
+También puedes usar el lanzador `scripts/solaria` desde el repo (o el instalado en `~/.local/bin` por `install.sh`), que resuelve el binario real en orden `/usr/local/lib/solaria/` → `~/.local/share/solaria/` → build local `target/release` → PATH:
 
 ```bash
-./scripts/solaria set-key openai sk-...
-./scripts/solaria agent "encuentra todos los TODOs"
-./scripts/solaria ask "explica este código"
+./scripts/solaria
 ```
 
 Los instaladores se generan en `src-tauri/target/release/bundle/`:
@@ -208,47 +189,18 @@ Activa el agente con el botón `[🤖 AGENT]` en el input de chat. El modelo pue
 
 Puedes configurar las herramientas permitidas y el directorio de trabajo en **Settings > Agente**.
 
-### Desde la terminal
+### Abrir desde la terminal (Linux)
 
-El mismo binario `solaria` (o `solaria-agent`) incluye un modo CLI. Por defecto usa **OpenAI** (`gpt-4o-mini`), así que no necesitas tener Ollama corriendo:
-
-```bash
-# Guardar tu API key (solo una vez)
-solaria set-key openai sk-...
-
-# Ejecutar el agente desde el directorio actual
-solaria agent "revisa el código y sugiere mejoras"
-
-# Especificar directorio, proveedor y modelo
-solaria agent "documenta este proyecto" --dir ./docs --provider anthropic --model claude-3-5-sonnet-20241022
-
-# Usar una API key sin guardarla
-solaria agent "investiga esto" --api-key sk-...
-
-# Preview de herramientas sin ejecutarlas
-solaria agent "borra los archivos temporales" --dry
-
-# Chat one-shot (también acepta stdin vía pipe; sin prompt y sin pipe muestra ayuda)
-solaria ask "¿qué hace este proyecto?"
-cat README.md | solaria ask "resume esto"
-```
-
-Comandos: `ask`, `agent`, `set-key`, `serve`, `status`, `stop`, `version` (`--version`/`-V`), `update`, `uninstall`.
+Solaria es una app gráfica: la terminal solo la lanza. El comando `solaria`
+abre la ventana (y libera la terminal); si ya está abierta, la trae al frente:
 
 ```bash
-# Ver si hay nueva versión (sin instalar)
-solaria update --check
-
-# Actualizar a la última (delega en install.sh; no hace nada si estás al día)
-solaria update
-
-# Desinstalar TODO (binarios, .deb, repo, ~/.solaria con keys y datos)
-solaria uninstall --yes   # sin --yes pide confirmación interactiva
+cd /mi/proyecto
+solaria
 ```
 
-Flags disponibles (`ask`/`agent`): `--provider`, `--model`, `--api-key`, `--host`, `--dir`, `--dry`. Se aceptan en cualquier posición y con `=` (`--dir=/ruta`) o `-d` para `--dir`; el resto posicional se une como prompt. `status`/`stop` usan el pid file `~/.solaria/solaria.pid`.
-
-> Para usar un modelo local (Ollama), añade `--provider ollama --model <modelo> --host http://localhost:11434`.
+Las API keys se guardan en **Configuración → Proveedores**, y las
+actualizaciones/desinstalación en **Configuración → Aplicación**.
 
 ---
 

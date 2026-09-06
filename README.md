@@ -71,31 +71,13 @@ sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev \
 
 ## Instalación
 
-### Rápida (recomendada, ~2-4 min)
+### Linux (x86_64 y ARM, ~1-2 min)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | bash
 ```
 
-Descarga el binario precompilado del último GitHub Release (Linux x86_64/aarch64; en sistemas con `apt` instala el `.deb`, en el resto un tarball con verificación sha256) e instala solo las dependencias de ejecución. Requiere conexión a internet y puede pedir sudo una vez.
-
-```bash
-# Fijar versión
-SOLARIA_VERSION=v0.9.3 curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | bash
-
-# Compilar desde fuente (todas las arch, 15-30 min; requiere Rust, Node, ~8 GB de disco)
-curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | bash -s -- --from-source
-
-# Build desde fuente más rápido (debug, igual de funcional, 5-10 min)
-curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | bash -s -- --from-source --debug-build
-
-# Actualizar a la última versión / desinstalar
-curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | bash
-curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | bash -s -- --uninstall
-```
-
-> Si tras instalar ves `solaria: command not found`, abre una terminal nueva
-> (el wrapper vive en `~/.local/bin` y el instalador lo añade a tu PATH).
+Precompilado verificado (`.deb` en Ubuntu/Debian, tarball en el resto) + dependencias de ejecución. Puede pedir sudo una vez. Detalle por distro en [docs/INSTALACION.md](docs/INSTALACION.md).
 
 ### macOS (Apple Silicon, ~2-4 min)
 
@@ -103,7 +85,7 @@ curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | 
 curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install-macos.sh | bash
 ```
 
-Descarga el binario precompilado (`darwin-aarch64`, verificado con sha256) a `~/.local/share/solaria` y el lanzador `solaria` a `~/.local/bin` (sin sudo, sin dependencias). Abre la app igual que en Linux. Nota: al ser un build sin firma de Apple, el primer arranque de la GUI pedirá clic derecho → Abrir. Solo arm64 (Intel no soportado).
+Sin sudo ni dependencias. El primer arranque pide clic derecho → Abrir (sin firma Apple).
 
 ### Windows (x64, ~2-4 min)
 
@@ -111,7 +93,26 @@ Descarga el binario precompilado (`darwin-aarch64`, verificado con sha256) a `~/
 irm https://raw.githubusercontent.com/Angelcmp/solaria/main/install.ps1 | iex
 ```
 
-Descarga el binario precompilado (`win-x86_64`, verificado con sha256) a `%LOCALAPPDATA%\solaria` y el lanzador `solaria.ps1` a una carpeta `bin` que se añade a tu PATH de usuario (sin admin). Abre la app igual. Para `glob`/`grep` del agente se recomienda [Git for Windows](https://git-scm.com/download/win). Solo x64.
+Sin admin. Se recomienda [Git for Windows](https://git-scm.com/download/win).
+
+### Después de instalar
+
+Abre la app (`solaria` en Linux, Menú inicio en Windows, Solaria.app en macOS), guarda tu API key en **Configuración → Proveedores** y mira tu versión en **Configuración → Aplicación** (ahí también se actualiza y desinstala).
+
+<details>
+<summary>Opciones avanzadas</summary>
+
+```bash
+# Fijar versión / forzar reinstalación / compilar desde fuente
+SOLARIA_VERSION=v0.9.5 curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | bash -s -- --force
+curl -fsSL https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh | bash -s -- --from-source
+```
+
+</details>
+
+> Si tras instalar ves `solaria: command not found`, abre una terminal nueva
+> (el lanzador vive en `~/.local/bin` y el instalador lo añade a tu PATH).
 
 ### Manual
 

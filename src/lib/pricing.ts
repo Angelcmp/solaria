@@ -1,26 +1,42 @@
 // Precios por 1M tokens (USD). Fuente: precios oficiales mayo 2026.
 const PRICING: Record<string, { input: number; output: number }> = {
   // OpenAI
+  'gpt-5.5': { input: 5, output: 20 },
+  'gpt-5-mini': { input: 0.5, output: 2 },
+  'gpt-4.1-mini': { input: 0.4, output: 1.6 },
   'gpt-4o': { input: 2.5, output: 10 },
   'gpt-4o-mini': { input: 0.15, output: 0.6 },
   'gpt-4-turbo': { input: 10, output: 30 },
   'gpt-3.5-turbo': { input: 0.5, output: 1.5 },
   // Anthropic
+  'claude-sonnet-5': { input: 3, output: 15 },
+  'claude-opus-4-8': { input: 15, output: 75 },
+  'claude-haiku-4-5-20251001': { input: 1, output: 5 },
   'claude-3-opus': { input: 15, output: 75 },
   'claude-3-sonnet': { input: 3, output: 15 },
   'claude-3-haiku': { input: 0.25, output: 1.25 },
   // DeepSeek
   'deepseek-chat': { input: 0.27, output: 1.1 },
+  'deepseek-reasoner': { input: 0.55, output: 2.19 },
   // Google
-  'gemini-2.0-flash': { input: 0.1, output: 0.4 },
-  'gemini-2.0-pro': { input: 2, output: 5 },
+  'gemini-3.6-flash': { input: 1.5, output: 7.5 },
+  'gemini-3.5-flash': { input: 1.5, output: 9 },
+  'gemini-3.5-flash-lite': { input: 0.3, output: 2.5 },
+  'gemini-2.5-flash': { input: 0.3, output: 2.5 },
+  'gemini-1.5-flash': { input: 0.075, output: 0.3 },
+  'gemini-1.5-pro': { input: 1.25, output: 5 },
   // Groq
+  'llama-3.3-70b-versatile': { input: 0.59, output: 0.79 },
+  'llama-3.1-8b-instant': { input: 0.05, output: 0.08 },
+  'openai/gpt-oss-20b': { input: 0.075, output: 0.3 },
   'llama3-70b': { input: 0.59, output: 0.79 },
   'llama3-8b': { input: 0.05, output: 0.08 },
   'mixtral-8x7b': { input: 0.24, output: 0.24 },
   // Cohere
+  'command-a-03-2025': { input: 2.5, output: 10 },
   'command-r': { input: 0.5, output: 1.5 },
   'command-r-plus': { input: 3, output: 15 },
+  'command-r7b-12-2024': { input: 0.0375, output: 0.15 },
 }
 
 export function estimateTokens(text: string): number {
@@ -46,12 +62,15 @@ export function estimateCost(
 }
 
 function guessPricing(model: string): { input: number; output: number } | null {
-  if (model.includes('gpt-4o')) return { input: 2.5, output: 10 }
+  if (model.includes('gpt-5-mini') || model.includes('gpt-4.1-mini') || model.includes('gpt-4o-mini')) return { input: 0.4, output: 1.6 }
+  if (model.includes('gpt-5') || model.includes('gpt-4o')) return { input: 2.5, output: 10 }
   if (model.includes('gpt-4')) return { input: 10, output: 30 }
   if (model.includes('gpt-3.5')) return { input: 0.5, output: 1.5 }
+  if (model.includes('haiku')) return { input: 1, output: 5 }
   if (model.includes('claude')) return { input: 3, output: 15 }
   if (model.includes('deepseek')) return { input: 0.27, output: 1.1 }
-  if (model.includes('gemini')) return { input: 0.1, output: 0.4 }
+  if (model.includes('flash-lite')) return { input: 0.3, output: 2.5 }
+  if (model.includes('gemini')) return { input: 0.3, output: 2.5 }
   if (model.includes('command')) return { input: 0.5, output: 1.5 }
   return null
 }

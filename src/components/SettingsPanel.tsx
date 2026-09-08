@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { invoke } from '@tauri-apps/api/core'
 import type { AppSettings, ApiKeys } from '../hooks/useSettings'
 import type { AgentConfig } from '../hooks/useAgent'
 import type { Lang } from '../lib/i18n'
@@ -24,15 +25,13 @@ export interface SettingsPanelProps {
 }
 
 const PROVIDERS: { id: AppSettings['defaultProvider']; label: string; models: string[]; isLocal: boolean }[] = [
-  { id: 'ollama', label: 'Ollama', models: ['qwen3.5', 'llama3.2', 'llama3.1', 'mistral', 'phi3', 'deepseek-r1', 'gemma3', 'gemma4'], isLocal: true },
-  { id: 'openai', label: 'OpenAI', models: ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo', 'gpt-5.5', 'o1', 'o3-mini'], isLocal: false },
-  { id: 'anthropic', label: 'Anthropic', models: ['claude-haiku-4-5', 'claude-sonnet-4-6', 'claude-opus-4-7'], isLocal: false },
-  { id: 'deepseek', label: 'DeepSeek', models: ['deepseek-v4-flash', 'deepseek-v4-pro'], isLocal: false },
-  { id: 'groq', label: 'Groq', models: ['llama-3.3-70b-versatile', 'llama-4-scout-17b-16e-instruct'], isLocal: false },
-  { id: 'google', label: 'Google', models: ['gemini-2.0-flash', 'gemini-3.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.5-pro-preview-03-25'], isLocal: false },
-  { id: 'cohere', label: 'Cohere', models: ['command-r7b-12-2024', 'command-r-plus-08-2024'], isLocal: false },
-  { id: 'kimi', label: 'Kimi', models: ['kimi-k2.6', 'kimi-k2-0905-preview'], isLocal: false },
-  { id: 'glm', label: 'GLM', models: ['glm-4.7', 'glm-4.7-flash', 'glm-5.1', 'glm-5', 'glm-5-turbo', 'glm-4.5', 'glm-4.5-flash'], isLocal: false },
+  { id: 'ollama', label: 'Ollama', models: ['qwen3', 'llama3.2', 'llama3.1', 'mistral', 'phi3', 'deepseek-r1', 'gemma3'], isLocal: true },
+  { id: 'openai', label: 'OpenAI', models: ['gpt-5.5', 'gpt-5-mini', 'gpt-4.1-mini', 'gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo', 'o1', 'o3-mini'], isLocal: false },
+  { id: 'anthropic', label: 'Anthropic', models: ['claude-sonnet-5', 'claude-opus-4-8', 'claude-haiku-4-5-20251001'], isLocal: false },
+  { id: 'deepseek', label: 'DeepSeek', models: ['deepseek-chat', 'deepseek-reasoner'], isLocal: false },
+  { id: 'groq', label: 'Groq', models: ['llama-3.3-70b-versatile', 'meta-llama/llama-4-scout-17b-16e-instruct', 'llama-3.1-8b-instant', 'openai/gpt-oss-20b'], isLocal: false },
+  { id: 'google', label: 'Google', models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'], isLocal: false },
+  { id: 'cohere', label: 'Cohere', models: ['command-a-03-2025', 'command-r-plus', 'command-r7b-12-2024'], isLocal: false },
 ]
 
 const TABS: { id: SettingsTab; labelKey: string; icon: string }[] = [
@@ -452,8 +451,6 @@ const AI_PROVIDER_DATA: { id: keyof ApiKeys; label: string; placeholder: string 
   { id: 'groq', label: 'Groq', placeholder: 'gsk_...' },
   { id: 'google', label: 'Google (Gemini)', placeholder: 'AIza...' },
   { id: 'cohere', label: 'Cohere', placeholder: '...' },
-  { id: 'kimi', label: 'Kimi (Moonshot)', placeholder: 'sk-...' },
-  { id: 'glm', label: 'GLM (Z.AI)', placeholder: '...' },
 ]
 
 const TAVILY_DATA = { id: 'tavily' as const, label: 'Tavily Search', placeholder: 'tvly-...' }
@@ -470,6 +467,29 @@ function ProvidersTab({ settings, onUpdateApiKey, onUpdateTavilyKey, selectedPro
   const isConfigured = isTavily
     ? settings.tavilyKey.length > 0
     : settings.apiKeys[selectedProvider].length > 0
+  const [testing, setTesting] = useState(false)
+  const [testMsg, setTestMsg] = useState<string | null>(null)
+  const testModel = !isTavily && activeAi
+    ? (settings.defaultProvider === activeAi.id ? settings.defaultModel : PROVIDERS.find(p => p.id === activeAi.id)?.models[0] || '')
+    : ''
+  async function handleTest() {
+    if (!activeAi || testing) return
+    const key = settings.apiKeys[activeAi.id]?.trim()
+    if (!key || !testModel) { setTestMsg('Guarda primero la key'); return }
+    setTesting(true)
+    setTestMsg(null)
+    try {
+      const res = await invoke<{ success: boolean; content: string; error?: string }>('provider_chat', {
+        provider: activeAi.id, model: testModel, apiKey: key,
+        messages: JSON.stringify([{ role: 'user', content: 'Responde solo: OK' }]),
+      })
+      setTestMsg(res.success ? `OK (${testModel})` : (res.error || 'Falló'))
+    } catch (e) {
+      setTestMsg(String(e))
+    } finally {
+      setTesting(false)
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -544,6 +564,19 @@ function ProvidersTab({ settings, onUpdateApiKey, onUpdateTavilyKey, selectedPro
             className="w-full px-3 py-2.5 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[rgba(255,255,255,0.2)] transition-colors"
           />
 
+          {!isTavily && activeAi && (
+            <div className="mt-3 flex items-center gap-2">
+              <button
+                onClick={handleTest}
+                disabled={testing || !isConfigured}
+                className="px-3 py-1.5 rounded-lg bg-[rgba(255,255,255,0.05)] border border-[rgba(255,255,255,0.08)] text-[0.6rem] text-[#E5E5E5] hover:bg-[rgba(255,255,255,0.08)] disabled:opacity-40"
+              >
+                {testing ? 'Probando…' : `Probar (${testModel})`}
+              </button>
+              {testMsg && <span className="text-[0.6rem] text-[#999999] truncate">{testMsg}</span>}
+            </div>
+          )}
+
           <div className="mt-3 p-2.5 rounded-lg bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.04)]">
             <p className="text-[0.55rem] text-[#999999] leading-relaxed">
               {isTavily ? (
@@ -555,6 +588,7 @@ function ProvidersTab({ settings, onUpdateApiKey, onUpdateTavilyKey, selectedPro
                 <>
                   Tu API key se almacena en el keyring del sistema operativo y solo se envía a la API de {activeAi?.label}.
                   Nunca se comparte con otros servicios.
+                  {activeAi?.id === 'deepseek' && <> Modelos válidos: <span className="text-[#E5E5E5]">deepseek-chat</span> (chat) y <span className="text-[#E5E5E5]">deepseek-reasoner</span> (razonamiento). El 401 es key inválida; el 402 es saldo insuficiente.</>}
                 </>
               )}
             </p>
@@ -1814,7 +1848,7 @@ function ModelManager() {
         )}
       </div>
       <div className="flex gap-2">
-        <input value={pullName} onChange={e => setPullName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handlePull()} placeholder="Ej: qwen3.5, llama3.2..." disabled={pulling}
+        <input value={pullName} onChange={e => setPullName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handlePull()} placeholder="Ej: qwen3, llama3.2..." disabled={pulling}
           className="flex-1 px-3 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[rgba(255,255,255,0.2)] transition-colors disabled:opacity-50" />
         <ActionButton variant="primary" onClick={handlePull} disabled={pulling || !pullName.trim()}>
           {pulling && <Spinner />}

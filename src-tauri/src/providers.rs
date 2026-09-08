@@ -165,25 +165,105 @@ pub struct ModelParams {
     pub max_tokens: Option<u32>,
 }
 
+fn normalize_model(provider: &str, model: &str) -> String {
+    let m = model.trim();
+    match provider.trim() {
+        "deepseek" => match m {
+            "deepseek-v4-flash" => "deepseek-chat".into(),
+            "deepseek-v4-pro" => "deepseek-reasoner".into(),
+            _ => m.into(),
+        },
+        "google" => match m {
+            "gemini-2.0-flash" | "gemini-2.0-flash-001" => "gemini-2.5-flash".into(),
+            "gemini-2.0-flash-lite" | "gemini-2.0-flash-lite-001" => "gemini-3.5-flash-lite".into(),
+            "gemini-2.5-pro-preview-03-25" => "gemini-2.5-pro".into(),
+            _ => m.into(),
+        },
+        "cohere" => match m {
+            "command-r-plus-08-2024" => "command-r-plus".into(),
+            _ => m.into(),
+        },
+        "groq" => match m {
+            "llama-4-scout-17b-16e-instruct" => "meta-llama/llama-4-scout-17b-16e-instruct".into(),
+            _ => m.into(),
+        },
+        "anthropic" => match m {
+            "claude-haiku-4-5" => "claude-haiku-4-5-20251001".into(),
+            _ => m.into(),
+        },
+        "ollama" => match m {
+            "qwen3.5" => "qwen3".into(),
+            "gemma4" => "gemma3".into(),
+            _ => m.into(),
+        },
+        _ => m.into(),
+    }
+}
+
+fn http_error(name: &str, status: u16, body: &str) -> String {
+    let snippet: String = body.trim().chars().take(300).collect();
+    let hint = match status {
+        401 => " (revisa la key en Configuración → Proveedores: sin espacios, del proveedor correcto)",
+        400 if snippet.to_lowercase().contains("model") => " (modelo no válido para este proveedor)",
+        402 => " (saldo insuficiente en el proveedor)",
+        _ => "",
+    };
+    if snippet.is_empty() {
+        format!("{} error HTTP {}{}", name, status, hint)
+    } else {
+        format!("{} error HTTP {}{}: {}", name, status, hint, snippet)
+    }
+}
+
 pub fn get_provider_config(provider: &str, model: &str) -> Option<ProviderConfig> {
-    match provider {
+    match provider.trim() {
         "openai" => Some(ProviderConfig {
             name: "OpenAI".into(),
             base_url: "https://api.openai.com/v1/chat/completions".into(),
-            model: model.into(),
+            model: normalize_model("openai", model),
             api_type: "openai".into(),
         }),
         "deepseek" => Some(ProviderConfig {
             name: "DeepSeek".into(),
             base_url: "https://api.deepseek.com/chat/completions".into(),
-            model: model.into(),
+            model: normalize_model("deepseek", model),
             api_type: "openai".into(),
         }),
         "groq" => Some(ProviderConfig {
             name: "Groq".into(),
             base_url: "https://api.groq.com/openai/v1/chat/completions".into(),
-            model: model.into(),
+            model: normalize_model("groq", model),
             api_type: "openai".into(),
+        }),
+        "kimi" => Some(ProviderConfig {
+            name: "Kimi".into(),
+            base_url: "https://api.moonshot.cn/v1/chat/completions".into(),
+            model: normalize_model("kimi", model),
+            api_type: "openai".into(),
+        }),
+        "glm" => Some(ProviderConfig {
+            name: "GLM".into(),
+            base_url: "https://api.z.ai/api/paas/v4/chat/completions".into(),
+            model: normalize_model("glm", model),
+            api_type: "openai".into(),
+        }),
+        "anthropic" => Some(ProviderConfig {
+            name: "Anthropic".into(),
+            base_url: "https://api.anthropic.com/v1/messages".into(),
+            model: normalize_model("anthropic", model),
+            api_type: "anthropic".into(),
+        }),
+        "google" => Some(ProviderConfig {
+            name: "Google".into(),
+            base_url: "https://generativelanguage.googleapis.com/v1beta/models".into(),
+            model: normalize_model("google", model),
+            api_type: "google".into(),
+        }),
+        "cohere" => Some(ProviderConfig {
+            name: "Cohere".into(),
+            base_url: "https://api.cohere.ai/v2/chat".into(),
+            model: normalize_model("cohere", model),
+            api_type: "cohere".into(),
         }),
         "kimi" => Some(ProviderConfig {
             name: "Kimi".into(),
@@ -250,6 +330,7 @@ pub async fn chat_openai_compatible(
     system_prompt: Option<String>,
     messages_str: String,
 ) -> ProviderResult {
+    let api_key = api_key.trim().to_string();
     let client = reqwest::Client::new();
     let chat_messages = build_messages(system_prompt, &messages_str);
 
@@ -269,10 +350,11 @@ pub async fn chat_openai_compatible(
         Ok(resp) => {
             if !resp.status().is_success() {
                 let status = resp.status().as_u16();
+                let body = resp.text().await.unwrap_or_default();
                 return ProviderResult {
                     success: false,
                     content: String::new(),
-                    error: Some(format!("{} error HTTP {}", config.name, status)),
+                    error: Some(http_error(&config.name, status, &body)),
                 };
             }
 
@@ -311,6 +393,7 @@ pub async fn chat_anthropic(
     system_prompt: Option<String>,
     messages_str: String,
 ) -> ProviderResult {
+    let api_key = api_key.trim().to_string();
     let client = reqwest::Client::new();
     let chat_messages = build_messages(system_prompt, &messages_str);
 
@@ -343,10 +426,11 @@ pub async fn chat_anthropic(
         Ok(resp) => {
             if !resp.status().is_success() {
                 let status = resp.status().as_u16();
+                let body = resp.text().await.unwrap_or_default();
                 return ProviderResult {
                     success: false,
                     content: String::new(),
-                    error: Some(format!("Anthropic error HTTP {}", status)),
+                    error: Some(http_error("Anthropic", status, &body)),
                 };
             }
             match resp.json::<AnthropicResponse>().await {
@@ -382,6 +466,7 @@ pub async fn chat_google(
     system_prompt: Option<String>,
     messages_str: String,
 ) -> ProviderResult {
+    let api_key = api_key.trim().to_string();
     let client = reqwest::Client::new();
     let chat_messages = build_messages(system_prompt, &messages_str);
 
@@ -418,9 +503,11 @@ pub async fn chat_google(
     match client.post(&url).json(&request).send().await {
         Ok(resp) => {
             if !resp.status().is_success() {
+                let status = resp.status().as_u16();
+                let body = resp.text().await.unwrap_or_default();
                 return ProviderResult {
                     success: false, content: String::new(),
-                    error: Some(format!("Google error HTTP {}", resp.status().as_u16())),
+                    error: Some(http_error("Google", status, &body)),
                 };
             }
             match resp.json::<GeminiResponse>().await {
@@ -459,6 +546,7 @@ pub async fn chat_cohere(
     system_prompt: Option<String>,
     messages_str: String,
 ) -> ProviderResult {
+    let api_key = api_key.trim().to_string();
     let client = reqwest::Client::new();
     let chat_messages = build_messages(system_prompt, &messages_str);
 
@@ -476,9 +564,11 @@ pub async fn chat_cohere(
     {
         Ok(resp) => {
             if !resp.status().is_success() {
+                let status = resp.status().as_u16();
+                let body = resp.text().await.unwrap_or_default();
                 return ProviderResult {
                     success: false, content: String::new(),
-                    error: Some(format!("Cohere error HTTP {}", resp.status().as_u16())),
+                    error: Some(http_error("Cohere", status, &body)),
                 };
             }
             match resp.json::<CohereResponse>().await {
@@ -515,6 +605,7 @@ pub async fn route_chat(
     system_prompt: Option<String>,
     messages_str: String,
 ) -> ProviderResult {
+    let api_key = api_key.trim().to_string();
     match api_type.as_str() {
         "anthropic" => chat_anthropic(api_key, config, system_prompt, messages_str).await,
         "google" => chat_google(api_key, config, system_prompt, messages_str).await,
@@ -585,6 +676,7 @@ pub async fn stream_openai_compatible(
     messages_str: String,
     params: ModelParams,
 ) {
+    let api_key = api_key.trim().to_string();
     let cancel_flag = crate::register_cancel(&stream_id);
 
     let client = reqwest::Client::new();
@@ -607,8 +699,10 @@ pub async fn stream_openai_compatible(
     {
         Ok(resp) => {
             if !resp.status().is_success() {
+                let status = resp.status().as_u16();
+                let body = resp.text().await.unwrap_or_default();
                 let _ = app.emit("stream://error", serde_json::json!({
-                    "stream_id": stream_id, "error": format!("HTTP {}", resp.status().as_u16()),
+                    "stream_id": stream_id, "error": http_error(&config.name, status, &body),
                 }));
                 return;
             }
@@ -636,6 +730,7 @@ pub async fn stream_anthropic(
     messages_str: String,
     params: ModelParams,
 ) {
+    let api_key = api_key.trim().to_string();
     let cancel_flag = crate::register_cancel(&stream_id);
 
     let client = reqwest::Client::new();
@@ -672,8 +767,10 @@ pub async fn stream_anthropic(
     {
         Ok(resp) => {
             if !resp.status().is_success() {
+                let status = resp.status().as_u16();
+                let body = resp.text().await.unwrap_or_default();
                 let _ = app.emit("stream://error", serde_json::json!({
-                    "stream_id": stream_id, "error": format!("Anthropic HTTP {}", resp.status().as_u16()),
+                    "stream_id": stream_id, "error": http_error("Anthropic", status, &body),
                 }));
                 return;
             }
@@ -729,6 +826,7 @@ pub async fn stream_google(
     messages_str: String,
     params: ModelParams,
 ) {
+    let api_key = api_key.trim().to_string();
     let cancel_flag = crate::register_cancel(&stream_id);
 
     let client = reqwest::Client::new();
@@ -772,8 +870,10 @@ pub async fn stream_google(
     match client.post(&url).json(&request).send().await {
         Ok(resp) => {
             if !resp.status().is_success() {
+                let status = resp.status().as_u16();
+                let body = resp.text().await.unwrap_or_default();
                 let _ = app.emit("stream://error", serde_json::json!({
-                    "stream_id": stream_id, "error": format!("Google HTTP {}", resp.status().as_u16()),
+                    "stream_id": stream_id, "error": http_error("Google", status, &body),
                 }));
                 return;
             }
@@ -822,6 +922,7 @@ pub async fn stream_cohere(
     messages_str: String,
     params: ModelParams,
 ) {
+    let api_key = api_key.trim().to_string();
     let cancel_flag = crate::register_cancel(&stream_id);
 
     let client = reqwest::Client::new();
@@ -845,8 +946,10 @@ pub async fn stream_cohere(
     {
         Ok(resp) => {
             if !resp.status().is_success() {
+                let status = resp.status().as_u16();
+                let body = resp.text().await.unwrap_or_default();
                 let _ = app.emit("stream://error", serde_json::json!({
-                    "stream_id": stream_id, "error": format!("Cohere HTTP {}", resp.status().as_u16()),
+                    "stream_id": stream_id, "error": http_error("Cohere", status, &body),
                 }));
                 return;
             }
@@ -896,6 +999,7 @@ pub async fn route_chat_stream(
     messages_str: String,
     params: ModelParams,
 ) {
+    let api_key = api_key.trim().to_string();
     match api_type.as_str() {
         "anthropic" => stream_anthropic(app, stream_id, api_key, config, system_prompt, messages_str, params).await,
         "google" => stream_google(app, stream_id, api_key, config, system_prompt, messages_str, params).await,

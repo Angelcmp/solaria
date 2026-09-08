@@ -17,15 +17,13 @@ import ProgressPanel from './components/ProgressPanel'
 import ModelComparator from './components/ModelComparator'
 
 const PROVIDERS: { id: string; label: string; models: string[]; local: boolean }[] = [
-  { id: 'ollama', label: 'Ollama (Local)', models: ['qwen3.5', 'llama3.2', 'llama3.1', 'mistral', 'phi3', 'deepseek-r1', 'gemma3', 'gemma4'], local: true },
-  { id: 'openai', label: 'OpenAI', models: ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo', 'gpt-5.5', 'o1', 'o3-mini'], local: false },
-  { id: 'anthropic', label: 'Anthropic', models: ['claude-haiku-4-5', 'claude-sonnet-4-6', 'claude-opus-4-7'], local: false },
-  { id: 'deepseek', label: 'DeepSeek', models: ['deepseek-v4-flash', 'deepseek-v4-pro'], local: false },
-  { id: 'groq', label: 'Groq', models: ['llama-3.3-70b-versatile', 'llama-4-scout-17b-16e-instruct'], local: false },
-  { id: 'google', label: 'Google', models: ['gemini-2.0-flash', 'gemini-3.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.5-pro-preview-03-25'], local: false },
-  { id: 'cohere', label: 'Cohere', models: ['command-r7b-12-2024', 'command-r-plus-08-2024'], local: false },
-  { id: 'kimi', label: 'Kimi (Moonshot)', models: ['kimi-k2.6', 'kimi-k2-0905-preview'], local: false },
-  { id: 'glm', label: 'GLM (Z.AI)', models: ['glm-4.7', 'glm-4.7-flash', 'glm-5.1', 'glm-5', 'glm-5-turbo', 'glm-4.5', 'glm-4.5-flash'], local: false },
+  { id: 'ollama', label: 'Ollama (Local)', models: ['qwen3', 'llama3.2', 'llama3.1', 'mistral', 'phi3', 'deepseek-r1', 'gemma3'], local: true },
+  { id: 'openai', label: 'OpenAI', models: ['gpt-5.5', 'gpt-5-mini', 'gpt-4.1-mini', 'gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo', 'o1', 'o3-mini'], local: false },
+  { id: 'anthropic', label: 'Anthropic', models: ['claude-sonnet-5', 'claude-opus-4-8', 'claude-haiku-4-5-20251001'], local: false },
+  { id: 'deepseek', label: 'DeepSeek', models: ['deepseek-chat', 'deepseek-reasoner'], local: false },
+  { id: 'groq', label: 'Groq', models: ['llama-3.3-70b-versatile', 'meta-llama/llama-4-scout-17b-16e-instruct', 'llama-3.1-8b-instant', 'openai/gpt-oss-20b'], local: false },
+  { id: 'google', label: 'Google', models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'], local: false },
+  { id: 'cohere', label: 'Cohere', models: ['command-a-03-2025', 'command-r-plus', 'command-r7b-12-2024'], local: false },
 ]
 
 function App() {

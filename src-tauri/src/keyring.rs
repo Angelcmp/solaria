@@ -9,6 +9,7 @@ pub struct KeyResult {
 }
 
 pub fn store_key(provider: &str, key: &str) -> KeyResult {
+    let key = key.trim();
     let entry = keyring::Entry::new(SERVICE_NAME, provider);
     match entry {
         Ok(e) => match e.set_password(key) {

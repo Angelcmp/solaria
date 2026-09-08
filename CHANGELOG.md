@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+- **Modelos cloud auditados**: IDs ficticios/retirados reemplazados por vigentes (OpenAI `gpt-5-mini`/`gpt-4.1-mini` 💰, Anthropic versionados, Gemini `3.6/3.5` + `flash-lite` 💰 sin el `2.0-flash` dado de baja, Groq con IDs completos + `8b-instant`/`gpt-oss-20b` 💰, Cohere `command-a` + `r-plus` sin fecha). Alias backend para configs guardadas con IDs viejos; errores HTTP ahora traen cuerpo + pista (401 key, 400 modelo, 402 saldo)
+- **Kimi/GLM ocultos** de la UI hasta verificar sus IDs (keys guardadas y backend intactos)
+
 ## [0.9.5] — 2026-09-06
 
 ### Removed (breaking)

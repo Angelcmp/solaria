@@ -29,12 +29,48 @@ fn test_get_deepseek_config() {
 }
 
 #[test]
+fn test_deepseek_legacy_alias_flash() {
+    let c = providers::get_provider_config("deepseek", "deepseek-v4-flash").unwrap();
+    assert_eq!(c.model, "deepseek-chat");
+}
+
+#[test]
+fn test_deepseek_legacy_alias_pro() {
+    let c = providers::get_provider_config("deepseek", "deepseek-v4-pro").unwrap();
+    assert_eq!(c.model, "deepseek-reasoner");
+}
+
+#[test]
+fn test_provider_model_trims_whitespace() {
+    let c = providers::get_provider_config(" deepseek ", "  deepseek-chat  ").unwrap();
+    assert_eq!(c.model, "deepseek-chat");
+}
+
+#[test]
+fn test_dead_google_model_alias() {
+    let c = providers::get_provider_config("google", "gemini-2.0-flash").unwrap();
+    assert_eq!(c.model, "gemini-2.5-flash");
+}
+
+#[test]
+fn test_cohere_dated_alias() {
+    let c = providers::get_provider_config("cohere", "command-r-plus-08-2024").unwrap();
+    assert_eq!(c.model, "command-r-plus");
+}
+
+#[test]
+fn test_groq_scout_alias() {
+    let c = providers::get_provider_config("groq", "llama-4-scout-17b-16e-instruct").unwrap();
+    assert_eq!(c.model, "meta-llama/llama-4-scout-17b-16e-instruct");
+}
+
+#[test]
 fn test_get_google_config() {
-    let config = providers::get_provider_config("google", "gemini-2.0-flash");
+    let config = providers::get_provider_config("google", "gemini-2.5-flash");
     assert!(config.is_some());
     let c = config.unwrap();
     assert_eq!(c.api_type, "google");
-    assert_eq!(c.model, "gemini-2.0-flash");
+    assert_eq!(c.model, "gemini-2.5-flash");
 }
 
 #[test]

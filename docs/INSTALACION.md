@@ -75,19 +75,28 @@ terminal nueva). El primer arranque de la GUI pedirá clic derecho → Abrir
 
 ## Windows x64 (~2-4 min)
 
+**Recomendado (usuarios comunes):** descarga el instalador `Solaria_*_x64-setup.exe`
+del último [Release](https://github.com/Angelcmp/solaria/releases/latest) y ejecútalo.
+Crea el acceso en **Menú Inicio → Solaria**, desinstalador y entrada en Agregar/Quitar.
+Sin admin. Para `glob`/`grep` del agente se recomienda
+[Git for Windows](https://git-scm.com/download/win).
+
+**Vía avanzada (tarball, sin instalador gráfico):**
+
 ```powershell
 irm https://raw.githubusercontent.com/Angelcmp/solaria/main/install.ps1 | iex
 ```
 
 Instala el binario (`win-x86_64`, verificado con sha256) en
-`%LOCALAPPDATA%\solaria` y el lanzador `solaria.ps1` en una carpeta `bin`
-que se añade a tu PATH de usuario. Para `glob`/`grep` del agente se
-recomienda [Git for Windows](https://git-scm.com/download/win).
+`%LOCALAPPDATA%\solaria`, los lanzadores `solaria.ps1` + `solaria.cmd` en una
+carpeta `bin` que se añade a tu PATH de usuario, y un acceso directo en
+**Menú Inicio → Solaria**. Tras instalar, **abre una terminal nueva**:
+en PowerShell ejecuta `solaria.ps1`, en cmd `solaria.cmd`.
 
 ## Primeros pasos
 
 1. Abre la app (`solaria` en Linux, Menú inicio en Windows, Solaria.app en macOS).
-2. Guarda tu API key en **Configuración → Proveedores** (OpenAI, Anthropic, DeepSeek, Groq, Ollama…).
+2. Guarda tu API key en **Configuración → Proveedores** (OpenAI, Anthropic, DeepSeek, Groq, Ollama…) y pulsa **Probar**. DeepSeek usa `deepseek-chat` / `deepseek-reasoner`: el error 401 es key inválida (revisa espacios y proveedor), el 402 es saldo insuficiente.
 3. Tu versión instalada está en **Configuración → Aplicación**.
 
 ## Actualizar, fijar versión, reinstalar, desinstalar

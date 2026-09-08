@@ -89,11 +89,18 @@ Sin sudo ni dependencias. El primer arranque pide clic derecho → Abrir (sin fi
 
 ### Windows (x64, ~2-4 min)
 
+Recomendado: instalador `Solaria_*_x64-setup.exe` del último
+[Release](https://github.com/Angelcmp/solaria/releases/latest)
+(Menú Inicio → Solaria, sin admin).
+
+Avanzado (tarball):
+
 ```powershell
 irm https://raw.githubusercontent.com/Angelcmp/solaria/main/install.ps1 | iex
 ```
 
-Sin admin. Se recomienda [Git for Windows](https://git-scm.com/download/win).
+Crea además Menú Inicio → Solaria y shims `solaria.ps1`/`solaria.cmd`
+(abre una terminal nueva). Se recomienda [Git for Windows](https://git-scm.com/download/win).
 
 ### Después de instalar
 
@@ -148,7 +155,7 @@ También puedes usar el lanzador `scripts/solaria` desde el repo (o el instalado
 
 Los instaladores se generan en `src-tauri/target/release/bundle/`:
 - **Linux**: `.deb` (Debian/Ubuntu) y `.AppImage`
-- **Windows**: `.msi`
+- **Windows**: `.exe` NSIS (canónico, con Menú Inicio) y `.msi`
 - **macOS**: `.dmg`
 
 ---
@@ -158,19 +165,20 @@ Los instaladores se generan en `src-tauri/target/release/bundle/`:
 ### Local (sin conexión)
 | Proveedor | Modelos recomendados |
 |-----------|---------------------|
-| Ollama | Qwen3.5, Llama3.2/3.1, DeepSeek-R1, Mistral, Gemma3/4, Phi3 |
+| Ollama | Qwen3, Llama3.2/3.1, DeepSeek-R1, Mistral, Gemma3, Phi3 |
 
 ### Cloud (trae tu propia API key)
 | Proveedor | Modelos recomendados |
 |-----------|---------------------|
-| OpenAI | GPT-4o, GPT-4o-mini, o1, o3-mini |
-| Anthropic | Claude Haiku 4.5, Sonnet 4.6, Opus 4.7 |
-| DeepSeek | DeepSeek V4 Flash, V4 Pro |
-| Kimi (Moonshot) | Kimi K2.6, K2-0905 Preview |
-| Google | Gemini 2.0 Flash, 1.5 Pro, 2.5 Pro Preview |
-| Groq | Llama 3.3 70B, Llama 4 Scout |
-| Cohere | Command R7B, R+ |
-| GLM (Z.AI) | GLM 4.7, 4.7 Flash, 4.5 |
+| OpenAI | GPT-5.5, GPT-5-mini 💰, GPT-4.1-mini 💰, GPT-4o-mini 💰 |
+| Anthropic | Sonnet 5, Opus 4.8, Haiku 4.5 💰 |
+| DeepSeek | deepseek-chat 💰, deepseek-reasoner 🧠 |
+| Google | Gemini 3.6 Flash, 3.5 Flash, 3.5 Flash-Lite 💰, 2.5 Flash 💰 |
+| Groq | Llama 3.3 70B, Llama 4 Scout, Llama 3.1 8B 💰, GPT-OSS 20B 💰 |
+| Cohere | Command A, Command R+, Command R7B 💰 |
+
+> 💰 = bajo costo, ideal solo-chat. Kimi y GLM están ocultos temporalmente
+> (IDs sin verificar); sus keys guardadas se conservan.
 
 ---
 

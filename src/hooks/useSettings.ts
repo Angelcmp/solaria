@@ -114,26 +114,25 @@ export function useSettings() {
   }, [])
 
   const updateApiKey = useCallback(async (provider: keyof ApiKeys, key: string) => {
+    const clean = key.trim()
     setSettings(prev => ({
       ...prev,
-      apiKeys: { ...prev.apiKeys, [provider]: key },
+      apiKeys: { ...prev.apiKeys, [provider]: clean },
     }))
-    // Persist to OS keyring + localStorage fallback
-    localStorage.setItem(`solaria-key-${provider}`, key)
+    localStorage.setItem(`solaria-key-${provider}`, clean)
     try {
-      await invoke('store_api_key', { provider, key })
+      await invoke('store_api_key', { provider, key: clean })
     } catch {
-      // Keyring unavailable — localStorage fallback is already set
     }
   }, [])
 
   const updateTavilyKey = useCallback(async (key: string) => {
-    setSettings(prev => ({ ...prev, tavilyKey: key }))
-    localStorage.setItem('solaria-key-tavily', key)
+    const clean = key.trim()
+    setSettings(prev => ({ ...prev, tavilyKey: clean }))
+    localStorage.setItem('solaria-key-tavily', clean)
     try {
-      await invoke('store_api_key', { provider: 'tavily', key })
+      await invoke('store_api_key', { provider: 'tavily', key: clean })
     } catch {
-      // Keyring unavailable — localStorage fallback
     }
   }, [])
 

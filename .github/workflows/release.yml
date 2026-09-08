@@ -296,6 +296,7 @@ jobs:
           New-Item -ItemType Directory -Path $stage -Force | Out-Null
           Copy-Item 'src-tauri\target\release\solaria-agent.exe' $stage
           Copy-Item 'scripts\solaria.ps1' (Join-Path $stage 'solaria.ps1')
+          Copy-Item 'scripts\solaria.cmd' (Join-Path $stage 'solaria.cmd')
           Copy-Item 'src-tauri\icons\128x128.png' (Join-Path $stage 'solaria.png')
           $ver | Out-File (Join-Path $stage 'VERSION') -NoNewline -Encoding ascii
           tar -czf "dist/solaria-$ver-win-x86_64.tar.gz" -C dist "solaria-$ver-win-x86_64"

@@ -1,8 +1,12 @@
 <#
 .SYNOPSIS
-  Solaria Agent - Instalador para Windows (x64).
+  Solaria Agent - Instalador avanzado para Windows (x64, via tarball).
 
-  Instalacion rapida (~2-4 min, precompilado):
+  RECOMENDADO para usuarios comunes: descarga el instalador .exe (NSIS)
+  del ultimo Release (crea acceso en Menu Inicio, desinstalador y PATH):
+    https://github.com/Angelcmp/solaria/releases/latest
+
+  Via avanzada (~2-4 min, precompilado, sin instalador grafico):
     irm https://raw.githubusercontent.com/Angelcmp/solaria/main/install.ps1 | iex
 
 .PARAMETER Version
@@ -107,13 +111,30 @@ function Add-PathUser($dir) {
   if (($env:Path -split ';') -notcontains $dir) { $env:Path += ";$dir" }
 }
 
+function Install-StartMenuShortcut($targetExe) {
+  try {
+    $startDir = Join-Path ([Environment]::GetFolderPath('StartMenu')) 'Programs\Solaria'
+    New-Item -ItemType Directory -Path $startDir -Force | Out-Null
+    $shell = New-Object -ComObject WScript.Shell
+    $lnk = $shell.CreateShortcut((Join-Path $startDir 'Solaria.lnk'))
+    $lnk.TargetPath = $targetExe
+    $lnk.WorkingDirectory = Split-Path $targetExe
+    $lnk.Description = 'Solaria Agent'
+    $lnk.Save()
+    Log-Ok "Acceso directo creado en Menu Inicio -> Solaria"
+  } catch {
+    Log-Warn "no se pudo crear el acceso directo del Menu Inicio: $($_.Exception.Message)"
+  }
+}
+
 if ($Uninstall) {
   Log-Info 'Desinstalando Solaria (borrado total)...'
   Stop-Daemon
   Remove-Item $BinDir -Recurse -Force -ErrorAction SilentlyContinue
   Remove-Item $AppDir -Recurse -Force -ErrorAction SilentlyContinue
   Remove-Item (Join-Path $HomeDir '.solaria') -Recurse -Force -ErrorAction SilentlyContinue
-  Log-Ok 'Solaria desinstalado por completo (binario, repo y datos)'
+  Remove-Item (Join-Path ([Environment]::GetFolderPath('StartMenu')) 'Programs\Solaria') -Recurse -Force -ErrorAction SilentlyContinue
+  Log-Ok 'Solaria desinstalado por completo (binario, repo, datos y acceso Inicio)'
   exit 0
 }
 
@@ -165,11 +186,19 @@ $Version.TrimStart('v') | Out-File (Join-Path $AppDir 'VERSION') -NoNewline -Enc
 $stageWrapper = Join-Path $stage 'solaria.ps1'
 if (-not (Test-Path $stageWrapper)) { Fail "el tarball no contiene el wrapper esperado ($base/solaria.ps1)" }
 Copy-Item $stageWrapper $BinDir -Force
+$stageCmd = Join-Path $stage 'solaria.cmd'
+if (Test-Path $stageCmd) {
+  Copy-Item $stageCmd $BinDir -Force
+  Log-Ok "Shim cmd instalado en $(Join-Path $BinDir 'solaria.cmd')"
+} else {
+  Log-Warn 'el tarball no trae solaria.cmd; `solaria` en cmd.exe no funcionara (usa el .exe del Release)'
+}
 Log-Ok "Binario instalado en $(Join-Path $AppDir 'solaria-agent.exe')"
 Log-Ok "Lanzador instalado en $(Join-Path $BinDir 'solaria.ps1')"
 Remove-Item $tmp -Recurse -Force
 
 Add-PathUser $BinDir
+Install-StartMenuShortcut (Join-Path $AppDir 'solaria-agent.exe')
 
 # --- Verificar (por ficheros; la app es GUI) ---
 if (-not (Test-Path (Join-Path $BinDir 'solaria.ps1'))) { Fail "falta el lanzador en $BinDir" }
@@ -177,10 +206,16 @@ if (-not (Test-Path (Join-Path $AppDir 'solaria-agent.exe'))) { Fail "falta el b
 Log-Ok "solaria $($Version.TrimStart('v')) listo ($(Join-Path $AppDir 'solaria-agent.exe'))"
 
 Write-Host ''
-Write-Host '  Solaria instalado correctamente' -ForegroundColor Green
+Write-Host '  Solaria instalado correctamente (via avanzada tarball)' -ForegroundColor Green
 Write-Host ''
-Write-Host '  Abrir app:   solaria'
-Write-Host '  Guardar key: en la app, Configuracion -> Proveedores'
+Write-Host '  Abrir app:   Menu Inicio -> Solaria'
+Write-Host '               o en PowerShell nueva: solaria.ps1 (o solaria.cmd en cmd)'
+Write-Host '  NOTA: abre una terminal NUEVA para que el PATH funcione.'
+Write-Host '  Usuarios comunes: preferir el instalador .exe del Release'
+Write-Host '    https://github.com/Angelcmp/solaria/releases/latest'
+Write-Host '  Guardar key: en la app, Configuracion -> Proveedores -> Probar'
+Write-Host '    DeepSeek usa deepseek-chat / deepseek-reasoner.'
+Write-Host '    El error 401 es key invalida; revisa espacios y proveedor.'
 Write-Host '  Actualizar:  en la app, Configuracion -> Aplicacion'
 Write-Host '  Desinstalar: en la app, Configuracion -> Aplicacion -> Desinstalar'
 Write-Host ''

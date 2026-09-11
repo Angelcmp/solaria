@@ -50,9 +50,21 @@ export interface AgentStep {
 export interface AgentMessage {
   role: 'user' | 'assistant' | 'tool'
   content: string
+  /** Native function calling (OpenAI-compatible). */
+  tool_calls?: { id: string; type: 'function'; function: { name: string; arguments: string } }[]
+  tool_call_id?: string
 }
 
-const AGENT_SYSTEM_PROMPT = `Eres Solaria Agent, un asistente de investigación y análisis. Tu función es ayudar al usuario a investigar, analizar y procesar información.
+export interface NativeToolCall {
+  id: string
+  name: string
+  arguments: Record<string, string>
+}
+
+/** Proveedores cuyo endpoint soporta function calling nativo de OpenAI. */
+const NATIVE_TOOL_PROVIDERS = new Set(['openai', 'deepseek', 'groq', 'kimi', 'glm'])
+
+const AGENT_INTRO = `Eres Solaria Agent, un asistente de investigación y análisis. Tu función es ayudar al usuario a investigar, analizar y procesar información.
 
 Tus herramientas disponibles son:
 - read_file: Lee archivos (documentos, reportes, datos)
@@ -60,7 +72,9 @@ Tus herramientas disponibles son:
 - glob: Busca archivos por patrón
 - grep: Busca texto dentro de archivos
 - web_search: Busca información en internet
-- fetch_url: Obtiene contenido de páginas web
+- fetch_url: Obtiene contenido de páginas web`
+
+const AGENT_TEXT_TOOL_PROTOCOL = `
 
 Para usar una herramienta, pon SOLO esto al final de tu respuesta:
 
@@ -74,7 +88,13 @@ El JSON debe ser ESTRICTO y válido:
 - Coma obligatoria entre "name" y "arguments": {"name": "web_search", "arguments": {...}}
 - El nombre de la herramienta va exacto y SIN espacios alrededor: "name": "read_file".
 - "arguments" es siempre un objeto.
-- No añadas texto entre el JSON y las etiquetas.
+- No añadas texto entre el JSON y las etiquetas.`
+
+const AGENT_NATIVE_TOOL_PROTOCOL = `
+
+Invoca las herramientas usando las funciones nativas (function calling) que la API expone. NO escribas bloques <tool_call> ni JSON de herramientas en el texto: llama a la función directamente.`
+
+const AGENT_RULES_STRICT = `
 
 REGLAS ESTRICTAS:
 1. **PROHIBIDO preguntar al usuario.** Nunca digas "¿quieres que profundice?", "¿necesitas algo más?", "si deseas...", "¿te gustaría...?". Simplemente entrega los resultados completos y termina.
@@ -87,8 +107,9 @@ REGLAS ESTRICTAS:
 8. Las skills activas contienen guías que DEBES seguir para cada tipo de tarea.
 9. Responde en el mismo idioma que el usuario (español → español, inglés → inglés).`
 
-function buildToolSystemPrompt(config: AgentConfig): string {
-  return `${AGENT_SYSTEM_PROMPT}
+function buildToolSystemPrompt(config: AgentConfig, nativeTools = false): string {
+  const protocol = nativeTools ? AGENT_NATIVE_TOOL_PROTOCOL : AGENT_TEXT_TOOL_PROTOCOL
+  return `${AGENT_INTRO}${protocol}${AGENT_RULES_STRICT}
 
 DIRECTORIO DE TRABAJO: ${config.workingDirectory || 'No especificado (usa rutas absolutas)'}
 
@@ -97,55 +118,55 @@ ${getToolDescriptions(config.allowedTools)}
 `
 }
 
-function getToolDescriptions(allowedTools: string[]): string {
-  const tools: ToolDefinition[] = [
-    {
-      name: 'read_file',
-      description: 'Lee y muestra el contenido de un archivo.',
-      parameters: [
-        { name: 'path', param_type: 'string', description: 'Ruta absoluta al archivo', required: true },
-      ],
-    },
-    {
-      name: 'write_file',
-      description: 'ESCRIBE o SOBREESCRIBE contenido en un archivo. Crea directorios si es necesario.',
-      parameters: [
-        { name: 'path', param_type: 'string', description: 'Ruta absoluta', required: true },
-        { name: 'content', param_type: 'string', description: 'Contenido a escribir', required: true },
-      ],
-    },
-    {
-      name: 'glob',
-      description: 'Busca archivos por patrón glob. Ej: "**/*.md", "docs/**/*.txt"',
-      parameters: [
-        { name: 'pattern', param_type: 'string', description: 'Patrón glob', required: true },
-      ],
-    },
-    {
-      name: 'grep',
-      description: 'Busca texto en archivos usando regex.',
-      parameters: [
-        { name: 'pattern', param_type: 'string', description: 'Regex a buscar (requerido)', required: true },
-        { name: 'path', param_type: 'string', description: 'Directorio donde buscar (opcional, por defecto .)', required: false },
-      ],
-    },
-    {
-      name: 'web_search',
-      description: 'Busca información en internet usando Tavily. Devuelve resultados con resumen.',
-      parameters: [
-        { name: 'query', param_type: 'string', description: 'Términos de búsqueda', required: true },
-      ],
-    },
-    {
-      name: 'fetch_url',
-      description: 'Obtiene el contenido de una URL y lo devuelve como texto.',
-      parameters: [
-        { name: 'url', param_type: 'string', description: 'URL completa', required: true },
-      ],
-    },
-  ]
+export const AGENT_TOOLS: ToolDefinition[] = [
+  {
+    name: 'read_file',
+    description: 'Lee y muestra el contenido de un archivo.',
+    parameters: [
+      { name: 'path', param_type: 'string', description: 'Ruta absoluta al archivo', required: true },
+    ],
+  },
+  {
+    name: 'write_file',
+    description: 'ESCRIBE o SOBREESCRIBE contenido en un archivo. Crea directorios si es necesario.',
+    parameters: [
+      { name: 'path', param_type: 'string', description: 'Ruta absoluta', required: true },
+      { name: 'content', param_type: 'string', description: 'Contenido a escribir', required: true },
+    ],
+  },
+  {
+    name: 'glob',
+    description: 'Busca archivos por patrón glob. Ej: "**/*.md", "docs/**/*.txt"',
+    parameters: [
+      { name: 'pattern', param_type: 'string', description: 'Patrón glob', required: true },
+    ],
+  },
+  {
+    name: 'grep',
+    description: 'Busca texto en archivos usando regex.',
+    parameters: [
+      { name: 'pattern', param_type: 'string', description: 'Regex a buscar (requerido)', required: true },
+      { name: 'path', param_type: 'string', description: 'Directorio donde buscar (opcional, por defecto .)', required: false },
+    ],
+  },
+  {
+    name: 'web_search',
+    description: 'Busca información en internet usando Tavily. Devuelve resultados con resumen.',
+    parameters: [
+      { name: 'query', param_type: 'string', description: 'Términos de búsqueda', required: true },
+    ],
+  },
+  {
+    name: 'fetch_url',
+    description: 'Obtiene el contenido de una URL y lo devuelve como texto.',
+    parameters: [
+      { name: 'url', param_type: 'string', description: 'URL completa', required: true },
+    ],
+  },
+]
 
-  return tools
+function getToolDescriptions(allowedTools: string[]): string {
+  return AGENT_TOOLS
     .filter(t => allowedTools.includes(t.name))
     .map(t => {
       const params = t.parameters.map(p => `  - ${p.name} (${p.param_type}${p.required ? '' : ', opcional'}): ${p.description}`).join('\n')
@@ -155,6 +176,35 @@ Parámetros:
 ${params}`
     })
     .join('\n\n')
+}
+
+const OPENAI_PARAM_TYPES: Record<string, string> = {
+  number: 'number',
+  integer: 'number',
+  float: 'number',
+  boolean: 'boolean',
+  array: 'array',
+  object: 'object',
+}
+
+/** Convierte las definiciones al esquema `tools` de la API de OpenAI. */
+export function toOpenAiTools(allowedTools: string[]): unknown[] {
+  return AGENT_TOOLS
+    .filter(t => allowedTools.includes(t.name))
+    .map(t => ({
+      type: 'function',
+      function: {
+        name: t.name,
+        description: t.description,
+        parameters: {
+          type: 'object',
+          properties: Object.fromEntries(
+            t.parameters.map(p => [p.name, { type: OPENAI_PARAM_TYPES[p.param_type] || 'string', description: p.description }]),
+          ),
+          required: t.parameters.filter(p => p.required).map(p => p.name),
+        },
+      },
+    }))
 }
 
 export function extractToolCall(text: string): { name: string; arguments: Record<string, string> } | null {
@@ -388,7 +438,9 @@ export function useAgent() {
     systemPrompt: string,
     provider: ProviderConfig,
     onToken: (token: string) => void,
-  ): Promise<string> => {
+    tools?: unknown[],
+    nativeTools = false,
+  ): Promise<{ content: string; toolCalls: NativeToolCall[] }> => {
     return new Promise((resolve, reject) => {
       const streamId = crypto.randomUUID()
       streamIdRef.current = streamId
@@ -405,7 +457,12 @@ export function useAgent() {
 
         const clearTimeoutFn = () => clearTimeout(timeoutId)
 
-        const unlistenDone = await listen<{ stream_id: string; full_content: string; cancelled: boolean }>('stream://done', async (event) => {
+        const unlistenDone = await listen<{
+          stream_id: string
+          full_content: string
+          cancelled: boolean
+          tool_calls?: NativeToolCall[]
+        }>('stream://done', async (event) => {
           if (event.payload.stream_id !== streamId) return
           if (settled) return
           settled = true
@@ -415,7 +472,8 @@ export function useAgent() {
           await new Promise(r => setTimeout(r, 100))
           const finalContent = fullContent.length > event.payload.full_content.length
             ? fullContent : event.payload.full_content
-          resolve(finalContent)
+          const toolCalls = Array.isArray(event.payload.tool_calls) ? event.payload.tool_calls : []
+          resolve({ content: finalContent, toolCalls })
         })
         unlistenRef.current.push(unlistenDone)
 
@@ -437,16 +495,25 @@ export function useAgent() {
           cleanupStreamListeners()
           streamIdRef.current = null
           if (fullContent.trim()) {
-            resolve(fullContent.trim())
+            resolve({ content: fullContent.trim(), toolCalls: [] })
           } else {
             reject(new Error('Tiempo de espera agotado (30s). El modelo no generó respuesta.'))
           }
         }, 60000)
 
-        const historyMessages = messages.map(m => ({
-          role: m.role === 'tool' ? 'user' as const : m.role,
-          content: m.content,
-        }))
+        // Con function calling nativo se conserva el par assistant(tool_calls)/tool
+        // tal cual lo espera la API. Sin él, los resultados van como `user`.
+        const historyMessages = messages.map(m => {
+          if (nativeTools) {
+            return {
+              role: m.role,
+              content: m.content,
+              ...(m.tool_calls ? { tool_calls: m.tool_calls } : {}),
+              ...(m.tool_call_id ? { tool_call_id: m.tool_call_id } : {}),
+            }
+          }
+          return { role: m.role === 'tool' ? 'user' as const : m.role, content: m.content }
+        })
 
         try {
           if (provider.type === 'ollama') {
@@ -470,6 +537,7 @@ export function useAgent() {
               temperature: provider.temperature ?? null,
               topP: provider.topP ?? null,
               maxTokens: provider.maxTokens ?? null,
+              tools: tools ? JSON.stringify(tools) : null,
             })
           }
         } catch (error: any) {
@@ -550,7 +618,11 @@ export function useAgent() {
       skillsPrompt = await invoke<string>('get_skills_prompt', params)
     } catch {}
 
-    const systemPrompt = buildToolSystemPrompt(agentConfig) + skillsPrompt
+    // deepseek-reasoner no soporta function calling (la API devuelve 400).
+    const nativeTools = NATIVE_TOOL_PROVIDERS.has(provider.type)
+      && !(provider.type === 'deepseek' && provider.model.includes('reasoner'))
+    const toolsSchema = nativeTools ? toOpenAiTools(agentConfig.allowedTools) : undefined
+    const systemPrompt = buildToolSystemPrompt(agentConfig, nativeTools) + skillsPrompt
     const systemPromptWithPersona = options?.personaPrompt
       ? systemPrompt + `\n\n## ROL / PERSONA ACTIVA\n${options.personaPrompt}`
       : systemPrompt
@@ -576,16 +648,44 @@ export function useAgent() {
 
         let currentThinking = ''
 
-        const response = await streamLLM(messages, finalSystemPrompt, provider, (token) => {
-          currentThinking += token
-          options?.onThinking?.(stripToolCallsForDisplay(thinkingAccum + currentThinking))
-        })
+        const { content: response, toolCalls: nativeCalls } = await streamLLM(
+          messages, finalSystemPrompt, provider,
+          (token) => {
+            currentThinking += token
+            options?.onThinking?.(stripToolCallsForDisplay(thinkingAccum + currentThinking))
+          },
+          toolsSchema, nativeTools,
+        )
 
-        const toolCall = extractToolCall(response)
+        const nativeCall = nativeCalls[0] ?? null
+        const toolCall = nativeCall
+          ? { name: nativeCall.name, arguments: nativeCall.arguments }
+          : extractToolCall(response)
+        const callId = nativeCall?.id || `call_${crypto.randomUUID().slice(0, 8)}`
         const cleanedResponse = cleanToolCalls(response)
         const pureText = cleanedResponse || response.replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '').trim()
         if (pureText) lastAssistantText = pureText
         const responseHasToolTags = response.includes('<tool_call>')
+
+        // Empuja el par assistant/tool en el formato que espera el proveedor:
+        // nativo (tool_calls/tool_call_id) o protocolo de texto (rol `tool`).
+        const pushToolExchange = (assistantText: string, toolContent: string) => {
+          if (nativeTools && toolCall) {
+            messages.push({
+              role: 'assistant',
+              content: assistantText || '',
+              tool_calls: [{
+                id: callId,
+                type: 'function',
+                function: { name: toolCall.name, arguments: JSON.stringify(toolCall.arguments) },
+              }],
+            })
+            messages.push({ role: 'tool', content: toolContent, tool_call_id: callId })
+          } else {
+            messages.push({ role: 'assistant', content: assistantText })
+            messages.push({ role: 'tool', content: toolContent })
+          }
+        }
 
         if (responseHasToolTags) {
           const reasonText = (cleanedResponse || pureText).trim()
@@ -605,7 +705,7 @@ export function useAgent() {
           if (responseHasToolTags) {
             const noToolMsg = 'No se pudo parsear el tool_call. Asegúrate de usar JSON válido: {"name": "tool_name", "arguments": {...}}. Termina con la etiqueta </tool_call>.'
             messages.push({ role: 'assistant', content: cleanedResponse || response })
-            messages.push({ role: 'tool', content: noToolMsg })
+            messages.push({ role: nativeTools ? 'user' : 'tool', content: noToolMsg })
             continue
           }
           options?.onThinking?.(stripToolCallsForDisplay(thinkingAccum))
@@ -666,8 +766,7 @@ export function useAgent() {
               toolName: toolCall.name,
               toolResult: deniedMsg,
             }))
-            messages.push({ role: 'assistant', content: response })
-            messages.push({ role: 'tool', content: deniedMsg })
+            pushToolExchange(cleanedResponse || response, deniedMsg)
             continue
           }
 
@@ -703,8 +802,7 @@ export function useAgent() {
             ? `Resultado de ${toolCall.name}:\n\`\`\`\n${toolResult.output.slice(0, 5000)}\n\`\`\`${toolResult.output.length > 5000 ? '\n...(resultado truncado)' : ''}`
             : `Error ejecutando ${toolCall.name}: ${toolResult.error || 'Error desconocido'}`)
 
-        messages.push({ role: 'assistant', content: cleanedResponse || response })
-        messages.push({ role: 'tool', content: resultContent })
+        pushToolExchange(cleanedResponse || response, resultContent)
 
         if (isWriteFile) {
           const filePath = toolCall.arguments.path || ''

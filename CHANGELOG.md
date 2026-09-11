@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.10.0] — 2026-09-11
+
+### Added
+- **Native function calling** para proveedores OpenAI-compatibles (OpenAI/GPT-4o, DeepSeek `deepseek-chat`, Groq, Kimi, GLM): el agente envía el esquema de herramientas (`tools`/`tool_choice`) y consume `tool_calls` nativas del stream, con el par `assistant(tool_calls)`/`tool(tool_call_id)` correcto. Esto elimina de raíz los tool_calls corruptos en esos modelos. `deepseek-reasoner` queda excluido (su API no soporta function calling) y usa el protocolo de texto.
+- El backend acumula los `tool_calls` troceados del stream SSE y los entrega en `stream://done`; el frontend los prefiere y cae al parser de texto cuando no hay nativos.
+
+### Changed
+- El system prompt usa instrucciones nativas cuando el proveedor soporta function calling, y el protocolo `<tool_call>` de texto como fallback.
+
 ## [0.9.9] — 2026-09-11
 
 ### Fixed

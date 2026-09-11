@@ -3,10 +3,18 @@ use tauri::{AppHandle, Emitter};
 use futures_util::StreamExt;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Default)]
 struct ChatMessage {
     role: String,
+    #[serde(default)]
     content: String,
+    /// Native function calling (OpenAI-compatible): assistant message que
+    /// contiene las llamadas a herramientas.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_calls: Option<serde_json::Value>,
+    /// Native function calling: id de la llamada que responde un mensaje `tool`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_call_id: Option<String>,
 }
 
 // OpenAI-compatible format
@@ -279,11 +287,13 @@ fn build_messages(
         chat_messages.push(ChatMessage {
             role: "system".into(),
             content: format!("{} IMPORTANTE: Responde siempre en español.", sp),
+            ..Default::default()
         });
     } else {
         chat_messages.push(ChatMessage {
             role: "system".into(),
             content: "Eres Solaria, un asistente de IA. Responde siempre en español de forma clara y concisa.".into(),
+            ..Default::default()
         });
     }
 
@@ -586,17 +596,63 @@ pub async fn route_chat(
 
 // ── Streaming ────────────────────────────────────────────────────────────────
 
+/// Acumulador de tool_calls nativas que llegan troceadas en el stream de
+/// OpenAI (`delta.tool_calls[]`).
+#[derive(Default)]
+struct ToolCallAcc {
+    items: Vec<(String, String, String)>, // (id, name, arguments)
+}
+
+impl ToolCallAcc {
+    fn absorb(&mut self, tcs: &[serde_json::Value]) {
+        for tc in tcs {
+            let idx = tc["index"].as_u64().unwrap_or(0) as usize;
+            while self.items.len() <= idx {
+                self.items.push((String::new(), String::new(), String::new()));
+            }
+            let slot = &mut self.items[idx];
+            if let Some(id) = tc["id"].as_str() {
+                if !id.is_empty() { slot.0 = id.to_string(); }
+            }
+            if let Some(name) = tc["function"]["name"].as_str() {
+                slot.1.push_str(name);
+            }
+            if let Some(args) = tc["function"]["arguments"].as_str() {
+                slot.2.push_str(args);
+            }
+        }
+    }
+
+    fn into_json(self) -> Vec<serde_json::Value> {
+        self.items
+            .into_iter()
+            .filter(|(_, name, _)| !name.is_empty())
+            .enumerate()
+            .map(|(i, (id, name, args))| {
+                let arguments: serde_json::Value =
+                    serde_json::from_str(&args).unwrap_or_else(|_| serde_json::json!({}));
+                serde_json::json!({
+                    "id": if id.is_empty() { format!("call_{}", i) } else { id },
+                    "name": name,
+                    "arguments": arguments,
+                })
+            })
+            .collect()
+    }
+}
+
 async fn stream_sse(
     app: &AppHandle,
     stream_id: &str,
     cancel_flag: &AtomicBool,
     response: reqwest::Response,
-) -> String {
+) -> (String, Vec<serde_json::Value>) {
     let mut full_content = String::new();
+    let mut tool_acc = ToolCallAcc::default();
     let mut stream = response.bytes_stream();
     while let Some(chunk_result) = stream.next().await {
         if cancel_flag.load(Ordering::SeqCst) {
-            return full_content;
+            return (full_content, tool_acc.into_json());
         }
         match chunk_result {
             Ok(chunk) => {
@@ -604,7 +660,9 @@ async fn stream_sse(
                 for line in chunk_str.lines() {
                     let line = line.trim();
                     if line.is_empty() { continue; }
-                    if line == "data: [DONE]" { return full_content; }
+                    if line == "data: [DONE]" {
+                        return (full_content, tool_acc.into_json());
+                    }
                     if let Some(data) = line.strip_prefix("data: ") {
                         if let Ok(val) = serde_json::from_str::<serde_json::Value>(data) {
                             if let Some(content) = val["choices"][0]["delta"]["content"].as_str() {
@@ -620,14 +678,17 @@ async fn stream_sse(
                                     "token": thinking,
                                 }));
                             }
+                            if let Some(tcs) = val["choices"][0]["delta"]["tool_calls"].as_array() {
+                                tool_acc.absorb(tcs);
+                            }
                         }
                     }
                 }
             }
-            Err(_) => return full_content,
+            Err(_) => return (full_content, tool_acc.into_json()),
         }
     }
-    full_content
+    (full_content, tool_acc.into_json())
 }
 
 fn build_messages_for_stream(
@@ -645,6 +706,7 @@ pub async fn stream_openai_compatible(
     system_prompt: Option<String>,
     messages_str: String,
     params: ModelParams,
+    tools: Option<String>,
 ) {
     let api_key = api_key.trim().to_string();
     let cancel_flag = crate::register_cancel(&stream_id);
@@ -659,6 +721,12 @@ pub async fn stream_openai_compatible(
     if let Some(t) = params.temperature { request["temperature"] = serde_json::json!(t); }
     if let Some(p) = params.top_p { request["top_p"] = serde_json::json!(p); }
     if let Some(m) = params.max_tokens { request["max_tokens"] = serde_json::json!(m); }
+    if let Some(tools_str) = tools {
+        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&tools_str) {
+            request["tools"] = parsed;
+            request["tool_choice"] = serde_json::json!("auto");
+        }
+    }
 
     match client
         .post(&config.base_url)
@@ -676,9 +744,10 @@ pub async fn stream_openai_compatible(
                 }));
                 return;
             }
-            let full = stream_sse(&app, &stream_id, &cancel_flag, resp).await;
+            let (full, tool_calls) = stream_sse(&app, &stream_id, &cancel_flag, resp).await;
             let _ = app.emit("stream://done", serde_json::json!({
                 "stream_id": stream_id, "full_content": full, "cancelled": false,
+                "tool_calls": tool_calls,
             }));
         }
         Err(e) => {
@@ -968,12 +1037,53 @@ pub async fn route_chat_stream(
     system_prompt: Option<String>,
     messages_str: String,
     params: ModelParams,
+    tools: Option<String>,
 ) {
     let api_key = api_key.trim().to_string();
     match api_type.as_str() {
         "anthropic" => stream_anthropic(app, stream_id, api_key, config, system_prompt, messages_str, params).await,
         "google" => stream_google(app, stream_id, api_key, config, system_prompt, messages_str, params).await,
         "cohere" => stream_cohere(app, stream_id, api_key, config, system_prompt, messages_str, params).await,
-        _ => stream_openai_compatible(app, stream_id, api_key, config, system_prompt, messages_str, params).await,
+        _ => stream_openai_compatible(app, stream_id, api_key, config, system_prompt, messages_str, params, tools).await,
+    }
+}
+
+#[cfg(test)]
+mod tool_call_tests {
+    use super::ToolCallAcc;
+    use serde_json::json;
+
+    #[test]
+    fn accumulates_fragmented_tool_calls() {
+        let mut acc = ToolCallAcc::default();
+        acc.absorb(&[json!({
+            "index": 0, "id": "call_1",
+            "function": { "name": "read_", "arguments": "{\"pa" }
+        })]);
+        acc.absorb(&[json!({
+            "index": 0,
+            "function": { "name": "file", "arguments": "th\":\"a.css\"}" }
+        })]);
+        let out = acc.into_json();
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0]["id"], "call_1");
+        assert_eq!(out[0]["name"], "read_file");
+        assert_eq!(out[0]["arguments"]["path"], "a.css");
+    }
+
+    #[test]
+    fn generates_id_when_missing() {
+        let mut acc = ToolCallAcc::default();
+        acc.absorb(&[json!({ "index": 0, "function": { "name": "glob", "arguments": "{}" } })]);
+        let out = acc.into_json();
+        assert_eq!(out[0]["name"], "glob");
+        assert_eq!(out[0]["arguments"], json!({}));
+        assert!(out[0]["id"].as_str().unwrap().starts_with("call_"));
+    }
+
+    #[test]
+    fn ignores_incomplete_tool_calls() {
+        let acc = ToolCallAcc::default();
+        assert!(acc.into_json().is_empty());
     }
 }

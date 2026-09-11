@@ -457,13 +457,14 @@ async fn provider_chat_stream(
     temperature: Option<f32>,
     top_p: Option<f32>,
     max_tokens: Option<u32>,
+    tools: Option<String>,
 ) {
     let model_params = providers::ModelParams { temperature, top_p, max_tokens };
     if let Some(config) = providers::get_provider_config(&provider, &model) {
         providers::route_chat_stream(
             app, stream_id,
             config.api_type.clone(), api_key, config,
-            system_prompt, messages, model_params,
+            system_prompt, messages, model_params, tools,
         ).await
     } else {
         let _ = app.emit("stream://error", serde_json::json!({

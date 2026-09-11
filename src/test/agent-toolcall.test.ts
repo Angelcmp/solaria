@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { extractToolCall } from '../hooks/useAgent'
+import { extractToolCall, toOpenAiTools } from '../hooks/useAgent'
 import { normalizeToolTags, stripToolCallsForDisplay } from '../lib/toolCallText'
 
 describe('extractToolCall — reparación de tool_calls malformados', () => {
@@ -62,5 +62,24 @@ describe('normalizeToolTags', () => {
   it('normaliza <tool> y cierres sin ángulo', () => {
     const out = normalizeToolTags('<tool> {} tool_call>')
     expect(out).toBe('<tool_call> {} </tool_call>')
+  })
+})
+
+describe('toOpenAiTools — esquema de function calling', () => {
+  it('convierte las herramientas permitidas al formato de OpenAI', () => {
+    const tools = toOpenAiTools(['read_file', 'write_file']) as Array<{
+      type: string
+      function: { name: string; parameters: { properties: Record<string, unknown>; required: string[] } }
+    }>
+    expect(tools).toHaveLength(2)
+    const read = tools.find(t => t.function.name === 'read_file')!
+    expect(read.type).toBe('function')
+    expect(read.function.parameters.properties).toHaveProperty('path')
+    expect(read.function.parameters.required).toEqual(['path'])
+  })
+
+  it('respeta el filtro de herramientas permitidas', () => {
+    const tools = toOpenAiTools(['glob']) as Array<{ function: { name: string } }>
+    expect(tools.map(t => t.function.name)).toEqual(['glob'])
   })
 })

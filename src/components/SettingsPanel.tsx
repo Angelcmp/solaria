@@ -376,7 +376,7 @@ function AppSection() {
           <span className="text-[0.7rem] font-medium text-[#E5E5E5]">{version || '…'}</span>
         </div>
         {upToDate && (
-          <div className="text-[0.65rem] text-[#999999]">Estás al día.</div>
+          <div className="text-[0.65rem] text-[#999999]">Estás al día{version ? ` (v${version})` : ''}.</div>
         )}
         {available && !installed && (
           <div className="space-y-2">
@@ -690,6 +690,38 @@ function AgentTab({ settings, onUpdate, agentConfig, onUpdateAgentConfig }: {
           </div>
 
           <div className="p-3 rounded-lg bg-[#1C1B1B] border border-[rgba(255,255,255,0.06)] border-l-2 border-l-[rgba(255,255,255,0.08)]">
+            <div className="flex items-center gap-2.5">
+              <div className="shrink-0">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#999999" strokeWidth="2">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[0.6875rem] text-[#E5E5E5] font-medium">Directorio de trabajo</div>
+                <div className="text-[0.55rem] text-[#666666]">Carpeta donde el agente lee y escribe archivos</div>
+              </div>
+            </div>
+            <div className="flex gap-1.5 mt-2.5">
+              <input
+                value={agentConfig.workingDirectory}
+                onChange={e => onUpdateAgentConfig({ workingDirectory: e.target.value })}
+                placeholder="Ej: /home/user/documentos"
+                className="flex-1 px-3 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[rgba(255,255,255,0.2)] transition-colors"
+              />
+              <ActionButton variant="ghost" small onClick={async () => {
+                try { const { invoke } = await import('@tauri-apps/api/core'); const cwd = await invoke<string>('get_cwd'); onUpdateAgentConfig({ workingDirectory: cwd }) } catch {}
+              }}>
+                <FolderIcon />
+              </ActionButton>
+              <ActionButton variant="ghost" small onClick={async () => {
+                try { const { open } = await import('@tauri-apps/plugin-dialog'); const selected = await open({ directory: true, multiple: false, title: 'Seleccionar directorio' }); if (selected) onUpdateAgentConfig({ workingDirectory: selected as string }) } catch {}
+              }}>
+                <SearchFolderIcon />
+              </ActionButton>
+            </div>
+          </div>
+
+          <div className="p-3 rounded-lg bg-[#1C1B1B] border border-[rgba(255,255,255,0.06)] border-l-2 border-l-[rgba(255,255,255,0.08)]">
             <button
               onClick={() => setParamsOpen(!paramsOpen)}
               className="flex items-center gap-2.5 w-full text-left"
@@ -718,28 +750,6 @@ function AgentTab({ settings, onUpdate, agentConfig, onUpdateAgentConfig }: {
                   onChange={v => onUpdateAgentConfig({ maxIterations: v })}
                   descLeft="3" descRight="25"
                 />
-
-                <div>
-                  <label className="block text-[0.625rem] font-medium text-[#999999] mb-1.5">Directorio de trabajo</label>
-                  <div className="flex gap-1.5">
-                    <input
-                      value={agentConfig.workingDirectory}
-                      onChange={e => onUpdateAgentConfig({ workingDirectory: e.target.value })}
-                      placeholder="Ej: /home/user/documentos"
-                      className="flex-1 px-3 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[rgba(255,255,255,0.2)] transition-colors"
-                    />
-                    <ActionButton variant="ghost" small onClick={async () => {
-                      try { const { invoke } = await import('@tauri-apps/api/core'); const cwd = await invoke<string>('get_cwd'); onUpdateAgentConfig({ workingDirectory: cwd }) } catch {}
-                    }}>
-                      <FolderIcon />
-                    </ActionButton>
-                    <ActionButton variant="ghost" small onClick={async () => {
-                      try { const { open } = await import('@tauri-apps/plugin-dialog'); const selected = await open({ directory: true, multiple: false, title: 'Seleccionar directorio' }); if (selected) onUpdateAgentConfig({ workingDirectory: selected as string }) } catch {}
-                    }}>
-                      <SearchFolderIcon />
-                    </ActionButton>
-                  </div>
-                </div>
 
                 <div className="flex items-center justify-between">
                   <div>

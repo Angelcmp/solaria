@@ -1,10 +1,15 @@
 # Changelog
 
-## [Unreleased]
+## [0.9.6] — 2026-09-10
+
+### Added
+- **Auto-release desde `main`**: al cambiar la versión en `src-tauri/tauri.conf.json` (y `package.json`/`Cargo.toml`) y hacer push a `main`, el CI valida que las tres coincidan, crea el tag `vX.Y.Z` si no existe y publica el Release con `latest.json` firmado. Así la app detecta e instala la actualización sin tag manual.
 
 ### Fixed
-- **Modelos cloud auditados**: IDs ficticios/retirados reemplazados por vigentes (OpenAI `gpt-5-mini`/`gpt-4.1-mini` 💰, Anthropic versionados, Gemini `3.6/3.5` + `flash-lite` 💰 sin el `2.0-flash` dado de baja, Groq con IDs completos + `8b-instant`/`gpt-oss-20b` 💰, Cohere `command-a` + `r-plus` sin fecha). Alias backend para configs guardadas con IDs viejos; errores HTTP ahora traen cuerpo + pista (401 key, 400 modelo, 402 saldo)
+- **DeepSeek 401 / modelos cloud auditados**: IDs ficticios/retirados reemplazados por vigentes (OpenAI `gpt-5-mini`/`gpt-4.1-mini` 💰, Anthropic versionados, Gemini `3.6/3.5` + `flash-lite` 💰 sin el `2.0-flash` dado de baja, Groq con IDs completos + `8b-instant`/`gpt-oss-20b` 💰, Cohere `command-a` + `r-plus` sin fecha). Alias backend para configs guardadas con IDs viejos; errores HTTP ahora traen cuerpo + pista (401 key, 400 modelo, 402 saldo)
 - **Kimi/GLM ocultos** de la UI hasta verificar sus IDs (keys guardadas y backend intactos)
+- **Keyring nativo por SO**: en Windows/macOS el backend por defecto era `mock` (no persistía las API keys). Ahora se usa Credential Manager (`windows-native`) y Keychain (`apple-native`); Linux sigue con Secret Service
+- **Carpeta de trabajo del agente**: el chip del header del chat abre el selector nativo de carpeta; el campo "Directorio de trabajo" está siempre visible en Configuración → Agente (ya no dentro del acordeón); al editar o seleccionar un proyecto se sincroniza su carpeta con el agente, y al abrir una conversación de proyecto se restaura su contexto. La carpeta activa persiste entre reinicios
 
 ## [0.9.5] — 2026-09-06
 

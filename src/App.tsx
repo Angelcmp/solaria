@@ -122,7 +122,9 @@ function App() {
   const [projects, setProjects] = useState<Project[]>(() => {
     try { return JSON.parse(localStorage.getItem('solaria-projects') || '[]') } catch { return [] }
   })
-  const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(() => {
+    try { return localStorage.getItem('solaria-active-project') || null } catch { return null }
+  })
   const completeMsgRef = useRef(completeAssistantMessage)
   const updateToolSummaryRef = useRef(updateToolSummary)
   const updateConvStepsRef = useRef(updateConvSteps)
@@ -132,6 +134,12 @@ function App() {
 
   useEffect(() => { completeMsgRef.current = completeAssistantMessage }, [completeAssistantMessage])
   useEffect(() => { localStorage.setItem('solaria-projects', JSON.stringify(projects)) }, [projects])
+  useEffect(() => {
+    try {
+      if (activeProjectId) localStorage.setItem('solaria-active-project', activeProjectId)
+      else localStorage.removeItem('solaria-active-project')
+    } catch {}
+  }, [activeProjectId])
   useEffect(() => { updateToolSummaryRef.current = updateToolSummary }, [updateToolSummary])
   useEffect(() => { updateConvStepsRef.current = updateConvSteps }, [updateConvSteps])
   useEffect(() => { agentStepsRef.current = agentSteps }, [agentSteps])
@@ -183,6 +191,29 @@ function App() {
   const handleToggleAgent = useCallback(() => {
     updateAgentConfig({ enabled: !agentConfig.enabled })
   }, [agentConfig.enabled, updateAgentConfig])
+
+  // Selector nativo de carpeta de trabajo del agente (independiente de proyectos).
+  const handlePickWorkingDir = useCallback(async () => {
+    try {
+      const { open } = await import('@tauri-apps/plugin-dialog')
+      const selected = await open({ directory: true, multiple: false, title: 'Seleccionar carpeta de trabajo' })
+      if (selected) {
+        updateAgentConfig({ workingDirectory: selected as string })
+        setActiveProjectId(null)
+      }
+    } catch (e) {
+      appLog('warn', `handlePickWorkingDir: ${e}`)
+    }
+  }, [updateAgentConfig])
+
+  // Al arrancar, restaurar la carpeta del proyecto activo (si sigue existiendo).
+  useEffect(() => {
+    const saved = localStorage.getItem('solaria-active-project')
+    if (!saved) return
+    const proj = projects.find(p => p.id === saved)
+    if (proj?.path) updateAgentConfig({ workingDirectory: proj.path })
+    else setActiveProjectId(null)
+  }, [])
 
   const handleStartComparison = useCallback((
     prompt: string,
@@ -342,7 +373,15 @@ function App() {
     const target = conversationsRef.current.find(c => c.id === convId)
     setAgentSteps(target?.steps ? [...target.steps] : [])
     setPanelForcedOpen(false)
-  }, [activeConvId, selectConversation])
+    // Restaurar el contexto de proyecto (y su carpeta de trabajo) de la conversación.
+    if (target?.projectId) {
+      setActiveProjectId(target.projectId)
+      const proj = projects.find(p => p.id === target.projectId)
+      if (proj?.path) updateAgentConfig({ workingDirectory: proj.path })
+    } else {
+      setActiveProjectId(null)
+    }
+  }, [activeConvId, selectConversation, projects, updateAgentConfig])
 
   const handlePanelClose = useCallback(() => {
     if (activeConvId) {
@@ -389,7 +428,10 @@ function App() {
         onOpenWiki={() => setWikiOpen(true)}
         projects={projects}
         onAddProject={(p) => setProjects(prev => [...prev, p])}
-        onUpdateProject={(p) => setProjects(prev => prev.map(proj => proj.id === p.id ? p : proj))}
+        onUpdateProject={(p) => {
+          setProjects(prev => prev.map(proj => proj.id === p.id ? p : proj))
+          if (activeProjectId === p.id && p.path) updateAgentConfig({ workingDirectory: p.path })
+        }}
         onDeleteProject={(id) => { setProjects(prev => prev.filter(p => p.id !== id)); if (activeProjectId === id) setActiveProjectId(null) }}
         onSelectProject={(p: Project) => {
           const isActive = activeProjectId === p.id
@@ -445,6 +487,7 @@ function App() {
         }}
         settings={settings}
         onShowSettings={() => setShowSettings('general')}
+        onPickWorkingDir={handlePickWorkingDir}
         agentConfig={agentConfig}
         agentIsRunning={agentIsRunning}
         onToggleAgent={handleToggleAgent}

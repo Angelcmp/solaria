@@ -1,19 +1,75 @@
 name: Release
 
-# Publica binarios precompilados de Linux (x86_64 + aarch64) en cada tag v*.
+# Publica binarios precompilados al subir una version nueva a main o al
+# empujar un tag v*.
+#
+# Flujo automatico (recomendado): al cambiar la version en
+# src-tauri/tauri.conf.json (y package.json/Cargo.toml) y hacer push a main,
+# el job `prepare` valida la coherencia de versiones, crea el tag vX.Y.Z si
+# no existe y dispara el build + Release con latest.json (updater Tauri).
+#
 # Cada Release incluye por arch: tarball (binario + wrapper + icono),
-# .deb / .AppImage del bundle Tauri, más un SHA256SUMS.txt conjunto.
-# El install.sh descarga estos assets por defecto (instalación en minutos).
+# .deb / .AppImage del bundle Tauri, mas un SHA256SUMS.txt conjunto.
 
 on:
   push:
+    branches: [main]
     tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      tag: ${{ steps.ver.outputs.tag }}
+      build: ${{ steps.ver.outputs.build }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validar versiones y calcular tag
+        id: ver
+        run: |
+          set -euo pipefail
+          VER=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          PKG=$(node -p "require('./package.json').version")
+          CARGO=$(grep -m1 '^version' src-tauri/Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "tauri.conf.json=$VER package.json=$PKG Cargo.toml=$CARGO"
+          if [ "$VER" != "$PKG" ] || [ "$VER" != "$CARGO" ]; then
+            echo "::error::Versiones desalineadas: tauri.conf.json=$VER package.json=$PKG Cargo.toml=$CARGO"
+            exit 1
+          fi
+          TAG="v$VER"
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+          # Debe construirse si ya venimos de un tag/dispatch, o si acabamos de
+          # crear el tag por un bump de version en main.
+          CREATED=0
+          if git ls-remote --tags origin "refs/tags/$TAG" | grep -q .; then
+            echo "El tag $TAG ya existe."
+          else
+            git tag "$TAG"
+            git push origin "$TAG"
+            echo "Tag $TAG creado."
+            CREATED=1
+          fi
+
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ] || [ "${GITHUB_EVENT_NAME:-}" = "workflow_dispatch" ] || [ "$CREATED" = "1" ]; then
+            echo "build=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=0" >> "$GITHUB_OUTPUT"
+            echo "Sin version nueva; se omite el build."
+          fi
+
   build-linux:
+    needs: prepare
+    if: needs.prepare.outputs.build == '1'
     strategy:
       matrix:
         include:
@@ -57,10 +113,11 @@ jobs:
         run: npm run tauri build
 
       - name: Package tarball
+        env:
+          VER: ${{ needs.prepare.outputs.version }}
         run: |
           set -euo pipefail
           shopt -s nullglob
-          VER="${GITHUB_REF_NAME#v}"
           STAGE="dist/solaria-${VER}-linux-${{ matrix.arch }}"
           mkdir -p "$STAGE"
           cp "src-tauri/target/release/solaria-agent" "$STAGE/"
@@ -92,7 +149,8 @@ jobs:
           path: release-assets/*
 
   publish:
-    needs: [build-linux, build-macos, build-windows]
+    needs: [prepare, build-linux, build-macos, build-windows]
+    if: needs.prepare.outputs.build == '1'
     runs-on: ubuntu-24.04
     steps:
       - name: Download Linux artifacts
@@ -126,7 +184,7 @@ jobs:
 
       - name: latest.json (updater Tauri)
         env:
-          TAG_NAME: ${{ github.ref_name }}
+          TAG_NAME: ${{ needs.prepare.outputs.tag }}
         run: |
           python3 - <<'EOF'
           import glob, json, os, re
@@ -177,6 +235,7 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
           files: |
             dist/*.tar.gz
             dist/*.deb
@@ -190,6 +249,8 @@ jobs:
             dist/SHA256SUMS.txt
 
   build-macos:
+    needs: prepare
+    if: needs.prepare.outputs.build == '1'
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
@@ -223,10 +284,11 @@ jobs:
           echo "Mach-O arm64 OK"
 
       - name: Package tarball
+        env:
+          VER: ${{ needs.prepare.outputs.version }}
         run: |
           set -euo pipefail
           shopt -s nullglob
-          VER="${GITHUB_REF_NAME#v}"
           STAGE="dist/solaria-${VER}-darwin-aarch64"
           mkdir -p "$STAGE"
           cp "src-tauri/target/release/solaria-agent" "$STAGE/"
@@ -255,6 +317,8 @@ jobs:
           path: release-assets/*
 
   build-windows:
+    needs: prepare
+    if: needs.prepare.outputs.build == '1'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -289,9 +353,11 @@ jobs:
 
       - name: Package tarball
         shell: pwsh
+        env:
+          VER: ${{ needs.prepare.outputs.version }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $ver = $env:GITHUB_REF_NAME.TrimStart('v')
+          $ver = $env:VER
           $stage = "dist/solaria-$ver-win-x86_64"
           New-Item -ItemType Directory -Path $stage -Force | Out-Null
           Copy-Item 'src-tauri\target\release\solaria-agent.exe' $stage

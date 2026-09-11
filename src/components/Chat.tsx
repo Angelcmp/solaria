@@ -23,6 +23,7 @@ interface ChatProps {
   onClearPersona?: () => void
   settings: AppSettings
   onShowSettings: () => void
+  onPickWorkingDir?: () => void
   agentConfig?: AgentConfig
   agentIsRunning?: boolean
   templateTrigger?: number
@@ -410,6 +411,7 @@ export default function Chat({
   onClearPersona,
   settings,
   onShowSettings,
+  onPickWorkingDir,
   agentConfig,
   agentIsRunning,
   onToggleAgent,
@@ -767,14 +769,14 @@ export default function Chat({
             />
           )}
           {isAgentEnabled && (
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.06)] text-[#666666] text-[0.6rem] font-mono" title={agentConfig?.workingDirectory || 'Sin directorio de trabajo. Haz clic para configurar.'}>
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.06)] text-[#666666] text-[0.6rem] font-mono" title={agentConfig?.workingDirectory || 'Sin directorio de trabajo. Haz clic para seleccionar carpeta.'}>
               <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
               <span
                 className="cursor-pointer hover:text-[#00E5C9] transition-colors max-w-[200px] truncate"
-                onClick={onShowSettings}
-                title="Haz clic para cambiar el directorio en Settings"
+                onClick={onPickWorkingDir || onShowSettings}
+                title="Haz clic para cambiar la carpeta de trabajo del agente"
               >
-                {agentConfig?.workingDirectory || 'Seleccionar directorio...'}
+                {agentConfig?.workingDirectory || 'Seleccionar carpeta...'}
               </span>
               {!agentConfig?.workingDirectory && (
                 <WarningIcon size={10} color="#DCB263" className="animate-pulse" />

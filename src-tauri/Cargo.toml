@@ -1,6 +1,6 @@
 [package]
 name = "solaria-agent"
-version = "0.9.5"
+version = "0.9.6"
 description = "Deep Research Agentic System with Skills — investigate, analyze, and automate"
 authors = ["you"]
 edition = "2021"
@@ -30,13 +30,21 @@ tokio = { version = "1", features = ["full"] }
 tokio-util = "0.7"
 futures-util = "0.3"
 bytes = "1"
-keyring = { version = "3", features = ["sync-secret-service"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
 sqlite-vec = "0.1"
 zerocopy = "0.7"
 sysinfo = "0.33"
 regex = "1"
 
+# Backends nativos del keyring por OS. En Windows/macOS el backend por
+# defecto es `mock` (no persiste): sin esto las API keys no se guardan.
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3", features = ["sync-secret-service"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3", features = ["apple-native"] }
+
 [target.'cfg(windows)'.dependencies]
+keyring = { version = "3", features = ["windows-native"] }
 winreg = "0.52"
 

@@ -265,36 +265,6 @@ pub fn get_provider_config(provider: &str, model: &str) -> Option<ProviderConfig
             model: normalize_model("cohere", model),
             api_type: "cohere".into(),
         }),
-        "kimi" => Some(ProviderConfig {
-            name: "Kimi".into(),
-            base_url: "https://api.moonshot.cn/v1/chat/completions".into(),
-            model: model.into(),
-            api_type: "openai".into(),
-        }),
-        "glm" => Some(ProviderConfig {
-            name: "GLM".into(),
-            base_url: "https://api.z.ai/api/paas/v4/chat/completions".into(),
-            model: model.into(),
-            api_type: "openai".into(),
-        }),
-        "anthropic" => Some(ProviderConfig {
-            name: "Anthropic".into(),
-            base_url: "https://api.anthropic.com/v1/messages".into(),
-            model: model.into(),
-            api_type: "anthropic".into(),
-        }),
-        "google" => Some(ProviderConfig {
-            name: "Google".into(),
-            base_url: "https://generativelanguage.googleapis.com/v1beta/models".into(),
-            model: model.into(),
-            api_type: "google".into(),
-        }),
-        "cohere" => Some(ProviderConfig {
-            name: "Cohere".into(),
-            base_url: "https://api.cohere.ai/v2/chat".into(),
-            model: model.into(),
-            api_type: "cohere".into(),
-        }),
         _ => None,
     }
 }

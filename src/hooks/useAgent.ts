@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import type { ProviderConfig } from './useChat'
 import type { ToolDefinition } from '../lib/tools'
+import { normalizeToolTags, stripToolCallsForDisplay, firstBalancedObject } from '../lib/toolCallText'
 
 export interface AgentConfig {
   enabled: boolean
@@ -247,19 +248,6 @@ function tryFindToolJson(text: string): string | null {
   return null
 }
 
-function normalizeToolTags(text: string): string {
-  let result = text
-    .replace(/TOOL\s*:\s*/gi, 'TOOL:')
-
-  result = result
-    .replace(/[{\[\(]*<\/?[Tt]ool[_-]?[Cc]all>/g, (m) => m.includes('/') ? '</tool_call>' : '<tool_call>')
-    .replace(/"?\s*[{\[\(]+tool_call[>\]\)]/gi, '<tool_call>')
-    .replace(/\{(tool_call|TOOL)\s*>/g, '<$1>')
-    .replace(/\{(tool_call|TOOL)\s*$/gim, '<$1>')
-
-  return result
-}
-
 function cleanToolCalls(text: string): string {
   const normalized = normalizeToolTags(text)
 
@@ -301,7 +289,27 @@ function parseToolJson(raw: string): { name: string; arguments: Record<string, s
       }
     } catch {}
   }
-  return null
+  return looseParseToolJson(raw)
+}
+
+/** Último recurso: rescata `name` y `arguments` aunque el JSON esté muy
+ *  corrupto (p. ej. `{"name "glob", "arguments": {…}}`). */
+function looseParseToolJson(raw: string): { name: string; arguments: Record<string, string> } | null {
+  const nameMatch = raw.match(/["']?\s*(?:name|nombre)\s*["']?\s*:?\s*["']?([A-Za-z0-9_.\-\/]+)/i)
+  if (!nameMatch) return null
+  const name = nameMatch[1].trim()
+  if (!name) return null
+
+  let args: Record<string, string> = {}
+  const argsIndex = raw.search(/["']?\s*(?:arguments|parametros)\s*["']?\s*:?/i)
+  const obj = firstBalancedObject(argsIndex >= 0 ? raw.slice(argsIndex) : raw)
+  if (obj) {
+    try {
+      const parsed = JSON.parse(tryFixJson(obj))
+      if (parsed && typeof parsed === 'object') args = parsed as Record<string, string>
+    } catch {}
+  }
+  return { name, arguments: args }
 }
 
 function extractToolCallFromNormalized(text: string): { name: string; arguments: Record<string, string> } | null {
@@ -322,16 +330,6 @@ function extractToolCallFromNormalized(text: string): { name: string; arguments:
     if (parsed) return parsed
   }
   return null
-}
-
-/** Elimina bloques `<tool_call>` (incluido uno a medio streamear) para no
- *  mostrar el JSON crudo en la UI (p. ej. el bloque "Thinking"). */
-function stripToolCallsForDisplay(text: string): string {
-  return normalizeToolTags(text)
-    .replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '')
-    .replace(/<tool_call>[\s\S]*$/g, '')
-    .replace(/<\/?tool_call>/g, '')
-    .trim()
 }
 
 export function useAgent() {

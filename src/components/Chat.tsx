@@ -12,6 +12,7 @@ import Markdown from '../lib/Markdown'
 import ArtifactCard from './ArtifactCard'
 import ModelPicker from './ModelPicker'
 import { WarningIcon, DocumentIcon, BulletIcon } from './Icons'
+import { stripToolCallsForDisplay } from '../lib/toolCallText'
 
 interface ChatProps {
   messages: Message[]
@@ -168,6 +169,8 @@ function ThinkingBlock({ text, isStreaming }: { text: string; isStreaming: boole
   }, [isStreaming])
 
   const open = isStreaming || expanded
+  // Defensa en profundidad: nunca mostrar el JSON de un tool_call en crudo.
+  const clean = stripToolCallsForDisplay(text)
 
   return (
     <details open={open} className="group/think mb-2 rounded-[10px] border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.025)] overflow-hidden">
@@ -188,15 +191,15 @@ function ThinkingBlock({ text, isStreaming }: { text: string; isStreaming: boole
         <span className="text-[0.6rem] font-medium text-[#999999]">
           {isStreaming ? `Thinking… ${elapsed}s` : `Thought for ${elapsed}s`}
         </span>
-        {!isStreaming && text.length > 0 && (
+        {!isStreaming && clean.length > 0 && (
           <svg className={`ml-0.5 text-[#666666] transition-transform ${expanded ? 'rotate-180' : ''}`} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <polyline points="6 9 12 15 18 9" />
           </svg>
         )}
       </summary>
-      {text.length > 0 && (
+      {clean.length > 0 && (
         <div className="px-2.5 pb-2 text-[0.625rem] leading-[1.5] text-[#8a8a8a] whitespace-pre-wrap max-h-[240px] overflow-y-auto">
-          {text}
+          {clean}
         </div>
       )}
     </details>

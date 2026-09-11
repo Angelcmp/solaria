@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.9.9] — 2026-09-11
+
+### Fixed
+- **Tool calls corruptos (GPT-4o y otros)**: se normalizan más variantes de etiqueta (`<tool>`, `</tool>`, cierres sin `<`/`/` como `tool_call>`, aperturas con `{`/`[`/`(`) y se añade un parser de último recurso que rescata `name`/`arguments` aunque el JSON esté muy roto (p. ej. `{"name "glob", "arguments": {…}}`). Con esto la herramienta se ejecuta en lugar de quedarse como texto.
+- **El JSON del tool_call nunca se muestra**: el saneado del bloque "Thinking" es defensa en profundidad y ahora también cubre las etiquetas corruptas.
+
 ## [0.9.8] — 2026-09-11
 
 ### Fixed

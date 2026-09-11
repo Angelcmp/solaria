@@ -315,10 +315,29 @@ async fn glob_execute(args: &str, working_dir: &Option<String>) -> ToolResult {
         Err(_) => args,
     };
 
+    let pattern = pattern.trim().trim_start_matches("./");
     let wd = working_dir.as_deref().unwrap_or(".");
     let wd_clean = wd.trim_end_matches('/');
+    let wd_esc = wd_clean.replace('\'', "'\\''");
 
-    let output = run_sh(&format!("find '{}' -name '{}' -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/target/*' 2>/dev/null | sed 's|^{}/||' | head -200", wd_clean, pattern.replace('\'', "'\\''"), wd_clean)).await;
+    // Traduce el patrón glob a `find`. En `find -path`, `*` cruza `/`, así que
+    // `**` se colapsa: `**/*.md` -> `*.md`, `docs/**/*.txt` -> `docs/*.txt`.
+    // (Antes se usaba `-name '<patrón>'`, que no soporta `/` y por eso `**/*`
+    // devolvía vacío.)
+    let collapsed = pattern.replace("**/", "").replace("**", "*");
+    let find_expr = if collapsed.is_empty() || collapsed == "*" {
+        String::new()
+    } else if collapsed.contains('/') {
+        format!("-path './{}'", collapsed.replace('\'', "'\\''"))
+    } else {
+        format!("-name '{}'", collapsed.replace('\'', "'\\''"))
+    };
+
+    let cmd = format!(
+        "cd '{}' && find . -type f {} -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/target/*' -not -path '*/dist/*' 2>/dev/null | sed 's|^\\./||' | head -200",
+        wd_esc, find_expr
+    );
+    let output = run_sh(&cmd).await;
 
     match output {
         Ok(stdout) => {

@@ -50,6 +50,37 @@ async fn test_glob_execute() {
 }
 
 #[tokio::test]
+async fn test_glob_recursive_patterns() {
+    let root = std::env::temp_dir().join(format!("solaria_glob_{}", std::process::id()));
+    let root_str = root.to_string_lossy().to_string();
+    let _ = std::fs::remove_dir_all(&root_str);
+    std::fs::create_dir_all(format!("{}/sub/deep", root_str)).unwrap();
+    std::fs::write(format!("{}/a.md", root_str), "a").unwrap();
+    std::fs::write(format!("{}/sub/b.md", root_str), "b").unwrap();
+    std::fs::write(format!("{}/sub/deep/c.md", root_str), "c").unwrap();
+    std::fs::write(format!("{}/sub/ignore.txt", root_str), "x").unwrap();
+
+    // `**/*` debe listar todo recursivamente (antes devolvía vacío).
+    let all = tools::execute_tool("glob", r#"{"pattern": "**/*"}"#, Some(root_str.clone()), false, false).await;
+    assert!(all.success, "{:?}", all.error);
+    assert!(all.output.contains("a.md"), "output: {}", all.output);
+    assert!(all.output.contains("sub/deep/c.md"), "output: {}", all.output);
+
+    // `**/*.md` filtra por extensión a cualquier profundidad.
+    let md = tools::execute_tool("glob", r#"{"pattern": "**/*.md"}"#, Some(root_str.clone()), false, false).await;
+    assert!(md.success);
+    assert!(md.output.contains("sub/deep/c.md"), "output: {}", md.output);
+    assert!(!md.output.contains("ignore.txt"), "output: {}", md.output);
+
+    // Patrón con prefijo de directorio.
+    let nested = tools::execute_tool("glob", r#"{"pattern": "sub/**/*.md"}"#, Some(root_str.clone()), false, false).await;
+    assert!(nested.success);
+    assert!(nested.output.contains("sub/deep/c.md"), "output: {}", nested.output);
+
+    let _ = std::fs::remove_dir_all(&root_str);
+}
+
+#[tokio::test]
 async fn test_tool_list_includes_all_tools() {
     let tools_list = tools::get_all_tools();
     let names: Vec<&str> = tools_list.iter().map(|t| t.name.as_str()).collect();

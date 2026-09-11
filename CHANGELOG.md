@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.10.1] — 2026-09-11
+
+### Fixed
+- **`glob` no encontraba archivos**: usaba `find -name '<patrón>'`, que no admite `/`, así que patrones recursivos como `**/*` o `**/*.md` devolvían vacío y el agente concluía "no hay archivos". Ahora traduce el patrón glob a `find` (`**/*` → todos los archivos, `**/*.md` → por extensión a cualquier profundidad, `sub/**/*` → por prefijo). Test de regresión con archivos anidados.
+
 ## [0.10.0] — 2026-09-11
 
 ### Added

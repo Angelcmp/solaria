@@ -192,16 +192,92 @@ async fn check_app_update(app: tauri::AppHandle) -> Result<Option<UpdateInfo>, S
 }
 
 #[tauri::command]
-async fn install_app_update(app: tauri::AppHandle) -> Result<(), String> {
+async fn install_app_update(app: tauri::AppHandle) -> Result<String, String> {
+    // En Linux el updater nativo de Tauri solo funciona si la app corre como
+    // AppImage. Las instalaciones vía install.sh (binario en /usr/local/lib o
+    // ~/.local) no pueden auto-reemplazarse: se delega en el instalador.
+    #[cfg(target_os = "linux")]
+    {
+        if std::env::var_os("APPIMAGE").is_none() {
+            install_linux_via_installer(&app).await?;
+            return Ok("delegated".into());
+        }
+    }
+
     use tauri_plugin_updater::UpdaterExt;
     let updater = app.updater().map_err(|e| e.to_string())?;
     match updater.check().await.map_err(|e| e.to_string())? {
-        Some(update) => update
-            .download_and_install(|_, _| {}, || {})
-            .await
-            .map_err(|e| e.to_string()),
+        Some(update) => {
+            update
+                .download_and_install(|_, _| {}, || {})
+                .await
+                .map_err(|e| e.to_string())?;
+            Ok("installed".into())
+        }
         None => Err("no hay actualización disponible".into()),
     }
+}
+
+/// Linux no-AppImage: descarga `install.sh`, lo ejecuta como el usuario con
+/// `pkexec` cuando hace falta elevar (para escribir en /usr/local/lib) y
+/// relanza la app al terminar.
+#[cfg(target_os = "linux")]
+async fn install_linux_via_installer(app: &tauri::AppHandle) -> Result<(), String> {
+    use tauri_plugin_updater::UpdaterExt;
+
+    // Versión destino; si el check falla, el instalador resuelve "latest".
+    let version = match app.updater() {
+        Ok(u) => match u.check().await {
+            Ok(Some(update)) => Some(update.version),
+            _ => None,
+        },
+        Err(_) => None,
+    };
+
+    let url = "https://raw.githubusercontent.com/Angelcmp/solaria/main/install.sh";
+    let bytes = reqwest::get(url)
+        .await
+        .map_err(|e| e.to_string())?
+        .error_for_status()
+        .map_err(|e| e.to_string())?
+        .bytes()
+        .await
+        .map_err(|e| e.to_string())?;
+    let script_path = std::env::temp_dir().join("solaria-update.sh");
+    std::fs::write(&script_path, &bytes).map_err(|e| e.to_string())?;
+
+    let version_env = match version.as_deref() {
+        Some(v) => format!("SOLARIA_VERSION='{}' ", v),
+        None => String::new(),
+    };
+
+    // El runner corre como el usuario; `id -u/-g` dan el propietario original
+    // para que install.sh devuelva la propiedad de los ficheros del HOME.
+    let script = format!(
+        "#!/bin/sh\n\
+         sleep 2\n\
+         UID_=\"$(id -u)\"; GID_=\"$(id -g)\"\n\
+         if command -v pkexec >/dev/null 2>&1; then\n\
+           pkexec env HOME=\"$HOME\" {ver}SOLARIA_FORCE=1 SOLARIA_USER_UID=\"$UID_\" SOLARIA_USER_GID=\"$GID_\" bash {path}\n\
+         else\n\
+           {ver}SOLARIA_FORCE=1 SOLARIA_USER_UID=\"$UID_\" SOLARIA_USER_GID=\"$GID_\" bash {path}\n\
+         fi\n\
+         nohup \"$HOME/.local/bin/solaria\" >/dev/null 2>&1 &\n",
+        ver = version_env,
+        path = script_path.display()
+    );
+    let runner = std::env::temp_dir().join("solaria-update-run.sh");
+    std::fs::write(&runner, script).map_err(|e| e.to_string())?;
+
+    std::process::Command::new("sh")
+        .arg(&runner)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
 }
 
 #[tauri::command]

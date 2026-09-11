@@ -310,6 +310,7 @@ function AppSection() {
   const [upToDate, setUpToDate] = useState(false)
   const [installing, setInstalling] = useState(false)
   const [installed, setInstalled] = useState(false)
+  const [delegated, setDelegated] = useState(false)
   const [uninstallStep, setUninstallStep] = useState<0 | 1 | 2>(0)
   const [uninstallMsg, setUninstallMsg] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -344,7 +345,13 @@ function AppSection() {
     setError(null)
     try {
       const { invoke } = await import('@tauri-apps/api/core')
-      await invoke('install_app_update')
+      const mode = await invoke<string>('install_app_update')
+      if (mode === 'delegated') {
+        // Linux no-AppImage: el instalador reemplaza el binario y relanza la app.
+        setDelegated(true)
+        setInstalled(true)
+        return
+      }
       await invoke('restart_app')
       setInstalled(true)
     } catch (e) {
@@ -387,7 +394,11 @@ function AppSection() {
           </div>
         )}
         {installed && (
-          <div className="text-[0.65rem] text-[#E5E5E5]">Actualización instalada. Reiniciando…</div>
+          <div className="text-[0.65rem] text-[#E5E5E5]">
+            {delegated
+              ? 'Ejecutando el instalador (puede pedir tu contraseña). La app se reiniciará sola.'
+              : 'Actualización instalada. Reiniciando…'}
+          </div>
         )}
         {error && (
           <div className="text-[0.65rem] text-[#E5E5E5] bg-[rgba(255,255,255,0.04)] rounded-lg px-2 py-1.5 break-words">{error}</div>

@@ -672,3 +672,11 @@ main() {
 }
 
 main "$@"
+
+# Si se ejecutó como root (p. ej. pkexec lanzado desde la app para
+# autoactualizar), devolver al usuario original la propiedad de los
+# artefactos que viven en su HOME (wrapper, desktop entry, icono).
+if [ "$(id -u)" -eq 0 ] && [ -n "${SOLARIA_USER_UID:-}" ] && [ "${SOLARIA_USER_UID}" != "0" ]; then
+  chown -R "${SOLARIA_USER_UID}:${SOLARIA_USER_GID:-$SOLARIA_USER_UID}" \
+    "$INSTALL_DIR" "$DESKTOP_DIR" "$HOME/.local/share/icons" 2>/dev/null || true
+fi

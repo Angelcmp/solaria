@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.9.7] — 2026-09-11
+
+### Fixed
+- **Auto-actualización en Linux (instalación `install.sh`)**: el updater nativo de Tauri solo soporta AppImage; en instalaciones con binario en `/usr/local/lib/solaria` fallaba con `Permiso denegado (os error 13)`. Ahora, si no se corre como AppImage, la app descarga `install.sh` y lo ejecuta con `pkexec` (pidiendo contraseña) para actualizar en el sitio y relanzarse. `install.sh` devuelve la propiedad de los ficheros del HOME al usuario original cuando corre como root.
+
 ## [0.9.6] — 2026-09-10
 
 ### Added

@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.8] — 2026-09-11
+
+### Fixed
+- **Tool calls malformados en el agente**: modelos como DeepSeek a veces emiten el JSON sin la coma entre `name` y `arguments` y con un espacio dentro del nombre (p. ej. `"name": "read_file "arguments": {…}`). El parser ahora repara esa variante, recorta el nombre y reintenta con el extractor alternativo, así la herramienta se ejecuta en lugar de fallar.
+- **El JSON crudo ya no se muestra**: el bloque "Thinking" filtra los `<tool_call>` (incluido uno a medio streamear) para no mostrar el JSON en la UI.
+- **System prompt** del agente endurecido con las reglas de JSON estricto del tool_call.
+- Tests de regresión del parser (`src/test/agent-toolcall.test.ts`).
+
 ## [0.9.7] — 2026-09-11
 
 ### Fixed

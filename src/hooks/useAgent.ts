@@ -69,6 +69,12 @@ Para usar una herramienta, pon SOLO esto al final de tu respuesta:
 
 SIEMPRE incluye "arguments": {}, incluso si la herramienta no necesita parámetros.
 
+El JSON debe ser ESTRICTO y válido:
+- Coma obligatoria entre "name" y "arguments": {"name": "web_search", "arguments": {...}}
+- El nombre de la herramienta va exacto y SIN espacios alrededor: "name": "read_file".
+- "arguments" es siempre un objeto.
+- No añadas texto entre el JSON y las etiquetas.
+
 REGLAS ESTRICTAS:
 1. **PROHIBIDO preguntar al usuario.** Nunca digas "¿quieres que profundice?", "¿necesitas algo más?", "si deseas...", "¿te gustaría...?". Simplemente entrega los resultados completos y termina.
 2. **PROHIBIDO pedir confirmación.** No digas "¿es correcto?", "¿procedo?", "¿quieres que guarde...?". Si el prompt es razonable, actúa directamente.
@@ -150,7 +156,7 @@ ${params}`
     .join('\n\n')
 }
 
-function extractToolCall(text: string): { name: string; arguments: Record<string, string> } | null {
+export function extractToolCall(text: string): { name: string; arguments: Record<string, string> } | null {
   return extractToolCallFromNormalized(normalizeToolTags(text))
 }
 
@@ -158,6 +164,14 @@ function tryFixJson(raw: string): string {
   try { JSON.parse(raw); return raw } catch {}
 
   let fixed = raw
+
+  // Modelos tipo DeepSeek a veces omiten la coma y dejan un espacio dentro
+  // del nombre: {"name": "read_file "arguments": {…}}. Normalizar nombre,
+  // coma y clave de argumentos.
+  fixed = fixed.replace(
+    /"name"\s*:\s*"([^"]*?)"\s*,?\s*"?(arguments|parametros)"?\s*:/g,
+    (_, name, key) => `"name": "${String(name).trim()}", "${key}":`,
+  )
 
   fixed = fixed.replace(/"(read_file|write_file|glob|grep|web_search|fetch_url|mcp__[\w_]+__[\w_]+)"\s*"(arguments|parametros)"/g, '"$1", "$2"')
 
@@ -274,44 +288,50 @@ function extractArgsFromTopLevel(parsed: Record<string, any>): Record<string, st
   return args
 }
 
-function extractToolCallFromNormalized(text: string): { name: string; arguments: Record<string, string> } | null {
-  const toolMatch = text.match(/TOOL:\s*(\{[\s\S]*?\})/)
-  if (toolMatch) {
+function parseToolJson(raw: string): { name: string; arguments: Record<string, string> } | null {
+  const fixed = tryFixJson(raw)
+  for (const candidate of fixed === raw ? [raw] : [raw, fixed]) {
     try {
-      const parsed = JSON.parse(toolMatch[1])
-      if (parsed.name) {
-        return {
-          name: parsed.name,
-          arguments: parsed.arguments || parsed.parametros || extractArgsFromTopLevel(parsed),
-        }
+      const parsed = JSON.parse(candidate)
+      const name = typeof parsed?.name === 'string' ? parsed.name.trim() : ''
+      if (!name) continue
+      return {
+        name,
+        arguments: parsed.arguments || parsed.parametros || extractArgsFromTopLevel(parsed),
       }
     } catch {}
   }
+  return null
+}
 
-  const match = text.match(/<tool_call>\s*({[\s\S]*?})\s*<\/tool_call>/)
-  const jsonStr = match ? match[1] : tryFindToolJson(text)
-  if (!jsonStr) return null
-
-  try {
-    const parsed = JSON.parse(jsonStr)
-    if (!parsed.name) return null
-    return {
-      name: parsed.name,
-      arguments: parsed.arguments || parsed.parametros || extractArgsFromTopLevel(parsed),
-    }
-  } catch {
-    const fixed = tryFixJson(jsonStr)
-    if (fixed !== jsonStr) {
-      try {
-        const parsed = JSON.parse(fixed)
-        if (parsed.name) return {
-          name: parsed.name,
-          arguments: parsed.arguments || parsed.parametros || extractArgsFromTopLevel(parsed),
-        }
-      } catch {}
-    }
-    return null
+function extractToolCallFromNormalized(text: string): { name: string; arguments: Record<string, string> } | null {
+  const toolMatch = text.match(/TOOL:\s*(\{[\s\S]*?\})/)
+  if (toolMatch) {
+    const fromTool = parseToolJson(toolMatch[1])
+    if (fromTool) return fromTool
   }
+
+  const candidates: string[] = []
+  const match = text.match(/<tool_call>\s*({[\s\S]*?})\s*<\/tool_call>/)
+  if (match) candidates.push(match[1])
+  const found = tryFindToolJson(text)
+  if (found && !candidates.includes(found)) candidates.push(found)
+
+  for (const candidate of candidates) {
+    const parsed = parseToolJson(candidate)
+    if (parsed) return parsed
+  }
+  return null
+}
+
+/** Elimina bloques `<tool_call>` (incluido uno a medio streamear) para no
+ *  mostrar el JSON crudo en la UI (p. ej. el bloque "Thinking"). */
+function stripToolCallsForDisplay(text: string): string {
+  return normalizeToolTags(text)
+    .replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '')
+    .replace(/<tool_call>[\s\S]*$/g, '')
+    .replace(/<\/?tool_call>/g, '')
+    .trim()
 }
 
 export function useAgent() {
@@ -560,7 +580,7 @@ export function useAgent() {
 
         const response = await streamLLM(messages, finalSystemPrompt, provider, (token) => {
           currentThinking += token
-          options?.onThinking?.(thinkingAccum + currentThinking)
+          options?.onThinking?.(stripToolCallsForDisplay(thinkingAccum + currentThinking))
         })
 
         const toolCall = extractToolCall(response)
@@ -574,7 +594,7 @@ export function useAgent() {
           if (reasonText) {
             thinkingAccum = thinkingAccum ? thinkingAccum + '\n\n' + reasonText : reasonText
           }
-          options?.onThinking?.(thinkingAccum)
+          options?.onThinking?.(stripToolCallsForDisplay(thinkingAccum))
         }
 
         if (toolCall) {
@@ -590,7 +610,7 @@ export function useAgent() {
             messages.push({ role: 'tool', content: noToolMsg })
             continue
           }
-          options?.onThinking?.(thinkingAccum)
+          options?.onThinking?.(stripToolCallsForDisplay(thinkingAccum))
           const finalText = cleanedResponse || response
           fullAssistantContent = fullAssistantContent
             ? fullAssistantContent + '\n\n' + finalText

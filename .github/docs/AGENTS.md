@@ -1,5 +1,18 @@
 # Solaria — Session Progress
 
+## Cierre (2026-09-11) — v0.9.6 → v0.10.1
+
+- **Auto-release desde `main`** (`.github/workflows/release.yml`): job `prepare` valida que `package.json` = `Cargo.toml` = `tauri.conf.json`, crea el tag `vX.Y.Z` si no existe y solo entonces construye/publica. Ya no hace falta tag manual; el `latest.json` se deriva de `tauri.conf.json`. Triggers: push a `main`, tags `v*`, `workflow_dispatch`.
+- **v0.9.6** — Fix DeepSeek 401 publicado (alias `v4-flash/pro` → `chat/reasoner`, `trim()` de keys, IDs de modelos auditados) + `keyring` nativo por SO (`windows-native`/`apple-native`/`sync-secret-service`; antes Windows/macOS usaban el backend `mock` que no persistía) + dedupe de `get_provider_config` + **carpeta del agente**: selector nativo desde el chip del chat, campo siempre visible en Configuración → Agente, sincronización al seleccionar/editar proyecto y persistencia de `activeProjectId`.
+- **v0.9.7** — Auto-actualización en Linux: el updater de Tauri solo soporta AppImage; en instalaciones `install.sh` (binario en `/usr/local/lib`) fallaba con `os error 13`. Ahora `install_app_update` delega en `install.sh` vía `pkexec` y relanza; `install.sh` devuelve la propiedad de los ficheros del HOME al usuario original cuando corre como root.
+- **v0.9.8** — Parser de tool_calls: repara el JSON sin coma y con espacio en el nombre (`"name": "read_file "arguments":`), recorta el nombre, reintenta con el extractor alternativo; el bloque "Thinking" filtra los `<tool_call>`; system prompt con reglas de JSON estricto; primer test de regresión.
+- **v0.9.9** — Parser robusto: normaliza etiquetas corruptas (`<tool>`, `</tool>`, `tool_call>` sin ángulo, aperturas con `{`/`[`/`(`) y un parser de último recurso (`looseParseToolJson` + braces balanceados) que rescata `name`/`arguments` de un JSON muy roto (caso GPT-4o `{"name "glob", …}`). Lógica compartida en `src/lib/toolCallText.ts` y saneado en `ThinkingBlock` como defensa en profundidad.
+- **v0.10.0** — **Native function calling** para proveedores OpenAI-compatibles (OpenAI/GPT-4o, DeepSeek `deepseek-chat`, Groq, Kimi, GLM): backend envía `tools`/`tool_choice`, `stream_sse` acumula `delta.tool_calls` (struct `ToolCallAcc`) y los entrega en `stream://done`; `ChatMessage` soporta `tool_calls`/`tool_call_id`; el agente prefiere tool_calls nativas y mantiene el par `assistant(tool_calls)`/`tool(tool_call_id)`. Fallback al protocolo de texto (Anthropic/Google/Cohere/Ollama y `deepseek-reasoner`, que no soporta function calling).
+- **v0.10.1** — `glob` no encontraba archivos: usaba `find -name '<patrón>'`, que no admite `/` (`**/*` → vacío). Ahora traduce el glob a `find` (`**/*` → todos, `**/*.md` → por extensión a cualquier profundidad, `sub/**/*` → por prefijo) colapsando `**`. Test de regresión con archivos anidados.
+- **Verificación por versión**: `tsc --noEmit`, `npm test` (22), `cargo test` (11 lib + 12 tool_execution + 16 provider_config + 5/4), `npm run build`; CI Release verde en las 4 plataformas (Linux x64/ARM, macOS ARM, Windows x64) con `latest.json` firmado.
+- **Pendiente usuario**: probar en un Mac real y un Windows real; decidir firma Apple ($99/año). En Linux instalado con `install.sh` (versión < 0.9.7) hay que re-ejecutar el instalador una vez para que el updater in-app funcione.
+- **Pendiente producto**: Fase 2 Progress (N of M real con `<plan>`), adjuntos PDF/Office, sidebar estilo Codex.
+
 ## Cierre (2026-09-06)
 
 - **Releases v0.9.1 → v0.9.5 publicadas y verdes**: instalación en minutos (Linux x64/ARM, macOS ARM, Windows x64) con checksums verificados.

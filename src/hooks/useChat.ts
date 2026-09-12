@@ -47,13 +47,21 @@ export interface Conversation {
 }
 
 export interface ProviderConfig {
-  type: 'ollama' | 'openai' | 'anthropic' | 'deepseek' | 'groq' | 'google' | 'cohere' | 'kimi' | 'glm'
+  type: string
   model: string
   apiKey?: string
   systemPrompt?: string
   temperature?: number
   topP?: number
   maxTokens?: number
+  /** Host de Ollama (local o remoto). */
+  host?: string
+  /** Proveedor definido por el usuario (endpoint propio). */
+  baseUrl?: string
+  apiType?: string
+  auth?: string
+  authHeader?: string
+  extraHeaders?: Record<string, string>
 }
 
 const STORAGE_KEY = 'solaria-conversations'
@@ -78,6 +86,20 @@ function loadConversations(): Conversation[] {
 
 function saveConversations(convs: Conversation[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(convs))
+}
+
+/** Argumentos comunes para los comandos `provider_chat[_stream]`. */
+export function providerInvokeArgs(provider: ProviderConfig) {
+  return {
+    provider: provider.type,
+    model: provider.model,
+    apiKey: provider.apiKey || '',
+    baseUrl: provider.baseUrl ?? null,
+    apiType: provider.apiType ?? null,
+    auth: provider.auth ?? null,
+    authHeader: provider.authHeader ?? null,
+    extraHeaders: provider.extraHeaders ? JSON.stringify(provider.extraHeaders) : null,
+  }
 }
 
 export function useChat() {
@@ -242,12 +264,11 @@ export function useChat() {
             { role: 'user', content: `Genera un título corto (máx 6 palabras, en español) para una conversación que empieza con: "${content}". Responde SOLO el título, sin comillas ni puntuación extra.` },
           ]),
           systemPrompt: 'Eres un asistente que genera títulos cortos y descriptivos.',
+          host: provider.host ?? null,
         })
       } else {
         result = await invoke('provider_chat', {
-          provider: provider.type,
-          model: provider.model,
-          apiKey: provider.apiKey || '',
+          ...providerInvokeArgs(provider),
           messages: JSON.stringify([
             { role: 'user', content: `Genera un título corto (máx 6 palabras, en español) para una conversación que empieza con: "${content}". Responde SOLO el título, sin comillas ni puntuación extra.` },
           ]),
@@ -354,13 +375,12 @@ export function useChat() {
           temperature: modelParams.temperature,
           topP: modelParams.topP,
           maxTokens: modelParams.maxTokens,
+          host: provider.host ?? null,
         })
       } else {
         await invoke('provider_chat_stream', {
           streamId,
-          provider: provider.type,
-          model: provider.model,
-          apiKey: provider.apiKey || '',
+          ...providerInvokeArgs(provider),
           messages: JSON.stringify(historyMessages),
           systemPrompt: finalSystemPrompt,
           temperature: modelParams.temperature,

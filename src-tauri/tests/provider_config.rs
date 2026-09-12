@@ -126,3 +126,79 @@ fn test_all_providers_have_required_fields() {
             "Provider {} tiene api_type inesperado: {}", name, c.api_type);
     }
 }
+
+#[test]
+fn test_builtin_auth_schemes() {
+    assert_eq!(providers::get_provider_config("openai", "gpt-4o").unwrap().auth, "bearer");
+    assert_eq!(providers::get_provider_config("anthropic", "claude").unwrap().auth, "x-api-key");
+    assert_eq!(providers::get_provider_config("google", "gemini").unwrap().auth, "none");
+}
+
+#[test]
+fn test_custom_provider_config_defaults() {
+    let c = providers::custom_provider_config(
+        "LM Studio",
+        "http://localhost:1234/v1/chat/completions",
+        "local-model",
+        None,
+        None,
+        None,
+        None,
+    );
+    assert_eq!(c.name, "LM Studio");
+    assert_eq!(c.base_url, "http://localhost:1234/v1/chat/completions");
+    assert_eq!(c.model, "local-model");
+    assert_eq!(c.api_type, "openai");
+    assert_eq!(c.auth, "bearer");
+    assert!(c.extra_headers.is_empty());
+}
+
+#[test]
+fn test_custom_provider_extra_headers() {
+    let headers = serde_json::json!({ "X-Token": "abc", "X-Other": 5 });
+    let c = providers::custom_provider_config(
+        "Custom", "https://example.com/v1/chat/completions", "m",
+        Some("openai"), Some("x-api-key"), Some("api-key"), Some(&headers),
+    );
+    assert_eq!(c.auth, "x-api-key");
+    assert_eq!(c.auth_header, "api-key");
+    // Solo se aceptan valores string en las cabeceras extra.
+    assert_eq!(c.extra_headers, vec![("X-Token".to_string(), "abc".to_string())]);
+}
+
+#[test]
+fn test_resolve_provider_prefers_custom_base_url() {
+    let c = providers::resolve_provider(
+        "mi-endpoint",
+        "mistral-7b",
+        Some("http://192.168.1.10:8000/v1/chat/completions".into()),
+        Some("openai".into()),
+        Some("none".into()),
+        None,
+        None,
+    )
+    .unwrap();
+    assert_eq!(c.base_url, "http://192.168.1.10:8000/v1/chat/completions");
+    assert_eq!(c.model, "mistral-7b");
+    assert_eq!(c.auth, "none");
+}
+
+#[test]
+fn test_resolve_provider_falls_back_to_builtin() {
+    let c = providers::resolve_provider("openai", "gpt-4o", None, None, None, None, None).unwrap();
+    assert!(c.base_url.contains("openai"));
+}
+
+#[test]
+fn test_resolve_provider_ignores_blank_base_url() {
+    let c = providers::resolve_provider("deepseek", "deepseek-chat", Some("   ".into()), None, None, None, None).unwrap();
+    assert!(c.base_url.contains("deepseek"));
+}
+
+#[test]
+fn test_normalize_model_does_not_alter_custom_models() {
+    let c = providers::custom_provider_config(
+        "Custom", "http://localhost:1234/v1/chat/completions", "Mi-Modelo-Raro", None, None, None, None,
+    );
+    assert_eq!(c.model, "Mi-Modelo-Raro");
+}

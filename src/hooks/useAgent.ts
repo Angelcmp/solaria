@@ -1,9 +1,16 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
-import type { ProviderConfig } from './useChat'
+import { providerInvokeArgs, type ProviderConfig } from './useChat'
 import type { ToolDefinition } from '../lib/tools'
 import { normalizeToolTags, stripToolCallsForDisplay, firstBalancedObject } from '../lib/toolCallText'
+import {
+  denialMessage,
+  requiresPreConfirmation,
+  type PendingConfirmation,
+  type PermissionDecision,
+} from '../agent/permissions'
+import { modelSupportsTools } from '../lib/models'
 
 export interface AgentConfig {
   enabled: boolean
@@ -61,8 +68,11 @@ export interface NativeToolCall {
   arguments: Record<string, string>
 }
 
-/** Proveedores cuyo endpoint soporta function calling nativo de OpenAI. */
-const NATIVE_TOOL_PROVIDERS = new Set(['openai', 'deepseek', 'groq', 'kimi', 'glm'])
+/** Proveedores cuyo endpoint soporta function calling nativo. */
+const NATIVE_TOOL_PROVIDERS = new Set([
+  'openai', 'deepseek', 'groq', 'kimi', 'glm', // OpenAI-compatible
+  'anthropic', 'google', 'cohere',             // nativos propios
+])
 
 const AGENT_INTRO = `Eres Solaria Agent, un asistente de investigación y análisis. Tu función es ayudar al usuario a investigar, analizar y procesar información.
 
@@ -397,33 +407,28 @@ export function useAgent() {
   }, [])
   const abortRef = useRef(false)
   const messageHistoryRef = useRef<AgentMessage[]>([])
-  const pendingConfirmRef = useRef<{ resolve: (value: boolean) => void } | null>(null)
+  const [pendingConfirmation, setPendingConfirmation] = useState<PendingConfirmation | null>(null)
+  const pendingResolversRef = useRef<Map<string, (decision: PermissionDecision) => void>>(new Map())
   const unlistenRef = useRef<UnlistenFn[]>([])
   const streamIdRef = useRef<string | null>(null)
 
-  const waitForConfirmation = useCallback((): Promise<'allow' | 'deny' | 'timeout'> => {
-    return new Promise(resolve => {
-      let settled = false
-      const timeoutId = setTimeout(() => {
-        if (settled) return
-        settled = true
-        pendingConfirmRef.current = null
-        resolve('timeout')
-      }, 60000)
-      pendingConfirmRef.current = {
-        resolve: (allow: boolean) => {
-          if (settled) return
-          settled = true
-          clearTimeout(timeoutId)
-          resolve(allow ? 'allow' : 'deny')
-        },
-      }
+  /**
+   * Solicita confirmación al usuario y espera su decisión. No expira por
+   * tiempo: se resuelve con Allow/Deny, o al detener el agente (deny).
+   */
+  const requestConfirmation = useCallback((info: PendingConfirmation): Promise<PermissionDecision> => {
+    return new Promise<PermissionDecision>(resolve => {
+      pendingResolversRef.current.set(info.id, resolve)
+      setPendingConfirmation(info)
     })
   }, [])
 
-  const confirmTool = useCallback((allow: boolean) => {
-    pendingConfirmRef.current?.resolve(allow)
-    pendingConfirmRef.current = null
+  const confirmTool = useCallback((id: string, allow: boolean) => {
+    const resolve = pendingResolversRef.current.get(id)
+    if (!resolve) return
+    pendingResolversRef.current.delete(id)
+    setPendingConfirmation(prev => (prev?.id === id ? null : prev))
+    resolve(allow ? 'allow' : 'deny')
   }, [])
 
   const cleanupStreamListeners = useCallback(() => {
@@ -525,13 +530,12 @@ export function useAgent() {
               temperature: provider.temperature ?? null,
               topP: provider.topP ?? null,
               maxTokens: provider.maxTokens ?? null,
+              host: provider.host ?? null,
             })
           } else {
             await invoke('provider_chat_stream', {
               streamId,
-              provider: provider.type,
-              model: provider.model,
-              apiKey: provider.apiKey || '',
+              ...providerInvokeArgs(provider),
               messages: JSON.stringify(historyMessages),
               systemPrompt: systemPrompt,
               temperature: provider.temperature ?? null,
@@ -618,9 +622,12 @@ export function useAgent() {
       skillsPrompt = await invoke<string>('get_skills_prompt', params)
     } catch {}
 
-    // deepseek-reasoner no soporta function calling (la API devuelve 400).
-    const nativeTools = NATIVE_TOOL_PROVIDERS.has(provider.type)
-      && !(provider.type === 'deepseek' && provider.model.includes('reasoner'))
+    // Function calling nativo según proveedor y capacidades del modelo
+    // (p. ej. deepseek-reasoner no lo soporta). Los endpoints custom
+    // OpenAI-compatible también lo soportan.
+    const customOpenAi = !!provider.baseUrl && (provider.apiType ?? 'openai') === 'openai'
+    const nativeTools = (NATIVE_TOOL_PROVIDERS.has(provider.type) || customOpenAi)
+      && modelSupportsTools(provider.type, provider.model)
     const toolsSchema = nativeTools ? toOpenAiTools(agentConfig.allowedTools) : undefined
     const systemPrompt = buildToolSystemPrompt(agentConfig, nativeTools) + skillsPrompt
     const systemPromptWithPersona = options?.personaPrompt
@@ -738,39 +745,58 @@ export function useAgent() {
           toolContent: toolCall.name === 'write_file' ? (toolCall.arguments.content as string) : undefined,
         }))
 
-        let toolResult = await executeToolCall(toolCall.name, toolCall.arguments, agentConfig.workingDirectory, false, false)
-        const needsConfirm = toolResult.requires_confirmation ||
-          (toolCall.name === 'write_file' && agentConfig.confirmWrite)
-
-        if (needsConfirm) {
-          const confirmWarning = toolCall.name === 'write_file' && !toolResult.requires_confirmation
-            ? 'Escribir archivo - requiere confirmación'
-            : toolResult.preview || 'Requiere confirmación'
-
-          onStep(makeStep('tool_result', toolCall.name, {
+        // Gate real de permisos: se pide permiso ANTES de ejecutar.
+        // `write_file` con confirmWrite nunca toca disco sin aprobación; las
+        // rutas sensibles/fuera del workspace usan el dry-run del backend.
+        const confirmOrDeny = async (warning: string): Promise<PermissionDecision> => {
+          const info: PendingConfirmation = {
+            id: `confirm_${crypto.randomUUID().slice(0, 8)}`,
             toolName: toolCall.name,
-            toolWarning: confirmWarning,
-            toolResult: '[PENDIENTE - esperando confirmación del usuario]',
-          }))
+            args: toolCall.arguments,
+            warning,
+          }
+          onStep(makeStep('reasoning', `⏸ Esperando aprobación para ejecutar ${toolCall.name}…`))
           updateChatMsg(fullAssistantContent
             ? fullAssistantContent + `\n\n⏸ Esperando aprobación para ejecutar \`${toolCall.name}\`…`
             : `⏸ Esperando aprobación para ejecutar \`${toolCall.name}\`…`)
+          return requestConfirmation(info)
+        }
 
-          const decision = await waitForConfirmation()
+        let toolResult: import('../lib/tools').ToolResult | null = null
+        let deniedMsg: string | null = null
 
-          if (decision !== 'allow') {
-            const deniedMsg = decision === 'timeout'
-              ? 'Tiempo de espera agotado: la herramienta no se confirmó a tiempo'
-              : `El usuario denegó la ejecución de ${toolCall.name} por seguridad`
-            onStep(makeStep('tool_result', toolCall.name, {
-              toolName: toolCall.name,
-              toolResult: deniedMsg,
-            }))
-            pushToolExchange(cleanedResponse || response, deniedMsg)
-            continue
+        if (requiresPreConfirmation(toolCall.name, agentConfig.confirmWrite)) {
+          const decision = await confirmOrDeny('Escribir archivo - requiere confirmación')
+          if (decision !== 'allow') deniedMsg = denialMessage(toolCall.name)
+        }
+
+        if (!deniedMsg) {
+          toolResult = await executeToolCall(
+            toolCall.name,
+            toolCall.arguments,
+            agentConfig.workingDirectory,
+            requiresPreConfirmation(toolCall.name, agentConfig.confirmWrite),
+            false,
+          )
+
+          if (toolResult.requires_confirmation) {
+            const decision = await confirmOrDeny(toolResult.preview || 'Requiere confirmación')
+            if (decision === 'allow') {
+              toolResult = await executeToolCall(toolCall.name, toolCall.arguments, agentConfig.workingDirectory, true, false)
+            } else {
+              deniedMsg = denialMessage(toolCall.name)
+            }
           }
+        }
 
-          toolResult = await executeToolCall(toolCall.name, toolCall.arguments, agentConfig.workingDirectory, true, false)
+        if (deniedMsg || !toolResult) {
+          const message = deniedMsg || denialMessage(toolCall.name)
+          onStep(makeStep('tool_result', toolCall.name, {
+            toolName: toolCall.name,
+            toolResult: message,
+          }))
+          pushToolExchange(cleanedResponse || response, message)
+          continue
         }
 
         const isWriteFile = toolCall.name === 'write_file' && toolResult.success
@@ -826,10 +852,17 @@ export function useAgent() {
     }
 
     setIsRunning(false)
-  }, [agentConfig, streamLLM, executeToolCall, makeStep, callComplete, waitForConfirmation])
+  }, [agentConfig, streamLLM, executeToolCall, makeStep, callComplete, requestConfirmation])
 
   const stopAgent = useCallback(() => {
     abortRef.current = true
+    // Resolver cualquier confirmación pendiente como denegada para no dejar
+    // el loop colgado esperando.
+    for (const [id, resolve] of pendingResolversRef.current) {
+      pendingResolversRef.current.delete(id)
+      resolve('deny')
+    }
+    setPendingConfirmation(null)
     const sid = streamIdRef.current
     if (sid) {
       invoke('stop_stream', { streamId: sid }).catch(() => {})
@@ -855,5 +888,6 @@ export function useAgent() {
     stopAgent,
     resetAgent,
     confirmTool,
+    pendingConfirmation,
   }
 }

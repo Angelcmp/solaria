@@ -4,17 +4,17 @@ use futures_util::StreamExt;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 #[derive(Serialize, Deserialize, Clone, Default)]
-struct ChatMessage {
-    role: String,
+pub(crate) struct ChatMessage {
+    pub(crate) role: String,
     #[serde(default)]
-    content: String,
+    pub(crate) content: String,
     /// Native function calling (OpenAI-compatible): assistant message que
     /// contiene las llamadas a herramientas.
     #[serde(skip_serializing_if = "Option::is_none")]
-    tool_calls: Option<serde_json::Value>,
+    pub(crate) tool_calls: Option<serde_json::Value>,
     /// Native function calling: id de la llamada que responde un mensaje `tool`.
     #[serde(skip_serializing_if = "Option::is_none")]
-    tool_call_id: Option<String>,
+    pub(crate) tool_call_id: Option<String>,
 }
 
 // OpenAI-compatible format
@@ -164,6 +164,28 @@ pub struct ProviderConfig {
     pub base_url: String,
     pub model: String,
     pub api_type: String,
+    /// Esquema de autenticación: `bearer` (Authorization: Bearer <key>),
+    /// `x-api-key` (header con la key en crudo) o `none` (sin auth).
+    pub auth: String,
+    /// Nombre de header a usar cuando `auth` no sea el default del esquema.
+    pub auth_header: String,
+    /// Headers extra (por ejemplo `anthropic-version` o cabeceras de un
+    /// endpoint OpenAI-compatible propio).
+    pub extra_headers: Vec<(String, String)>,
+}
+
+impl ProviderConfig {
+    fn builtin(name: &str, base_url: &str, model: String, api_type: &str, auth: &str) -> Self {
+        Self {
+            name: name.into(),
+            base_url: base_url.into(),
+            model,
+            api_type: api_type.into(),
+            auth: auth.into(),
+            auth_header: String::new(),
+            extra_headers: Vec::new(),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -171,6 +193,104 @@ pub struct ModelParams {
     pub temperature: Option<f32>,
     pub top_p: Option<f32>,
     pub max_tokens: Option<u32>,
+}
+
+/// Aplica autenticación y headers extra a una request según la config.
+fn apply_headers(
+    req: reqwest::RequestBuilder,
+    config: &ProviderConfig,
+    api_key: &str,
+) -> reqwest::RequestBuilder {
+    let mut req = req;
+    let key = api_key.trim();
+    match config.auth.as_str() {
+        "none" => {}
+        "x-api-key" => {
+            if !key.is_empty() {
+                let header = if config.auth_header.is_empty() {
+                    "x-api-key"
+                } else {
+                    config.auth_header.as_str()
+                };
+                req = req.header(header, key);
+            }
+        }
+        // Default: bearer
+        _ => {
+            if !key.is_empty() {
+                if config.auth_header.is_empty() {
+                    req = req.header("Authorization", format!("Bearer {}", key));
+                } else {
+                    req = req.header(config.auth_header.as_str(), key);
+                }
+            }
+        }
+    }
+    for (k, v) in &config.extra_headers {
+        req = req.header(k.as_str(), v.as_str());
+    }
+    req
+}
+
+/// Construye la config de un proveedor definido por el usuario (endpoint
+/// OpenAI-compatible u otro api_type). `provider` se usa como nombre visible.
+pub fn custom_provider_config(
+    provider: &str,
+    base_url: &str,
+    model: &str,
+    api_type: Option<&str>,
+    auth: Option<&str>,
+    auth_header: Option<&str>,
+    extra_headers: Option<&serde_json::Value>,
+) -> ProviderConfig {
+    let mut config = ProviderConfig::builtin(
+        if provider.trim().is_empty() { "Custom" } else { provider.trim() },
+        base_url.trim(),
+        model.trim().to_string(),
+        api_type.filter(|s| !s.trim().is_empty()).unwrap_or("openai"),
+        auth.filter(|s| !s.trim().is_empty()).unwrap_or("bearer"),
+    );
+    if let Some(h) = auth_header {
+        config.auth_header = h.trim().to_string();
+    }
+    if let Some(serde_json::Value::Object(map)) = extra_headers {
+        for (k, v) in map {
+            if let Some(s) = v.as_str() {
+                config.extra_headers.push((k.clone(), s.to_string()));
+            }
+        }
+    }
+    config
+}
+
+/// Resuelve la config de un proveedor. Si `base_url` viene informado se
+/// construye uno custom (el usuario trae su propio endpoint); si no, se busca
+/// entre los proveedores integrados.
+pub fn resolve_provider(
+    provider: &str,
+    model: &str,
+    base_url: Option<String>,
+    api_type: Option<String>,
+    auth: Option<String>,
+    auth_header: Option<String>,
+    extra_headers: Option<String>,
+) -> Option<ProviderConfig> {
+    if let Some(url) = base_url.filter(|u| !u.trim().is_empty()) {
+        let headers = extra_headers
+            .as_deref()
+            .and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok());
+        Some(custom_provider_config(
+            provider,
+            &url,
+            model,
+            api_type.as_deref(),
+            auth.as_deref(),
+            auth_header.as_deref(),
+            headers.as_ref(),
+        ))
+    } else {
+        get_provider_config(provider, model)
+    }
 }
 
 fn normalize_model(provider: &str, model: &str) -> String {
@@ -225,54 +345,62 @@ fn http_error(name: &str, status: u16, body: &str) -> String {
 
 pub fn get_provider_config(provider: &str, model: &str) -> Option<ProviderConfig> {
     match provider.trim() {
-        "openai" => Some(ProviderConfig {
-            name: "OpenAI".into(),
-            base_url: "https://api.openai.com/v1/chat/completions".into(),
-            model: normalize_model("openai", model),
-            api_type: "openai".into(),
-        }),
-        "deepseek" => Some(ProviderConfig {
-            name: "DeepSeek".into(),
-            base_url: "https://api.deepseek.com/chat/completions".into(),
-            model: normalize_model("deepseek", model),
-            api_type: "openai".into(),
-        }),
-        "groq" => Some(ProviderConfig {
-            name: "Groq".into(),
-            base_url: "https://api.groq.com/openai/v1/chat/completions".into(),
-            model: normalize_model("groq", model),
-            api_type: "openai".into(),
-        }),
-        "kimi" => Some(ProviderConfig {
-            name: "Kimi".into(),
-            base_url: "https://api.moonshot.cn/v1/chat/completions".into(),
-            model: normalize_model("kimi", model),
-            api_type: "openai".into(),
-        }),
-        "glm" => Some(ProviderConfig {
-            name: "GLM".into(),
-            base_url: "https://api.z.ai/api/paas/v4/chat/completions".into(),
-            model: normalize_model("glm", model),
-            api_type: "openai".into(),
-        }),
-        "anthropic" => Some(ProviderConfig {
-            name: "Anthropic".into(),
-            base_url: "https://api.anthropic.com/v1/messages".into(),
-            model: normalize_model("anthropic", model),
-            api_type: "anthropic".into(),
-        }),
-        "google" => Some(ProviderConfig {
-            name: "Google".into(),
-            base_url: "https://generativelanguage.googleapis.com/v1beta/models".into(),
-            model: normalize_model("google", model),
-            api_type: "google".into(),
-        }),
-        "cohere" => Some(ProviderConfig {
-            name: "Cohere".into(),
-            base_url: "https://api.cohere.ai/v2/chat".into(),
-            model: normalize_model("cohere", model),
-            api_type: "cohere".into(),
-        }),
+        "openai" => Some(ProviderConfig::builtin(
+            "OpenAI",
+            "https://api.openai.com/v1/chat/completions",
+            normalize_model("openai", model),
+            "openai",
+            "bearer",
+        )),
+        "deepseek" => Some(ProviderConfig::builtin(
+            "DeepSeek",
+            "https://api.deepseek.com/chat/completions",
+            normalize_model("deepseek", model),
+            "openai",
+            "bearer",
+        )),
+        "groq" => Some(ProviderConfig::builtin(
+            "Groq",
+            "https://api.groq.com/openai/v1/chat/completions",
+            normalize_model("groq", model),
+            "openai",
+            "bearer",
+        )),
+        "kimi" => Some(ProviderConfig::builtin(
+            "Kimi",
+            "https://api.moonshot.cn/v1/chat/completions",
+            normalize_model("kimi", model),
+            "openai",
+            "bearer",
+        )),
+        "glm" => Some(ProviderConfig::builtin(
+            "GLM",
+            "https://api.z.ai/api/paas/v4/chat/completions",
+            normalize_model("glm", model),
+            "openai",
+            "bearer",
+        )),
+        "anthropic" => Some(ProviderConfig::builtin(
+            "Anthropic",
+            "https://api.anthropic.com/v1/messages",
+            normalize_model("anthropic", model),
+            "anthropic",
+            "x-api-key",
+        )),
+        "google" => Some(ProviderConfig::builtin(
+            "Google",
+            "https://generativelanguage.googleapis.com/v1beta/models",
+            normalize_model("google", model),
+            "google",
+            "none",
+        )),
+        "cohere" => Some(ProviderConfig::builtin(
+            "Cohere",
+            "https://api.cohere.ai/v2/chat",
+            normalize_model("cohere", model),
+            "cohere",
+            "bearer",
+        )),
         _ => None,
     }
 }
@@ -286,13 +414,13 @@ fn build_messages(
     if let Some(sp) = system_prompt {
         chat_messages.push(ChatMessage {
             role: "system".into(),
-            content: format!("{} IMPORTANTE: Responde siempre en español.", sp),
+            content: sp,
             ..Default::default()
         });
     } else {
         chat_messages.push(ChatMessage {
             role: "system".into(),
-            content: "Eres Solaria, un asistente de IA. Responde siempre en español de forma clara y concisa.".into(),
+            content: "You are Solaria, a helpful AI assistant. Always respond in the user's language.".into(),
             ..Default::default()
         });
     }
@@ -315,14 +443,12 @@ pub async fn chat_openai_compatible(
     let chat_messages = build_messages(system_prompt, &messages_str);
 
     let request = OpenAIRequest {
-        model: config.model,
+        model: config.model.clone(),
         messages: chat_messages,
         stream: false,
     };
 
-    match client
-        .post(&config.base_url)
-        .header("Authorization", format!("Bearer {}", api_key))
+    match apply_headers(client.post(&config.base_url), &config, &api_key)
         .json(&request)
         .send()
         .await
@@ -389,15 +515,13 @@ pub async fn chat_anthropic(
         .collect();
 
     let request = AnthropicRequest {
-        model: config.model,
+        model: config.model.clone(),
         max_tokens: 4096,
         system: if system.is_empty() { None } else { Some(system) },
         messages: non_system,
     };
 
-    match client
-        .post(&config.base_url)
-        .header("x-api-key", &api_key)
+    match apply_headers(client.post(&config.base_url), &config, &api_key)
         .header("anthropic-version", "2023-06-01")
         .json(&request)
         .send()
@@ -480,7 +604,7 @@ pub async fn chat_google(
 
     let url = format!("{}/{}:generateContent?key={}", config.base_url, config.model, api_key);
 
-    match client.post(&url).json(&request).send().await {
+    match apply_headers(client.post(&url), &config, &api_key).json(&request).send().await {
         Ok(resp) => {
             if !resp.status().is_success() {
                 let status = resp.status().as_u16();
@@ -531,13 +655,11 @@ pub async fn chat_cohere(
     let chat_messages = build_messages(system_prompt, &messages_str);
 
     let request = CohereRequest {
-        model: config.model,
+        model: config.model.clone(),
         messages: chat_messages,
     };
 
-    match client
-        .post(&config.base_url)
-        .header("Authorization", format!("Bearer {}", api_key))
+    match apply_headers(client.post(&config.base_url), &config, &api_key)
         .json(&request)
         .send()
         .await
@@ -728,9 +850,7 @@ pub async fn stream_openai_compatible(
         }
     }
 
-    match client
-        .post(&config.base_url)
-        .header("Authorization", format!("Bearer {}", api_key))
+    match apply_headers(client.post(&config.base_url), &config, &api_key)
         .json(&request)
         .send()
         .await
@@ -768,6 +888,7 @@ pub async fn stream_anthropic(
     system_prompt: Option<String>,
     messages_str: String,
     params: ModelParams,
+    tools: Option<String>,
 ) {
     let api_key = api_key.trim().to_string();
     let cancel_flag = crate::register_cancel(&stream_id);
@@ -781,10 +902,7 @@ pub async fn stream_anthropic(
         .collect::<Vec<_>>()
         .join("\n");
 
-    let non_system: Vec<AnthropicChatMessage> = chat_messages.iter()
-        .filter(|m| m.role != "system")
-        .map(|m| AnthropicChatMessage { role: m.role.clone(), content: m.content.clone() })
-        .collect();
+    let non_system = crate::native_tools::to_anthropic_messages(&chat_messages);
 
     let mut request = serde_json::json!({
         "model": config.model,
@@ -795,10 +913,16 @@ pub async fn stream_anthropic(
     });
     if let Some(t) = params.temperature { request["temperature"] = serde_json::json!(t); }
     if let Some(p) = params.top_p { request["top_p"] = serde_json::json!(p); }
+    if let Some(tools_str) = tools {
+        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&tools_str) {
+            let converted = crate::native_tools::anthropic_tools(&parsed);
+            if converted.as_array().is_some_and(|a| !a.is_empty()) {
+                request["tools"] = converted;
+            }
+        }
+    }
 
-    match client
-        .post(&config.base_url)
-        .header("x-api-key", &api_key)
+    match apply_headers(client.post(&config.base_url), &config, &api_key)
         .header("anthropic-version", "2023-06-01")
         .json(&request)
         .send()
@@ -814,6 +938,8 @@ pub async fn stream_anthropic(
                 return;
             }
             let mut full_content = String::new();
+            let mut tool_builder = crate::native_tools::ToolCallBuilder::default();
+            let mut block_to_tool: std::collections::HashMap<i64, usize> = std::collections::HashMap::new();
             let mut stream = resp.bytes_stream();
             while let Some(chunk_result) = stream.next().await {
                 if cancel_flag.load(Ordering::SeqCst) { break; }
@@ -824,18 +950,36 @@ pub async fn stream_anthropic(
                         if line.is_empty() { continue; }
                         if let Some(data) = line.strip_prefix("data: ") {
                             if let Ok(val) = serde_json::from_str::<serde_json::Value>(data) {
-                                if val.get("type").and_then(|t| t.as_str()) == Some("content_block_delta") {
-                                    if let Some(text) = val["delta"]["text"].as_str() {
-                                        full_content.push_str(text);
-                                        let _ = app.emit("stream://token", serde_json::json!({
-                                            "stream_id": stream_id, "token": text,
-                                        }));
+                                match val["type"].as_str().unwrap_or("") {
+                                    "content_block_start" => {
+                                        if val["content_block"]["type"].as_str() == Some("tool_use") {
+                                            let idx = val["index"].as_i64().unwrap_or(0);
+                                            let id = val["content_block"]["id"].as_str().unwrap_or("");
+                                            let name = val["content_block"]["name"].as_str().unwrap_or("");
+                                            let bi = tool_builder.start(id, name);
+                                            block_to_tool.insert(idx, bi);
+                                        }
                                     }
-                                    if let Some(thinking) = val["delta"]["thinking"].as_str() {
-                                        let _ = app.emit("stream://thinking", serde_json::json!({
-                                            "stream_id": stream_id, "token": thinking,
-                                        }));
+                                    "content_block_delta" => {
+                                        if let Some(text) = val["delta"]["text"].as_str() {
+                                            full_content.push_str(text);
+                                            let _ = app.emit("stream://token", serde_json::json!({
+                                                "stream_id": stream_id, "token": text,
+                                            }));
+                                        }
+                                        if let Some(thinking) = val["delta"]["thinking"].as_str() {
+                                            let _ = app.emit("stream://thinking", serde_json::json!({
+                                                "stream_id": stream_id, "token": thinking,
+                                            }));
+                                        }
+                                        if let Some(partial) = val["delta"]["partial_json"].as_str() {
+                                            let idx = val["index"].as_i64().unwrap_or(0);
+                                            if let Some(bi) = block_to_tool.get(&idx) {
+                                                tool_builder.append(*bi, partial);
+                                            }
+                                        }
                                     }
+                                    _ => {}
                                 }
                             }
                         }
@@ -844,6 +988,7 @@ pub async fn stream_anthropic(
             }
             let _ = app.emit("stream://done", serde_json::json!({
                 "stream_id": stream_id, "full_content": full_content, "cancelled": false,
+                "tool_calls": tool_builder.into_json(),
             }));
         }
         Err(e) => {
@@ -864,6 +1009,7 @@ pub async fn stream_google(
     system_prompt: Option<String>,
     messages_str: String,
     params: ModelParams,
+    tools: Option<String>,
 ) {
     let api_key = api_key.trim().to_string();
     let cancel_flag = crate::register_cancel(&stream_id);
@@ -877,16 +1023,7 @@ pub async fn stream_google(
         .collect::<Vec<_>>()
         .join("\n");
 
-    let contents: Vec<serde_json::Value> = chat_messages.iter()
-        .filter(|m| m.role != "system")
-        .map(|m| {
-            let role = if m.role == "assistant" { "model".into() } else { m.role.clone() };
-            serde_json::json!({
-                "role": role,
-                "parts": [{"text": m.content}],
-            })
-        })
-        .collect();
+    let contents = crate::native_tools::to_google_contents(&chat_messages);
 
     let mut request = serde_json::json!({
         "system_instruction": if system_text.is_empty() {
@@ -903,10 +1040,21 @@ pub async fn stream_google(
     if !generation_config.is_empty() {
         request["generationConfig"] = serde_json::json!(generation_config);
     }
+    if let Some(tools_str) = tools {
+        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&tools_str) {
+            let converted = crate::native_tools::google_tools(&parsed);
+            if converted[0]["functionDeclarations"].as_array().is_some_and(|a| !a.is_empty()) {
+                request["tools"] = converted;
+                request["toolConfig"] = serde_json::json!({
+                    "functionCallingConfig": { "mode": "AUTO" }
+                });
+            }
+        }
+    }
 
     let url = format!("{}/{}:streamGenerateContent?alt=sse&key={}", config.base_url, config.model, api_key);
 
-    match client.post(&url).json(&request).send().await {
+    match apply_headers(client.post(&url), &config, &api_key).json(&request).send().await {
         Ok(resp) => {
             if !resp.status().is_success() {
                 let status = resp.status().as_u16();
@@ -917,6 +1065,7 @@ pub async fn stream_google(
                 return;
             }
             let mut full_content = String::new();
+            let mut tool_builder = crate::native_tools::ToolCallBuilder::default();
             let mut stream = resp.bytes_stream();
             while let Some(chunk_result) = stream.next().await {
                 if cancel_flag.load(Ordering::SeqCst) { break; }
@@ -927,11 +1076,21 @@ pub async fn stream_google(
                         if line.is_empty() { continue; }
                         if let Some(data) = line.strip_prefix("data: ") {
                             if let Ok(val) = serde_json::from_str::<serde_json::Value>(data) {
-                                if let Some(text) = val["candidates"][0]["content"]["parts"][0]["text"].as_str() {
-                                    full_content.push_str(text);
-                                    let _ = app.emit("stream://token", serde_json::json!({
-                                        "stream_id": stream_id, "token": text,
-                                    }));
+                                if let Some(parts) = val["candidates"][0]["content"]["parts"].as_array() {
+                                    for part in parts {
+                                        if let Some(text) = part["text"].as_str() {
+                                            full_content.push_str(text);
+                                            let _ = app.emit("stream://token", serde_json::json!({
+                                                "stream_id": stream_id, "token": text,
+                                            }));
+                                        }
+                                        if let Some(fc) = part.get("functionCall") {
+                                            let name = fc["name"].as_str().unwrap_or("");
+                                            let args = fc.get("args").cloned().unwrap_or_else(|| serde_json::json!({}));
+                                            let idx = tool_builder.start("", name);
+                                            tool_builder.append(idx, &args.to_string());
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -940,6 +1099,7 @@ pub async fn stream_google(
             }
             let _ = app.emit("stream://done", serde_json::json!({
                 "stream_id": stream_id, "full_content": full_content, "cancelled": false,
+                "tool_calls": tool_builder.into_json(),
             }));
         }
         Err(e) => {
@@ -960,6 +1120,7 @@ pub async fn stream_cohere(
     system_prompt: Option<String>,
     messages_str: String,
     params: ModelParams,
+    tools: Option<String>,
 ) {
     let api_key = api_key.trim().to_string();
     let cancel_flag = crate::register_cancel(&stream_id);
@@ -975,10 +1136,16 @@ pub async fn stream_cohere(
     if let Some(t) = params.temperature { request["temperature"] = serde_json::json!(t); }
     if let Some(p) = params.top_p { request["p"] = serde_json::json!(p); }
     if let Some(m) = params.max_tokens { request["max_tokens"] = serde_json::json!(m); }
+    if let Some(tools_str) = tools {
+        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&tools_str) {
+            let converted = crate::native_tools::cohere_tools(&parsed);
+            if converted.as_array().is_some_and(|a| !a.is_empty()) {
+                request["tools"] = converted;
+            }
+        }
+    }
 
-    match client
-        .post(&config.base_url)
-        .header("Authorization", format!("Bearer {}", api_key))
+    match apply_headers(client.post(&config.base_url), &config, &api_key)
         .json(&request)
         .send()
         .await
@@ -993,6 +1160,8 @@ pub async fn stream_cohere(
                 return;
             }
             let mut full_content = String::new();
+            let mut tool_builder = crate::native_tools::ToolCallBuilder::default();
+            let mut index_to_tool: std::collections::HashMap<i64, usize> = std::collections::HashMap::new();
             let mut stream = resp.bytes_stream();
             while let Some(chunk_result) = stream.next().await {
                 if cancel_flag.load(Ordering::SeqCst) { break; }
@@ -1003,11 +1172,42 @@ pub async fn stream_cohere(
                         if line.is_empty() { continue; }
                         if let Some(data) = line.strip_prefix("data: ") {
                             if let Ok(val) = serde_json::from_str::<serde_json::Value>(data) {
-                                if let Some(text) = val["text"].as_str() {
-                                    full_content.push_str(text);
-                                    let _ = app.emit("stream://token", serde_json::json!({
-                                        "stream_id": stream_id, "token": text,
-                                    }));
+                                let event = val["type"].as_str().unwrap_or("");
+                                let index = val["index"].as_i64().unwrap_or(0);
+                                match event {
+                                    "content-delta" => {
+                                        let text = val["delta"]["message"]["content"]["text"]
+                                            .as_str()
+                                            .or_else(|| val["text"].as_str());
+                                        if let Some(text) = text {
+                                            full_content.push_str(text);
+                                            let _ = app.emit("stream://token", serde_json::json!({
+                                                "stream_id": stream_id, "token": text,
+                                            }));
+                                        }
+                                    }
+                                    "tool-call-start" => {
+                                        let tc = &val["delta"]["message"]["tool_calls"];
+                                        let id = tc["id"].as_str().unwrap_or("");
+                                        let name = tc["function"]["name"].as_str().unwrap_or("");
+                                        let bi = tool_builder.start(id, name);
+                                        index_to_tool.insert(index, bi);
+                                        if let Some(args) = tc["function"]["arguments"].as_str() {
+                                            if !args.is_empty() {
+                                                tool_builder.append(bi, args);
+                                            }
+                                        }
+                                    }
+                                    "tool-call-delta" => {
+                                        if let Some(args) = val["delta"]["message"]["tool_calls"]["function"]["arguments"].as_str() {
+                                            let bi = index_to_tool
+                                                .get(&index)
+                                                .copied()
+                                                .unwrap_or_else(|| tool_builder.start("", ""));
+                                            tool_builder.append(bi, args);
+                                        }
+                                    }
+                                    _ => {}
                                 }
                             }
                         }
@@ -1016,6 +1216,7 @@ pub async fn stream_cohere(
             }
             let _ = app.emit("stream://done", serde_json::json!({
                 "stream_id": stream_id, "full_content": full_content, "cancelled": false,
+                "tool_calls": tool_builder.into_json(),
             }));
         }
         Err(e) => {
@@ -1041,9 +1242,9 @@ pub async fn route_chat_stream(
 ) {
     let api_key = api_key.trim().to_string();
     match api_type.as_str() {
-        "anthropic" => stream_anthropic(app, stream_id, api_key, config, system_prompt, messages_str, params).await,
-        "google" => stream_google(app, stream_id, api_key, config, system_prompt, messages_str, params).await,
-        "cohere" => stream_cohere(app, stream_id, api_key, config, system_prompt, messages_str, params).await,
+        "anthropic" => stream_anthropic(app, stream_id, api_key, config, system_prompt, messages_str, params, tools).await,
+        "google" => stream_google(app, stream_id, api_key, config, system_prompt, messages_str, params, tools).await,
+        "cohere" => stream_cohere(app, stream_id, api_key, config, system_prompt, messages_str, params, tools).await,
         _ => stream_openai_compatible(app, stream_id, api_key, config, system_prompt, messages_str, params, tools).await,
     }
 }

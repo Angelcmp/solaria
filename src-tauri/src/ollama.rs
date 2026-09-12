@@ -4,8 +4,6 @@ use tauri::{AppHandle, Emitter};
 use std::sync::atomic::Ordering;
 use futures_util::StreamExt;
 
-const OLLAMA_URL: &str = "http://localhost:11434/api/chat";
-
 #[derive(Serialize)]
 struct ChatRequest {
     model: String,
@@ -37,18 +35,29 @@ pub struct OllamaResult {
     pub error: Option<String>,
 }
 
-pub async fn check_connection() -> bool {
+const OLLAMA_DEFAULT_HOST: &str = "http://localhost:11434";
+
+fn resolve_base(host: &Option<String>) -> String {
+    let raw = host
+        .as_deref()
+        .map(str::trim)
+        .filter(|h| !h.is_empty())
+        .unwrap_or(OLLAMA_DEFAULT_HOST);
+    raw.trim_end_matches('/').to_string()
+}
+
+pub async fn check_connection(host: Option<String>) -> bool {
     let client = reqwest::Client::new();
-    match client.get("http://localhost:11434/api/tags").send().await {
+    match client.get(format!("{}/api/tags", resolve_base(&host))).send().await {
         Ok(resp) => resp.status().is_success(),
         Err(_) => false,
     }
 }
 
-pub async fn list_models() -> Result<Vec<String>, String> {
+pub async fn list_models(host: Option<String>) -> Result<Vec<String>, String> {
     let client = reqwest::Client::new();
     let resp = client
-        .get("http://localhost:11434/api/tags")
+        .get(format!("{}/api/tags", resolve_base(&host)))
         .send()
         .await
         .map_err(|e| format!("Error al conectar con Ollama: {}", e))?;
@@ -85,24 +94,20 @@ pub async fn send_chat(
         .build()
         .unwrap_or_default();
 
-    let base_url = host.unwrap_or_else(|| "http://localhost:11434".to_string());
-    let chat_url = format!("{}/api/chat", base_url.trim_end_matches('/'));
+    let chat_url = format!("{}/api/chat", resolve_base(&host));
 
     let mut ollama_messages: Vec<Message> = Vec::new();
 
     if let Some(sp) = system_prompt {
         ollama_messages.push(Message {
             role: "system".into(),
-            content: format!(
-                "{} IMPORTANTE: Responde siempre en español.",
-                sp
-            ),
+            content: sp,
         });
     } else {
         ollama_messages.push(Message {
             role: "system".into(),
-            content: "Eres Solaria, un asistente de IA amigable y servicial. \
-                       Responde siempre en español de forma clara y concisa."
+            content: "You are Solaria, a helpful AI assistant. \
+                       Always respond in the user's language."
                 .into(),
         });
     }
@@ -177,6 +182,7 @@ pub async fn send_chat_stream(
     temperature: Option<f32>,
     top_p: Option<f32>,
     max_tokens: Option<u32>,
+    host: Option<String>,
 ) {
     let cancel_flag = crate::register_cancel(&stream_id);
 
@@ -189,13 +195,13 @@ pub async fn send_chat_stream(
     if let Some(sp) = system_prompt {
         ollama_messages.push(Message {
             role: "system".into(),
-            content: format!("{} IMPORTANTE: Responde siempre en español.", sp),
+            content: sp,
         });
     } else {
         ollama_messages.push(Message {
             role: "system".into(),
-            content: "Eres Solaria, un asistente de IA amigable y servicial. \
-                       Responde siempre en español de forma clara y concisa."
+            content: "You are Solaria, a helpful AI assistant. \
+                       Always respond in the user's language."
                 .into(),
         });
     }
@@ -217,7 +223,7 @@ pub async fn send_chat_stream(
         request["options"] = json!(options);
     }
 
-    match client.post(OLLAMA_URL).json(&request).send().await {
+    match client.post(format!("{}/api/chat", resolve_base(&host))).json(&request).send().await {
         Ok(resp) => {
             if !resp.status().is_success() {
                 let _ = app.emit("stream://error", serde_json::json!({
@@ -293,13 +299,13 @@ pub async fn send_chat_stream(
     crate::unregister_cancel(&stream_id);
 }
 
-pub async fn pull_model(model_name: &str) -> Result<String, String> {
+pub async fn pull_model(model_name: &str, host: Option<String>) -> Result<String, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(600))
         .build()
         .unwrap_or_default();
 
-    let pull_url = "http://localhost:11434/api/pull";
+    let pull_url = format!("{}/api/pull", resolve_base(&host));
     let body = serde_json::json!({ "name": model_name, "stream": false });
 
     let resp = client
@@ -322,9 +328,9 @@ pub async fn pull_model(model_name: &str) -> Result<String, String> {
     Ok(format!("Modelo '{}' descargado correctamente", model_name))
 }
 
-pub async fn delete_model(model_name: &str) -> Result<String, String> {
+pub async fn delete_model(model_name: &str, host: Option<String>) -> Result<String, String> {
     let client = reqwest::Client::new();
-    let delete_url = "http://localhost:11434/api/delete";
+    let delete_url = format!("{}/api/delete", resolve_base(&host));
 
     let resp = client
         .delete(delete_url)

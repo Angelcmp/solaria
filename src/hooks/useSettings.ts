@@ -13,19 +13,42 @@ export interface ApiKeys {
   glm: string
 }
 
+/** Tipo de API de un proveedor definido por el usuario. */
+export type ApiType = 'openai' | 'anthropic' | 'google' | 'cohere'
+
+/** Esquema de autenticación de un proveedor custom. */
+export type AuthScheme = 'bearer' | 'x-api-key' | 'none'
+
+/**
+ * Proveedor definido por el usuario (endpoint propio o servicio
+ * OpenAI-compatible: LM Studio, vLLM, llama.cpp, OpenRouter, etc.).
+ */
+export interface CustomProvider {
+  id: string
+  name: string
+  baseUrl: string
+  apiType: ApiType
+  auth: AuthScheme
+  /** Header a usar cuando `auth` no coincide con el default del esquema. */
+  authHeader?: string
+  models: string[]
+}
+
 export type SecurityProfile = 'explore' | 'execute'
 
 export interface AppSettings {
   ollamaHost: string
   ollamaTimeout: number
   defaultModel: string
-  defaultProvider: 'ollama' | 'openai' | 'anthropic' | 'deepseek' | 'groq' | 'google' | 'cohere' | 'kimi' | 'glm'
+  defaultProvider: string
   temperature: number
   topP: number
   maxTokens: number
   language: 'es' | 'en'
   tavilyKey: string
   apiKeys: ApiKeys
+  customProviders: CustomProvider[]
+  customApiKeys: Record<string, string>
   securityProfile: SecurityProfile
   comparisonEnabled: boolean
 }
@@ -50,6 +73,8 @@ const DEFAULT_SETTINGS: AppSettings = {
     kimi: '',
     glm: '',
   },
+  customProviders: [],
+  customApiKeys: {},
   securityProfile: 'explore',
   comparisonEnabled: false,
 }
@@ -105,6 +130,31 @@ export function useSettings() {
     loadTavily()
   }, [])
 
+  // Load custom provider keys from keyring (fallback localStorage)
+  useEffect(() => {
+    const ids = settings.customProviders.map(p => p.id)
+    if (ids.length === 0) return
+    let cancelled = false
+    const loadCustom = async () => {
+      const loaded: Record<string, string> = {}
+      for (const id of ids) {
+        if (settings.customApiKeys[id]) continue
+        try {
+          const key = await invoke<string>('get_api_key', { provider: id })
+          if (key) loaded[id] = key
+        } catch {
+          const cached = localStorage.getItem(`solaria-key-${id}`)
+          if (cached) loaded[id] = cached
+        }
+      }
+      if (!cancelled && Object.keys(loaded).length > 0) {
+        setSettings(prev => ({ ...prev, customApiKeys: { ...prev.customApiKeys, ...loaded } }))
+      }
+    }
+    loadCustom()
+    return () => { cancelled = true }
+  }, [settings.customProviders])
+
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
   }, [settings])
@@ -136,12 +186,51 @@ export function useSettings() {
     }
   }, [])
 
-  const updateProvider = useCallback((provider: AppSettings['defaultProvider'], model: string) => {
+  const updateProvider = useCallback((provider: string, model: string) => {
     setSettings(prev => ({
       ...prev,
       defaultProvider: provider,
       defaultModel: model,
     }))
+  }, [])
+
+  const addCustomProvider = useCallback((provider: CustomProvider) => {
+    setSettings(prev => ({ ...prev, customProviders: [...prev.customProviders, provider] }))
+  }, [])
+
+  const updateCustomProvider = useCallback((provider: CustomProvider) => {
+    setSettings(prev => ({
+      ...prev,
+      customProviders: prev.customProviders.map(p => (p.id === provider.id ? provider : p)),
+    }))
+  }, [])
+
+  const removeCustomProvider = useCallback((id: string) => {
+    setSettings(prev => {
+      const customApiKeys = { ...prev.customApiKeys }
+      delete customApiKeys[id]
+      return {
+        ...prev,
+        customProviders: prev.customProviders.filter(p => p.id !== id),
+        customApiKeys,
+        defaultProvider: prev.defaultProvider === id ? 'openai' : prev.defaultProvider,
+      }
+    })
+    localStorage.removeItem(`solaria-key-${id}`)
+    invoke('delete_api_key', { provider: id }).catch(() => {})
+  }, [])
+
+  const updateCustomApiKey = useCallback(async (id: string, key: string) => {
+    const clean = key.trim()
+    setSettings(prev => ({
+      ...prev,
+      customApiKeys: { ...prev.customApiKeys, [id]: clean },
+    }))
+    localStorage.setItem(`solaria-key-${id}`, clean)
+    try {
+      await invoke('store_api_key', { provider: id, key: clean })
+    } catch {
+    }
   }, [])
 
   return {
@@ -152,5 +241,9 @@ export function useSettings() {
     updateApiKey,
     updateTavilyKey,
     updateProvider,
+    addCustomProvider,
+    updateCustomProvider,
+    removeCustomProvider,
+    updateCustomApiKey,
   }
 }

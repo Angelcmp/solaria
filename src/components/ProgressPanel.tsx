@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import type { AgentStep } from '../hooks/useAgent'
+import type { PendingConfirmation } from '../agent/permissions'
 import { DocumentIcon, WarningIcon } from './Icons'
 
 interface ProgressPanelProps {
@@ -7,7 +8,8 @@ interface ProgressPanelProps {
   isRunning: boolean
   onClose: () => void
   onStop?: () => void
-  onConfirmTool?: (allow: boolean) => void
+  onConfirmTool?: (id: string, allow: boolean) => void
+  pendingConfirmation?: PendingConfirmation | null
   projectName?: string
   workingDirectory?: string
   personaPrompt?: string
@@ -111,7 +113,6 @@ interface ToolGroup {
   count: number
   done: number
   hasError: boolean
-  hasPending: boolean
   warning?: string
 }
 
@@ -119,12 +120,11 @@ function groupSteps(toolSteps: AgentStep[]): ToolGroup[] {
   const groups = new Map<string, ToolGroup>()
   for (const step of toolSteps) {
     if (!step.toolName) continue
-    const g = groups.get(step.toolName) || { toolName: step.toolName, count: 0, done: 0, hasError: false, hasPending: false, warning: undefined }
+    const g = groups.get(step.toolName) || { toolName: step.toolName, count: 0, done: 0, hasError: false, warning: undefined }
     if (step.type === 'tool_call') {
       g.count++
     } else if (step.type === 'tool_result') {
       if (step.toolResult?.startsWith('ERROR')) g.hasError = true
-      else if (step.toolResult?.startsWith('[PENDIENTE')) g.hasPending = true
       else g.done++
     }
     if (step.toolWarning) g.warning = step.toolWarning
@@ -144,7 +144,7 @@ function SectionHeader({ title, right }: { title: string; right?: React.ReactNod
 }
 
 function ProgressPanel(props: ProgressPanelProps) {
-  const { steps, isRunning, onClose, onStop, onConfirmTool, projectName, workingDirectory, personaPrompt, onOpenDocument } = props
+  const { steps, isRunning, onClose, onStop, onConfirmTool, pendingConfirmation, projectName, workingDirectory, personaPrompt, onOpenDocument } = props
   const [collapsed, setCollapsed] = useState(false)
   const [skills, setSkills] = useState<string[]>([])
 
@@ -243,9 +243,40 @@ function ProgressPanel(props: ProgressPanelProps) {
             </p>
           )}
           {toolGroups.map(group => (
-            <CompactToolRow key={group.toolName} group={group} isRunning={isRunning} onConfirmTool={onConfirmTool} />
+            <CompactToolRow key={group.toolName} group={group} isRunning={isRunning} />
           ))}
         </div>
+
+        {/* Permission confirmation */}
+        {pendingConfirmation && onConfirmTool && (
+          <div className="mx-3 mt-2 p-3 rounded-xl bg-[rgba(245,158,11,0.06)] border border-[rgba(245,158,11,0.25)] space-y-2">
+            <div className="flex items-start gap-2">
+              <WarningIcon size={12} color="#f59e0b" />
+              <div className="flex-1 min-w-0">
+                <div className="text-[0.7rem] font-semibold text-[#E5E5E5]">
+                  Confirmar `{pendingConfirmation.toolName}`
+                </div>
+                <div className="text-[0.6rem] text-[#999999] mt-0.5 break-words">
+                  {pendingConfirmation.warning}
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => onConfirmTool(pendingConfirmation.id, true)}
+                className="flex-1 px-3 py-1.5 rounded-lg text-[0.65rem] font-semibold bg-[rgba(0,229,201,0.12)] border border-[rgba(255,255,255,0.08)] text-[#00E5C9] hover:bg-[rgba(0,229,201,0.2)] transition-colors"
+              >
+                Permitir
+              </button>
+              <button
+                onClick={() => onConfirmTool(pendingConfirmation.id, false)}
+                className="flex-1 px-3 py-1.5 rounded-lg text-[0.65rem] font-semibold bg-[rgba(239,68,68,0.1)] border border-[rgba(239,68,68,0.2)] text-[#ef4444] hover:bg-[rgba(239,68,68,0.2)] transition-colors"
+              >
+                Denegar
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Project */}
         <SectionHeader title="Project" />
@@ -348,13 +379,12 @@ function ProgressPanel(props: ProgressPanelProps) {
   )
 }
 
-function CompactToolRow({ group, isRunning, onConfirmTool }: {
+function CompactToolRow({ group, isRunning }: {
   group: ToolGroup
   isRunning: boolean
-  onConfirmTool?: (allow: boolean) => void
 }) {
-  const { toolName, count, done, hasError, hasPending, warning } = group
-  const allDone = count > 0 && !hasError && done >= count && !hasPending
+  const { toolName, count, done, hasError, warning } = group
+  const allDone = count > 0 && !hasError && done >= count
 
   const circle = hasError
     ? 'bg-[#ef4444]'
@@ -370,12 +400,6 @@ function CompactToolRow({ group, isRunning, onConfirmTool }: {
       {warning && (
         <span title={warning} className="flex items-center shrink-0">
           <WarningIcon size={10} color="#f59e0b" />
-        </span>
-      )}
-      {hasPending && onConfirmTool && (
-        <span className="flex gap-1 shrink-0">
-          <button onClick={() => onConfirmTool(true)} className="px-1.5 py-0.5 rounded text-[0.55rem] font-semibold bg-[rgba(0,229,201,0.12)] border border-[rgba(255,255,255,0.08)] text-[#00E5C9] hover:bg-[rgba(0,229,201,0.2)] transition-colors">Allow</button>
-          <button onClick={() => onConfirmTool(false)} className="px-1.5 py-0.5 rounded text-[0.55rem] font-semibold bg-[rgba(239,68,68,0.1)] border border-[rgba(239,68,68,0.2)] text-[#ef4444] hover:bg-[rgba(239,68,68,0.2)] transition-colors">Deny</button>
         </span>
       )}
     </div>

@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.11.0] — 2026-09-12
+
+### Added
+- **Proveedores personalizados (BYO endpoint)**: usa cualquier LLM con endpoint propio o compatible con OpenAI — LM Studio, vLLM, llama.cpp server, OpenRouter, Together, xAI, Ollama remoto, etc. En Configuración → Proveedores: nombre, Base URL, tipo de API, esquema de auth (`bearer` / header con key / sin auth), header opcional, lista de modelos y botón **Probar**. Las keys se guardan en el keyring del SO por proveedor.
+- **Backend genérico OpenAI-compatible**: `resolve_provider()` construye la config al vuelo a partir de la Base URL y aplica autenticación y headers extra por request; los proveedores integrados siguen funcionando igual.
+- **Function calling nativo** para endpoints custom OpenAI-compatible (mismo camino que OpenAI/DeepSeek/Groq).
+- **Function calling nativo en Anthropic, Google y Cohere**: nuevo módulo `native_tools.rs` que convierte las tools OpenAI a `input_schema`/`functionDeclarations`/Cohere, transforma el historial (`tool_calls`/`tool_result` ↔ `tool_use`/`functionCall`/`functionResponse`) y parsea los eventos de streaming (`content_block_start`/`input_json_delta`, `functionCall`, `tool-call-start`/`tool-call-delta`).
+- **Registro central de modelos** (`src/lib/models.ts`): única fuente de verdad con proveedores, modelos y capacidades (tools/vision/context/reasoning). Sustituye las copias de `App.tsx` y `SettingsPanel.tsx`; añade Kimi y GLM a la UI.
+
+### Changed
+- **Ollama remoto**: el host configurado ahora se respeta en streaming, listado, pull y borrado de modelos (antes solo se usaba en chat no-stream; streaming y gestión estaban fijados a `localhost:11434`).
+- **Idioma**: se elimina la inyección forzada de «Responde siempre en español» en proveedores cloud y Ollama; el idioma lo determina el system prompt del usuario (preparando la UI bilingüe).
+- **Proveedor por defecto** pasa a ser un identificador libre, permitiendo seleccionar proveedores custom en el chat y el agente.
+
+### Fixed
+- **Confirmación de herramientas (Allow/Deny)**: el estado pendiente se deducía del texto del paso (`[PENDIENTE…`), que nunca se limpiaba, y `waitForConfirmation` expiraba a los 60 s dejando los botones huérfanos (al pulsarlos ya no había ninguna promesa que resolver → no hacían nada). Ahora hay un estado real `pendingConfirmation` con id por llamada, una tarjeta de confirmación que desaparece al decidir, sin timeout silencioso (se resuelve con Allow/Deny o al detener el agente) y sin promesas globales.
+- **`write_file` + `confirmWrite` no escribía primero**: la confirmación se pedía *después* de que el backend ya hubiera escrito. Ahora es un gate real: se confirma **antes** de ejecutar y denegar no toca disco. Las rutas sensibles/fuera del workspace siguen usando el dry-run del backend.
+- **MCP** (`call_mcp_tool` no leía la respuesta) queda documentado como pendiente; no se toca en esta entrega.
+
+### Tests
+- 7 tests nuevos de configuración de proveedores (custom, auth, headers extra, resolución con/sin Base URL) — 23 en total.
+- 7 tests de conversión/parseo de function calling nativo (`native_tools`) — 18 en la lib.
+- 7 tests del registro central de modelos — 32 frontend en total.
+- 3 tests del primitivo de permisos (`requiresPreConfirmation`, `denialMessage`, forma de `PendingConfirmation`) — incluidos en los 32.
+- Test de integración del dry-run de `write_file` (no escribe antes de confirmar) — 13 en tool_execution.
+
 ## [0.10.1] — 2026-09-11
 
 ### Fixed

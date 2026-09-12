@@ -1,5 +1,21 @@
 # Solaria — Session Progress
 
+## v0.11 (2026-09-12) — Motor agnóstico de modelo (primera entrega)
+
+Pivote a **harness de código BYO-model**: cualquier LLM local o API key. Plan completo acordado: v0.11 motor de modelos → v0.12 harness autónomo → v0.13 UI limpia multiplataforma → v1.0 documentos + release.
+
+- **Proveedores custom (BYO endpoint)**: `CustomProvider` en `useSettings` (`customProviders` + `customApiKeys` con keyring por id). UI en Configuración → Proveedores para añadir/editar/eliminar cualquier endpoint (LM Studio, vLLM, llama.cpp, OpenRouter, xAI, Ollama remoto…): nombre, Base URL, tipo de API, auth (`bearer`/`x-api-key`/`none`), header opcional, modelos y botón Probar.
+- **Backend genérico**: `ProviderConfig` gana `auth`/`auth_header`/`extra_headers`; `apply_headers()` aplica auth y cabeceras por request; `custom_provider_config()` + `resolve_provider()` construyen la config al vuelo. `provider_chat`/`provider_chat_stream` aceptan `base_url`/`api_type`/`auth`/`auth_header`/`extra_headers` opcionales.
+- **Ollama**: `host` ahora se respeta en `send_chat_stream`, `check_connection`, `list_models`, `pull_model`, `delete_model` (`resolve_base()`); se propaga desde settos/ModelManager.
+- **Idioma**: eliminado el sufijo forzado «Responde siempre en español» (cloud y Ollama); el idioma lo fija el system prompt.
+- **Frontend**: `ProviderConfig.type` pasa a `string`; helper `providerInvokeArgs()` compartido por chat y agente; `resolveProvider()` en `App` construye la config (integrada o custom) y alimenta chat/agente/regenerate/autoName; `allProviders` (integrados + custom) se pasa a Chat y ModelComparator; native tools activadas para endpoints custom OpenAI-compatible.
+- **Permisos (fix)**: nuevo primitivo en `src/agent/permissions.ts` (`PendingConfirmation`, `PermissionDecision`, `ToolPolicy`, `requiresPreConfirmation`, `denialMessage`). `useAgent` gestiona `pendingConfirmation` como estado real + resolvers por id (`requestConfirmation`/`confirmTool(id, allow)`), sin timeout silencioso; `stopAgent` resuelve pendientes como denegadas. `ProgressPanel` renderiza una tarjeta Permitir/Denegar que desaparece al decidir (se eliminó el `hasPending` derivado del texto `[PENDIENTE`). `write_file` + `confirmWrite` ahora se confirma **antes** de escribir (gate real); denegar no toca disco. `App` fuerza el panel abierto si hay confirmación pendiente.
+- **Native function calling (Anthropic/Google/Cohere)**: módulo `native_tools.rs` con conversión de tools + historial y `ToolCallBuilder`; `stream_anthropic`/`stream_google`/`stream_cohere` aceptan `tools`, parsean sus eventos y emiten `tool_calls` en `stream://done`. El agente decide native tools con `NATIVE_TOOL_PROVIDERS` + `modelSupportsTools()` (deepseek-reasoner queda fuera).
+- **Registro central de modelos**: `src/lib/models.ts` con `PROVIDERS`/`PROVIDER_OPTIONS`/`API_PROVIDERS` y capacidades (tools/vision/context/reasoning); `App` y `SettingsPanel` lo consumen (eliminadas las listas duplicadas y añadidos Kimi/GLM a la UI).
+- **Verificación**: `tsc` limpio, `npm test` (32), `npm run build`, `cargo check`, `cargo test` (18 lib + 5/4 + 23 provider_config + 13 tool_execution) verdes. Bump a 0.11.0 en `package.json`/`Cargo.toml`/`tauri.conf.json` + `CHANGELOG`.
+- **v0.11 completo**. Siguiente: v0.12 (harness autónomo: shell con allowlist/jail reutilizando el primitivo de permisos, tool calls en paralelo, plan/todo real, sub-agentes, MCP fix).
+- **Plan de próximas sesiones**: `.github/docs/PLAN-v0.12-a-v1.0.md` (tareas, archivos, dependencias y criterios de aceptación por versión). Roadmap resumido: `.github/docs/ROADMAP.md`. Detalle de cambios de v0.11: `CHANGELOG.md` `[0.11.0]`.
+
 ## Cierre (2026-09-11) — v0.9.6 → v0.10.1
 
 - **Auto-release desde `main`** (`.github/workflows/release.yml`): job `prepare` valida que `package.json` = `Cargo.toml` = `tauri.conf.json`, crea el tag `vX.Y.Z` si no existe y solo entonces construye/publica. Ya no hace falta tag manual; el `latest.json` se deriva de `tauri.conf.json`. Triggers: push a `main`, tags `v*`, `workflow_dispatch`.

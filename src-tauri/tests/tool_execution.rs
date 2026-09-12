@@ -169,3 +169,21 @@ async fn test_read_blocked_path() {
     assert!(!result.success);
     assert!(result.requires_confirmation);
 }
+
+#[tokio::test]
+async fn test_write_file_blocked_path_is_dry_run() {
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
+    let target = format!("{}/.ssh/solaria_gate_{}.txt", home, std::process::id());
+    let result = tools::execute_tool(
+        "write_file",
+        &format!(r#"{{"path": "{}", "content": "no debe escribirse"}}"#, target),
+        None, false, false,
+    ).await;
+    assert!(!result.success);
+    assert!(result.requires_confirmation);
+    assert!(result.error.is_none(), "el dry-run no debe devolver error: {:?}", result.error);
+    assert!(
+        !std::path::Path::new(&target).exists(),
+        "no debe escribir nada antes de la confirmación"
+    );
+}

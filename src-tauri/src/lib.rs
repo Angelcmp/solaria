@@ -5,6 +5,7 @@ pub mod embeddings;
 mod keyring;
 mod mcp;
 mod memory;
+mod native_tools;
 mod ollama;
 pub mod providers;
 mod search;
@@ -85,18 +86,19 @@ async fn ollama_chat(
     model: String,
     messages: String,
     system_prompt: Option<String>,
+    host: Option<String>,
 ) -> ollama::OllamaResult {
-    ollama::send_chat(model, messages, system_prompt, None).await
+    ollama::send_chat(model, messages, system_prompt, host).await
 }
 
 #[tauri::command]
-async fn ollama_check() -> bool {
-    ollama::check_connection().await
+async fn ollama_check(host: Option<String>) -> bool {
+    ollama::check_connection(host).await
 }
 
 #[tauri::command]
-async fn ollama_models() -> Result<Vec<String>, String> {
-    ollama::list_models().await
+async fn ollama_models(host: Option<String>) -> Result<Vec<String>, String> {
+    ollama::list_models(host).await
 }
 
 #[tauri::command]
@@ -106,8 +108,15 @@ async fn provider_chat(
     api_key: String,
     messages: String,
     system_prompt: Option<String>,
+    base_url: Option<String>,
+    api_type: Option<String>,
+    auth: Option<String>,
+    auth_header: Option<String>,
+    extra_headers: Option<String>,
 ) -> providers::ProviderResult {
-    match providers::get_provider_config(&provider, &model) {
+    match providers::resolve_provider(
+        &provider, &model, base_url, api_type, auth, auth_header, extra_headers,
+    ) {
         Some(config) => {
             providers::route_chat(config.api_type.clone(), api_key, config, system_prompt, messages).await
         }
@@ -396,13 +405,13 @@ fn split_uninstall_string(s: &str) -> (String, Vec<String>) {
 }
 
 #[tauri::command]
-async fn ollama_pull_model(model_name: String) -> Result<String, String> {
-    ollama::pull_model(&model_name).await
+async fn ollama_pull_model(model_name: String, host: Option<String>) -> Result<String, String> {
+    ollama::pull_model(&model_name, host).await
 }
 
 #[tauri::command]
-async fn ollama_delete_model(model_name: String) -> Result<String, String> {
-    ollama::delete_model(&model_name).await
+async fn ollama_delete_model(model_name: String, host: Option<String>) -> Result<String, String> {
+    ollama::delete_model(&model_name, host).await
 }
 
 #[tauri::command]
@@ -441,8 +450,9 @@ async fn ollama_chat_stream(
     temperature: Option<f32>,
     top_p: Option<f32>,
     max_tokens: Option<u32>,
+    host: Option<String>,
 ) {
-    ollama::send_chat_stream(app, stream_id, model, messages, system_prompt, temperature, top_p, max_tokens).await
+    ollama::send_chat_stream(app, stream_id, model, messages, system_prompt, temperature, top_p, max_tokens, host).await
 }
 
 #[tauri::command]
@@ -458,9 +468,16 @@ async fn provider_chat_stream(
     top_p: Option<f32>,
     max_tokens: Option<u32>,
     tools: Option<String>,
+    base_url: Option<String>,
+    api_type: Option<String>,
+    auth: Option<String>,
+    auth_header: Option<String>,
+    extra_headers: Option<String>,
 ) {
     let model_params = providers::ModelParams { temperature, top_p, max_tokens };
-    if let Some(config) = providers::get_provider_config(&provider, &model) {
+    if let Some(config) = providers::resolve_provider(
+        &provider, &model, base_url, api_type, auth, auth_header, extra_headers,
+    ) {
         providers::route_chat_stream(
             app, stream_id,
             config.api_type.clone(), api_key, config,

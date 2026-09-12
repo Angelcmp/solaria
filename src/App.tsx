@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { useChat, type ProviderConfig } from './hooks/useChat'
 import { useSettings } from './hooks/useSettings'
 import { useAgent } from './hooks/useAgent'
@@ -15,16 +15,7 @@ import type { WikiFile } from './components/WikiListAside'
 import SettingsPanel, { type SettingsPanelProps } from './components/SettingsPanel'
 import ProgressPanel from './components/ProgressPanel'
 import ModelComparator from './components/ModelComparator'
-
-const PROVIDERS: { id: string; label: string; models: string[]; local: boolean }[] = [
-  { id: 'ollama', label: 'Ollama (Local)', models: ['qwen3', 'llama3.2', 'llama3.1', 'mistral', 'phi3', 'deepseek-r1', 'gemma3'], local: true },
-  { id: 'openai', label: 'OpenAI', models: ['gpt-5.5', 'gpt-5-mini', 'gpt-4.1-mini', 'gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo', 'o1', 'o3-mini'], local: false },
-  { id: 'anthropic', label: 'Anthropic', models: ['claude-sonnet-5', 'claude-opus-4-8', 'claude-haiku-4-5-20251001'], local: false },
-  { id: 'deepseek', label: 'DeepSeek', models: ['deepseek-chat', 'deepseek-reasoner'], local: false },
-  { id: 'groq', label: 'Groq', models: ['llama-3.3-70b-versatile', 'meta-llama/llama-4-scout-17b-16e-instruct', 'llama-3.1-8b-instant', 'openai/gpt-oss-20b'], local: false },
-  { id: 'google', label: 'Google', models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'], local: false },
-  { id: 'cohere', label: 'Cohere', models: ['command-a-03-2025', 'command-r-plus', 'command-r7b-12-2024'], local: false },
-]
+import { PROVIDER_OPTIONS } from './lib/models'
 
 function App() {
   useEffect(() => {
@@ -62,6 +53,10 @@ function App() {
     updateApiKey,
     updateTavilyKey,
     updateProvider,
+    addCustomProvider,
+    updateCustomProvider,
+    removeCustomProvider,
+    updateCustomApiKey,
   } = useSettings()
 
   const {
@@ -99,6 +94,7 @@ function App() {
     stopAgent,
     resetAgent,
     confirmTool,
+    pendingConfirmation,
   } = useAgent()
 
   const memory = useMemory()
@@ -246,6 +242,42 @@ function App() {
     if (ids) setThinkingRef.current(ids.convId, ids.assistantId, content)
   }, [])
 
+  const getModelParams = useCallback(() => ({
+    temperature: settings.temperature,
+    topP: settings.topP,
+    maxTokens: settings.maxTokens,
+  }), [settings])
+
+  // Proveedores integrados + los definidos por el usuario.
+  const allProviders = useMemo(() => [
+    ...PROVIDER_OPTIONS,
+    ...settings.customProviders.map(p => ({ id: p.id, label: p.name, models: p.models, local: false })),
+  ], [settings.customProviders])
+
+  /** Construye la config de proveedor (integrado o custom) para chat/agente. */
+  const resolveProvider = useCallback((providerId: string, model: string): ProviderConfig => {
+    const custom = settings.customProviders.find(p => p.id === providerId)
+    if (custom) {
+      return {
+        type: custom.id,
+        model,
+        apiKey: settings.customApiKeys[custom.id] || '',
+        baseUrl: custom.baseUrl,
+        apiType: custom.apiType,
+        auth: custom.auth,
+        authHeader: custom.authHeader,
+        ...getModelParams(),
+      }
+    }
+    return {
+      type: providerId,
+      model,
+      apiKey: providerId !== 'ollama' ? settings.apiKeys[providerId as keyof typeof settings.apiKeys] : undefined,
+      host: providerId === 'ollama' ? settings.ollamaHost : undefined,
+      ...getModelParams(),
+    }
+  }, [settings, getModelParams])
+
   const handleAgentComplete = useCallback((finalContent: string) => {
     const ids = agentIdsRef.current
     if (ids) {
@@ -254,7 +286,7 @@ function App() {
       if (currentConv && currentConv.title === 'Nueva conversación') {
         const provider = currentConv.provider || settings.defaultProvider
         const model = currentConv.model || settings.defaultModel
-        autoName(ids.convId, { type: provider as ProviderConfig['type'], model, apiKey: settings.apiKeys[provider as keyof typeof settings.apiKeys] })
+        autoName(ids.convId, resolveProvider(provider, model))
       }
       const existing = currentConv?.toolSummary || {}
       const stepSummary: Record<string, number> = { ...existing }
@@ -279,13 +311,7 @@ function App() {
         memory.indexConversation(conv.id, conv.title, allMessages).catch(() => {})
       }
     }
-  }, [memory])
-
-  const getModelParams = useCallback(() => ({
-    temperature: settings.temperature,
-    topP: settings.topP,
-    maxTokens: settings.maxTokens,
-  }), [settings])
+  }, [memory, resolveProvider])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -319,13 +345,7 @@ function App() {
     const activeConv = conversations.find(c => c.id === activeConvId)
     const convProvider = activeConv?.provider || settings.defaultProvider
     const convModel = activeConv?.model || settings.defaultModel
-    const apiKey = convProvider !== 'ollama' ? settings.apiKeys[convProvider as keyof typeof settings.apiKeys] : undefined
-    const providerConfig = {
-      type: convProvider as ProviderConfig['type'],
-      model: convModel,
-      apiKey,
-      ...getModelParams(),
-    }
+    const providerConfig = resolveProvider(convProvider, convModel)
 
     let memoryContext: string | undefined
     if (memory.config.enabled && memory.config.autoInject) {
@@ -358,7 +378,7 @@ function App() {
     } else {
       sendMessage(content, providerConfig, memoryContext, attachments)
     }
-  }, [agentConfig.enabled, settings, conversations, activeConvId, sendMessage, startAgentPrompt, runAgent, handleAgentStep, handleAgentComplete, handleAgentThinking, getModelParams, memory, setConvPersona, clearConvPersona, setPendingPersona])
+  }, [agentConfig.enabled, settings, conversations, activeConvId, sendMessage, startAgentPrompt, runAgent, handleAgentStep, handleAgentComplete, handleAgentThinking, resolveProvider, memory, setConvPersona, clearConvPersona, setPendingPersona])
 
   const activeConv = conversations.find(c => c.id === activeConvId)
 
@@ -408,7 +428,7 @@ function App() {
     }
   }, [activeConvId])
 
-  const showPanel = panelForcedOpen || (!panelDismissed[activeConvId || ''] && (agentSteps.length > 0 || agentIsRunning))
+  const showPanel = panelForcedOpen || !!pendingConfirmation || (!panelDismissed[activeConvId || ''] && (agentSteps.length > 0 || agentIsRunning))
 
   return (
     <div className="flex h-screen bg-[#131313] overflow-hidden">
@@ -478,12 +498,7 @@ function App() {
           const activeConv = conversations.find(c => c.id === activeConvId)
           const regenProvider = activeConv?.provider || settings.defaultProvider
           const regenModel = activeConv?.model || settings.defaultModel
-          regenerate({
-            type: regenProvider as ProviderConfig['type'],
-            model: regenModel,
-            apiKey: regenProvider !== 'ollama' ? settings.apiKeys[regenProvider as keyof typeof settings.apiKeys] : undefined,
-            ...getModelParams(),
-          })
+          regenerate(resolveProvider(regenProvider, regenModel))
         }}
         settings={settings}
         onShowSettings={() => setShowSettings('general')}
@@ -494,7 +509,7 @@ function App() {
         conversationTitle={activeConv?.title}
         activeConversation={activeConv || null}
         onUpdateConvModel={updateConvModel}
-        providers={PROVIDERS}
+        providers={allProviders}
         activeProject={activeProjectId ? projects.find(p => p.id === activeProjectId) || null : null}
         comparisonEnabled={settings.comparisonEnabled}
         onOpenComparator={openComparator}
@@ -516,6 +531,7 @@ function App() {
           onClose={handlePanelClose}
           onStop={agentIsRunning ? stopAgent : undefined}
           onConfirmTool={confirmTool}
+          pendingConfirmation={pendingConfirmation}
           projectName={activeProjectId ? (projects.find(p => p.id === activeProjectId)?.name || undefined) : undefined}
           workingDirectory={agentConfig.workingDirectory || undefined}
           personaPrompt={activeConv?.personaPrompt}
@@ -525,7 +541,7 @@ function App() {
 
       {comparisonActive && (
         <ModelComparator
-          models={PROVIDERS}
+          models={allProviders}
           apiKeys={settings.apiKeys as unknown as Record<string, string>}
           temperature={settings.temperature}
           topP={settings.topP}
@@ -548,6 +564,10 @@ function App() {
           onUpdateApiKey={updateApiKey}
           onUpdateTavilyKey={updateTavilyKey}
           onUpdateProvider={updateProvider}
+          onAddCustomProvider={addCustomProvider}
+          onUpdateCustomProvider={updateCustomProvider}
+          onRemoveCustomProvider={removeCustomProvider}
+          onUpdateCustomApiKey={updateCustomApiKey}
           agentConfig={agentConfig}
           onUpdateAgentConfig={updateAgentConfig}
         />

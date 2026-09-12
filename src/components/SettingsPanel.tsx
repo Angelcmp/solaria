@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import type { AppSettings, ApiKeys } from '../hooks/useSettings'
+import type { AppSettings, ApiKeys, CustomProvider } from '../hooks/useSettings'
 import type { AgentConfig } from '../hooks/useAgent'
 import type { Lang } from '../lib/i18n'
 import { t } from '../lib/i18n'
 import { useMemory, type SearchResult } from '../hooks/useMemory'
 import { StarIcon, BulletIcon } from './Icons'
+import { API_PROVIDERS, PROVIDER_OPTIONS } from '../lib/models'
 
 type SettingsTab = 'general' | 'providers' | 'agent' | 'skills' | 'advanced'
 type AdvancedSubTab = 'memory' | 'mcp' | 'cookbook' | 'audit'
@@ -20,19 +21,13 @@ export interface SettingsPanelProps {
   onUpdateApiKey: (provider: keyof ApiKeys, key: string) => void
   onUpdateTavilyKey: (key: string) => void
   onUpdateProvider: (provider: AppSettings['defaultProvider'], model: string) => void
+  onAddCustomProvider?: (p: CustomProvider) => void
+  onUpdateCustomProvider?: (p: CustomProvider) => void
+  onRemoveCustomProvider?: (id: string) => void
+  onUpdateCustomApiKey?: (id: string, key: string) => void
   agentConfig?: AgentConfig
   onUpdateAgentConfig?: (updates: Partial<AgentConfig>) => void
 }
-
-const PROVIDERS: { id: AppSettings['defaultProvider']; label: string; models: string[]; isLocal: boolean }[] = [
-  { id: 'ollama', label: 'Ollama', models: ['qwen3', 'llama3.2', 'llama3.1', 'mistral', 'phi3', 'deepseek-r1', 'gemma3'], isLocal: true },
-  { id: 'openai', label: 'OpenAI', models: ['gpt-5.5', 'gpt-5-mini', 'gpt-4.1-mini', 'gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo', 'o1', 'o3-mini'], isLocal: false },
-  { id: 'anthropic', label: 'Anthropic', models: ['claude-sonnet-5', 'claude-opus-4-8', 'claude-haiku-4-5-20251001'], isLocal: false },
-  { id: 'deepseek', label: 'DeepSeek', models: ['deepseek-chat', 'deepseek-reasoner'], isLocal: false },
-  { id: 'groq', label: 'Groq', models: ['llama-3.3-70b-versatile', 'meta-llama/llama-4-scout-17b-16e-instruct', 'llama-3.1-8b-instant', 'openai/gpt-oss-20b'], isLocal: false },
-  { id: 'google', label: 'Google', models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'], isLocal: false },
-  { id: 'cohere', label: 'Cohere', models: ['command-a-03-2025', 'command-r-plus', 'command-r7b-12-2024'], isLocal: false },
-]
 
 const TABS: { id: SettingsTab; labelKey: string; icon: string }[] = [
   { id: 'general', labelKey: 'settings.general', icon: 'general' },
@@ -67,6 +62,10 @@ export default function SettingsPanel({
   onUpdateApiKey,
   onUpdateTavilyKey,
   onUpdateProvider,
+  onAddCustomProvider,
+  onUpdateCustomProvider,
+  onRemoveCustomProvider,
+  onUpdateCustomApiKey,
   agentConfig,
   onUpdateAgentConfig,
 }: SettingsPanelProps) {
@@ -136,7 +135,17 @@ export default function SettingsPanel({
             )}
 
             {tab === 'providers' && (
-              <ProvidersTab settings={settings} onUpdateApiKey={onUpdateApiKey} onUpdateTavilyKey={onUpdateTavilyKey} selectedProvider={selectedProvider} setSelectedProvider={setSelectedProvider} />
+              <ProvidersTab
+                settings={settings}
+                onUpdateApiKey={onUpdateApiKey}
+                onUpdateTavilyKey={onUpdateTavilyKey}
+                selectedProvider={selectedProvider}
+                setSelectedProvider={setSelectedProvider}
+                onAddCustomProvider={onAddCustomProvider}
+                onUpdateCustomProvider={onUpdateCustomProvider}
+                onRemoveCustomProvider={onRemoveCustomProvider}
+                onUpdateCustomApiKey={onUpdateCustomApiKey}
+              />
             )}
 
             {tab === 'agent' && (
@@ -148,7 +157,7 @@ export default function SettingsPanel({
             )}
 
             {tab === 'advanced' && (
-              <AdvancedTab advancedTab={advancedTab} setAdvancedTab={setAdvancedTab} lang={lang} />
+              <AdvancedTab advancedTab={advancedTab} setAdvancedTab={setAdvancedTab} lang={lang} ollamaHost={settings.ollamaHost} />
             )}
           </div>
         </div>
@@ -170,7 +179,7 @@ function GeneralTab({
   onUpdate: (u: Partial<AppSettings>) => void
   onUpdateProvider: (p: AppSettings['defaultProvider'], m: string) => void
 }) {
-  const providerDef = PROVIDERS.find(p => p.id === settings.defaultProvider)
+  const providerDef = PROVIDER_OPTIONS.find(p => p.id === settings.defaultProvider)
 
   return (
     <div className="space-y-5">
@@ -182,7 +191,7 @@ function GeneralTab({
             <div className="space-y-2">
               <div className="text-[0.55rem] text-[#666666] uppercase tracking-wider font-medium">Local</div>
               <div className="grid grid-cols-3 gap-1.5">
-                {PROVIDERS.filter(p => p.isLocal).map(p => (
+                {PROVIDER_OPTIONS.filter(p => p.local).map(p => (
                   <button
                     key={p.id}
                     onClick={() => onUpdateProvider(p.id, settings.defaultProvider === p.id ? settings.defaultModel : p.models[0])}
@@ -198,7 +207,7 @@ function GeneralTab({
               </div>
               <div className="text-[0.55rem] text-[#666666] uppercase tracking-wider font-medium pt-1">Cloud (BYOK)</div>
               <div className="grid grid-cols-3 gap-1.5">
-                {PROVIDERS.filter(p => !p.isLocal).map(p => (
+                {PROVIDER_OPTIONS.filter(p => !p.local).map(p => (
                   <button
                     key={p.id}
                     onClick={() => onUpdateProvider(p.id, settings.defaultProvider === p.id ? settings.defaultModel : p.models[0])}
@@ -455,37 +464,32 @@ function AppSection() {
   )
 }
 
-const AI_PROVIDER_DATA: { id: keyof ApiKeys; label: string; placeholder: string }[] = [
-  { id: 'openai', label: 'OpenAI', placeholder: 'sk-...' },
-  { id: 'anthropic', label: 'Anthropic (Claude)', placeholder: 'sk-ant-...' },
-  { id: 'deepseek', label: 'DeepSeek', placeholder: 'sk-...' },
-  { id: 'groq', label: 'Groq', placeholder: 'gsk_...' },
-  { id: 'google', label: 'Google (Gemini)', placeholder: 'AIza...' },
-  { id: 'cohere', label: 'Cohere', placeholder: '...' },
-]
-
 const TAVILY_DATA = { id: 'tavily' as const, label: 'Tavily Search', placeholder: 'tvly-...' }
 
-function ProvidersTab({ settings, onUpdateApiKey, onUpdateTavilyKey, selectedProvider, setSelectedProvider }: {
+function ProvidersTab({ settings, onUpdateApiKey, onUpdateTavilyKey, selectedProvider, setSelectedProvider, onAddCustomProvider, onUpdateCustomProvider, onRemoveCustomProvider, onUpdateCustomApiKey }: {
   settings: AppSettings
   onUpdateApiKey: (provider: keyof ApiKeys, key: string) => void
   onUpdateTavilyKey: (key: string) => void
   selectedProvider: keyof ApiKeys | 'tavily'
   setSelectedProvider: (p: keyof ApiKeys | 'tavily') => void
+  onAddCustomProvider?: (p: CustomProvider) => void
+  onUpdateCustomProvider?: (p: CustomProvider) => void
+  onRemoveCustomProvider?: (id: string) => void
+  onUpdateCustomApiKey?: (id: string, key: string) => void
 }) {
   const isTavily = selectedProvider === 'tavily'
-  const activeAi = AI_PROVIDER_DATA.find(p => p.id === selectedProvider)
+  const activeAi = API_PROVIDERS.find(p => p.id === selectedProvider)
   const isConfigured = isTavily
     ? settings.tavilyKey.length > 0
-    : settings.apiKeys[selectedProvider].length > 0
+    : settings.apiKeys[selectedProvider as keyof ApiKeys].length > 0
   const [testing, setTesting] = useState(false)
   const [testMsg, setTestMsg] = useState<string | null>(null)
   const testModel = !isTavily && activeAi
-    ? (settings.defaultProvider === activeAi.id ? settings.defaultModel : PROVIDERS.find(p => p.id === activeAi.id)?.models[0] || '')
+    ? (settings.defaultProvider === activeAi.id ? settings.defaultModel : PROVIDER_OPTIONS.find(p => p.id === activeAi.id)?.models[0] || '')
     : ''
   async function handleTest() {
     if (!activeAi || testing) return
-    const key = settings.apiKeys[activeAi.id]?.trim()
+    const key = settings.apiKeys[activeAi.id as keyof ApiKeys]?.trim()
     if (!key || !testModel) { setTestMsg('Guarda primero la key'); return }
     setTesting(true)
     setTestMsg(null)
@@ -508,17 +512,17 @@ function ProvidersTab({ settings, onUpdateApiKey, onUpdateTavilyKey, selectedPro
 
       <div className="flex gap-3 h-full min-h-0">
         <div className="w-[140px] shrink-0 space-y-0.5">
-          {AI_PROVIDER_DATA.map(p => (
+          {API_PROVIDERS.map(p => (
             <button
               key={p.id}
-              onClick={() => setSelectedProvider(p.id)}
+              onClick={() => setSelectedProvider(p.id as keyof ApiKeys)}
               className={`flex items-center gap-2 w-full px-2.5 py-2 rounded-lg text-[0.65rem] transition-all ${
                 selectedProvider === p.id
                       ? 'bg-[rgba(0,229,201,0.07)] border border-[rgba(255,255,255,0.08)] text-white'
                   : 'text-[#999999] hover:bg-[rgba(255,255,255,0.03)] hover:text-[#E5E5E5] border border-transparent'
               }`}
             >
-              <ProviderStatusDot configured={settings.apiKeys[p.id]?.length > 0} active={selectedProvider === p.id} />
+              <ProviderStatusDot configured={settings.apiKeys[p.id as keyof ApiKeys]?.length > 0} active={selectedProvider === p.id} />
               <span className="truncate">{p.label}</span>
             </button>
           ))}
@@ -569,9 +573,9 @@ function ProvidersTab({ settings, onUpdateApiKey, onUpdateTavilyKey, selectedPro
           <label className="block text-[0.625rem] font-medium text-[#999999] mb-1.5">API Key</label>
           <input
             type="password"
-            value={isTavily ? settings.tavilyKey : (activeAi ? settings.apiKeys[activeAi.id] : '')}
-            onChange={e => isTavily ? onUpdateTavilyKey(e.target.value) : activeAi && onUpdateApiKey(activeAi.id, e.target.value)}
-            placeholder={isTavily ? TAVILY_DATA.placeholder : activeAi?.placeholder}
+            value={isTavily ? settings.tavilyKey : (activeAi ? settings.apiKeys[activeAi.id as keyof ApiKeys] : '')}
+            onChange={e => isTavily ? onUpdateTavilyKey(e.target.value) : activeAi && onUpdateApiKey(activeAi.id as keyof ApiKeys, e.target.value)}
+            placeholder={isTavily ? TAVILY_DATA.placeholder : activeAi?.keyPlaceholder}
             className="w-full px-3 py-2.5 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[rgba(255,255,255,0.2)] transition-colors"
           />
 
@@ -606,6 +610,181 @@ function ProvidersTab({ settings, onUpdateApiKey, onUpdateTavilyKey, selectedPro
           </div>
         </div>
       </div>
+
+      <CustomProvidersSection
+        settings={settings}
+        onAddCustomProvider={onAddCustomProvider}
+        onUpdateCustomProvider={onUpdateCustomProvider}
+        onRemoveCustomProvider={onRemoveCustomProvider}
+        onUpdateCustomApiKey={onUpdateCustomApiKey}
+      />
+    </div>
+  )
+}
+
+function CustomProvidersSection({
+  settings,
+  onAddCustomProvider,
+  onUpdateCustomProvider,
+  onRemoveCustomProvider,
+  onUpdateCustomApiKey,
+}: {
+  settings: AppSettings
+  onAddCustomProvider?: (p: CustomProvider) => void
+  onUpdateCustomProvider?: (p: CustomProvider) => void
+  onRemoveCustomProvider?: (id: string) => void
+  onUpdateCustomApiKey?: (id: string, key: string) => void
+}) {
+  const [testMsg, setTestMsg] = useState<Record<string, string>>({})
+  const [testingId, setTestingId] = useState<string | null>(null)
+
+  const addProvider = () => {
+    if (!onAddCustomProvider) return
+    const id = `custom-${Date.now().toString(36)}`
+    onAddCustomProvider({
+      id,
+      name: 'Nuevo proveedor',
+      baseUrl: 'http://localhost:1234/v1/chat/completions',
+      apiType: 'openai',
+      auth: 'none',
+      authHeader: '',
+      models: [],
+    })
+  }
+
+  const testProvider = async (p: CustomProvider) => {
+    if (testingId) return
+    const model = p.models[0]
+    if (!p.baseUrl || !model) { setTestMsg(prev => ({ ...prev, [p.id]: 'Añade URL y un modelo' })); return }
+    setTestingId(p.id)
+    setTestMsg(prev => ({ ...prev, [p.id]: '' }))
+    try {
+      const res = await invoke<{ success: boolean; content: string; error?: string }>('provider_chat', {
+        provider: p.id,
+        model,
+        apiKey: settings.customApiKeys[p.id] || '',
+        baseUrl: p.baseUrl,
+        apiType: p.apiType,
+        auth: p.auth,
+        authHeader: p.authHeader || null,
+        messages: JSON.stringify([{ role: 'user', content: 'Responde solo: OK' }]),
+      })
+      setTestMsg(prev => ({ ...prev, [p.id]: res.success ? `OK (${model})` : (res.error || 'Falló') }))
+    } catch (e) {
+      setTestMsg(prev => ({ ...prev, [p.id]: String(e) }))
+    } finally {
+      setTestingId(null)
+    }
+  }
+
+  const inputCls = 'w-full px-3 py-2 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.65rem] text-white placeholder-[#666666] outline-none focus:border-[rgba(255,255,255,0.2)] transition-colors'
+  const labelCls = 'block text-[0.55rem] font-medium text-[#999999] mb-1'
+
+  return (
+    <div className="space-y-3">
+      <SectionHeader
+        title="Proveedores personalizados"
+        desc="Añade cualquier endpoint compatible con OpenAI: LM Studio, vLLM, llama.cpp, OpenRouter, Together, xAI…"
+      />
+      {settings.customProviders.length === 0 && (
+        <p className="text-[0.6rem] text-[#666666]">Todavía no hay proveedores personalizados.</p>
+      )}
+      {settings.customProviders.map(p => (
+        <div key={p.id} className="p-3 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Nombre</label>
+              <input className={inputCls} value={p.name} onChange={e => onUpdateCustomProvider?.({ ...p, name: e.target.value })} />
+            </div>
+            <div>
+              <label className={labelCls}>Modelos (separados por coma)</label>
+              <input
+                className={inputCls}
+                value={p.models.join(', ')}
+                placeholder="llama-3.1-8b, mistral-7b"
+                onChange={e => onUpdateCustomProvider?.({ ...p, models: e.target.value.split(',').map(m => m.trim()).filter(Boolean) })}
+              />
+            </div>
+          </div>
+          <div>
+            <label className={labelCls}>Base URL (endpoint de chat)</label>
+            <input
+              className={inputCls}
+              value={p.baseUrl}
+              placeholder="http://localhost:1234/v1/chat/completions"
+              onChange={e => onUpdateCustomProvider?.({ ...p, baseUrl: e.target.value })}
+            />
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className={labelCls}>Tipo de API</label>
+              <select
+                className={inputCls}
+                value={p.apiType}
+                onChange={e => onUpdateCustomProvider?.({ ...p, apiType: e.target.value as CustomProvider['apiType'] })}
+              >
+                <option value="openai">OpenAI-compatible</option>
+                <option value="anthropic">Anthropic</option>
+                <option value="google">Google</option>
+                <option value="cohere">Cohere</option>
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Auth</label>
+              <select
+                className={inputCls}
+                value={p.auth}
+                onChange={e => onUpdateCustomProvider?.({ ...p, auth: e.target.value as CustomProvider['auth'] })}
+              >
+                <option value="none">Sin auth</option>
+                <option value="bearer">Bearer token</option>
+                <option value="x-api-key">Header con key</option>
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Header (opcional)</label>
+              <input
+                className={inputCls}
+                value={p.authHeader || ''}
+                placeholder="Authorization / api-key"
+                onChange={e => onUpdateCustomProvider?.({ ...p, authHeader: e.target.value })}
+              />
+            </div>
+          </div>
+          <div>
+            <label className={labelCls}>API Key (opcional)</label>
+            <input
+              type="password"
+              className={inputCls}
+              value={settings.customApiKeys[p.id] || ''}
+              placeholder="sk-… (vacío si el endpoint no pide auth)"
+              onChange={e => onUpdateCustomApiKey?.(p.id, e.target.value)}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => testProvider(p)}
+              disabled={testingId === p.id}
+              className="px-3 py-1.5 rounded-lg bg-[rgba(255,255,255,0.05)] border border-[rgba(255,255,255,0.08)] text-[0.6rem] text-[#E5E5E5] hover:bg-[rgba(255,255,255,0.08)] disabled:opacity-40"
+            >
+              {testingId === p.id ? 'Probando…' : 'Probar'}
+            </button>
+            <button
+              onClick={() => onRemoveCustomProvider?.(p.id)}
+              className="px-3 py-1.5 rounded-lg bg-[#222] border border-[rgba(255,255,255,0.06)] text-[0.6rem] text-[#999999] hover:text-white hover:border-[rgba(255,255,255,0.12)]"
+            >
+              Eliminar
+            </button>
+            {testMsg[p.id] && <span className="text-[0.6rem] text-[#999999] truncate">{testMsg[p.id]}</span>}
+          </div>
+        </div>
+      ))}
+      <button
+        onClick={addProvider}
+        className="px-3 py-2 rounded-lg bg-[rgba(255,255,255,0.05)] border border-[rgba(255,255,255,0.08)] text-[0.65rem] text-[#E5E5E5] hover:bg-[rgba(255,255,255,0.08)]"
+      >
+        + Añadir proveedor
+      </button>
     </div>
   )
 }
@@ -808,10 +987,11 @@ function AgentTab({ settings, onUpdate, agentConfig, onUpdateAgentConfig }: {
   )
 }
 
-function AdvancedTab({ advancedTab, setAdvancedTab, lang }: {
+function AdvancedTab({ advancedTab, setAdvancedTab, lang, ollamaHost }: {
   advancedTab: AdvancedSubTab
   setAdvancedTab: (t: AdvancedSubTab) => void
   lang: Lang
+  ollamaHost?: string
 }) {
   return (
     <div className="space-y-5">
@@ -845,7 +1025,7 @@ function AdvancedTab({ advancedTab, setAdvancedTab, lang }: {
       </Section>
 
       <Section title="Modelos Ollama">
-        <ModelManager />
+        <ModelManager ollamaHost={ollamaHost} />
       </Section>
     </div>
   )
@@ -1815,7 +1995,7 @@ function SkillRow({ skill, onToggle, alwaysEnabled }: { skill: { name: string; d
   )
 }
 
-function ModelManager() {
+function ModelManager({ ollamaHost }: { ollamaHost?: string }) {
   const [models, setModels] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -1825,25 +2005,25 @@ function ModelManager() {
 
   const loadModels = useCallback(async () => {
     setLoading(true); setError(null)
-    try { const { invoke } = await import('@tauri-apps/api/core'); const list = await invoke<string[]>('ollama_models'); setModels(list) }
+    try { const { invoke } = await import('@tauri-apps/api/core'); const list = await invoke<string[]>('ollama_models', { host: ollamaHost ?? null }); setModels(list) }
     catch (e: any) { setError(e?.toString() || 'Error') }
     setLoading(false)
-  }, [])
+  }, [ollamaHost])
 
   useEffect(() => { loadModels() }, [loadModels])
 
   const handlePull = useCallback(async () => {
     const name = pullName.trim(); if (!name) return
     setPulling(true); setMessage(null)
-    try { const { invoke } = await import('@tauri-apps/api/core'); const result = await invoke<string>('ollama_pull_model', { modelName: name }); setMessage(result); setPullName(''); loadModels() }
+    try { const { invoke } = await import('@tauri-apps/api/core'); const result = await invoke<string>('ollama_pull_model', { modelName: name, host: ollamaHost ?? null }); setMessage(result); setPullName(''); loadModels() }
     catch (e: any) { setMessage(`Error: ${e?.toString() || 'Error'}`) }
     setPulling(false)
-  }, [pullName, loadModels])
+  }, [pullName, loadModels, ollamaHost])
 
   const handleDelete = useCallback(async (name: string) => {
-    try { const { invoke } = await import('@tauri-apps/api/core'); const result = await invoke<string>('ollama_delete_model', { modelName: name }); setMessage(result); loadModels() }
+    try { const { invoke } = await import('@tauri-apps/api/core'); const result = await invoke<string>('ollama_delete_model', { modelName: name, host: ollamaHost ?? null }); setMessage(result); loadModels() }
     catch (e: any) { setMessage(`Error: ${e?.toString() || 'Error'}`) }
-  }, [loadModels])
+  }, [loadModels, ollamaHost])
 
   return (
     <div className="p-3 rounded-xl bg-[#2A2A2A] border border-[rgba(255,255,255,0.06)] space-y-3">
